@@ -4,7 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-class Attendance extends Model
+class EventVolunteer extends Model
 {
     /**
      * The database connection that should be used by the model.
@@ -15,17 +15,18 @@ class Attendance extends Model
 
     protected $fillable = [
         'event_id',
+        'role_category',
+        'role_name',
         'member_id',
-        'scan_time',
-        'status',
-    ];
-
-    protected $casts = [
-        'scan_time' => 'datetime',
     ];
 
     public function event()
     {
         return $this->belongsTo(Event::class);
+    }
+
+    public function member()
+    {
+        return $this->belongsTo(ExternalMember::class, 'member_id', 'idjemaat');
     }
 }

@@ -1,12 +1,3 @@
-import { Link } from '@inertiajs/react';
-import {
-    LayoutDashboard,
-    QrCode,
-    History,
-    Users,
-    Settings,
-    HelpCircle,
-} from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
@@ -20,8 +11,16 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { anggota } from '@/routes';
 import type { NavItem } from '@/types';
+import { Link } from '@inertiajs/react';
+import {
+    HelpCircle,
+    History,
+    LayoutDashboard,
+    QrCode,
+    Settings,
+    Users,
+} from 'lucide-react';
 
 const mainNavItems: NavItem[] = [
     {
@@ -41,7 +40,7 @@ const mainNavItems: NavItem[] = [
     },
     {
         title: 'Member List',
-        href: anggota ? anggota() : '/anggota',
+        href: '/anggota',
         icon: Users,
     },
     {

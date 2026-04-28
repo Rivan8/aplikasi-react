@@ -1,8 +1,7 @@
-import { Head, Link } from '@inertiajs/react';
-import { Search, Edit2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { anggota } from '@/routes';
+import { Head, Link } from '@inertiajs/react';
+import { Edit2, Search } from 'lucide-react';
 
 const avatarColors = ['bg-primary', 'bg-chart-2', 'bg-chart-3', 'bg-chart-4', 'bg-chart-5'];
 
@@ -123,7 +122,7 @@ export default function Anggota({
                                                 <td className="px-6 py-4">
                                                     <div className="flex items-center gap-3">
                                                         <div className={`h-9 w-9 rounded-full ${avatarColors[idx % avatarColors.length]} flex items-center justify-center text-white font-bold text-xs`}>
-                                                            {displayName.charAt(0).toUpperCase()}
+                                                            {displayName?.charAt(0).toUpperCase() || '?'}
                                                         </div>
                                                         <div>
                                                             <div className="font-semibold text-foreground">{displayName}</div>
@@ -152,11 +151,11 @@ export default function Anggota({
                                                     </span>
                                                 </td>
                                                 <td className="px-6 py-4 text-muted-foreground font-medium">
-                                                    {dateJoined ? new Date(dateJoined).toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' }) : '-'}
+                                                    {dateJoined && !isNaN(Date.parse(dateJoined)) ? new Date(dateJoined).toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' }) : '-'}
                                                 </td>
                                                 <td className="px-6 py-4 text-right">
                                                     <Link
-                                                        href={route('anggota.edit', user.id)}
+                                                        href={`/anggota/${user.id}/edit`}
                                                         className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
                                                     >
                                                         <Edit2 className="h-4 w-4" />
@@ -195,12 +194,3 @@ export default function Anggota({
         </>
     );
 }
-
-Anggota.layout = {
-    breadcrumbs: [
-        {
-            title: 'Member List',
-            href: anggota ? anggota() : '/anggota',
-        },
-    ],
-};

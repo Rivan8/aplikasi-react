@@ -6,6 +6,13 @@ use Illuminate\Database\Eloquent\Model;
 
 class Event extends Model
 {
+    /**
+     * The database connection that should be used by the model.
+     *
+     * @var string
+     */
+    protected $connection = 'mysql';
+
     protected $fillable = [
         'title',
         'date',
@@ -16,4 +23,9 @@ class Event extends Model
         'expected',
         'image_path',
     ];
+
+    public function volunteers()
+    {
+        return $this->hasMany(EventVolunteer::class);
+    }
 }

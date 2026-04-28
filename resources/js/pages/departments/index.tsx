@@ -28,7 +28,7 @@ export default function Departments({ departments }: { departments: Department[]
 
     const handleAdd = (e: React.FormEvent) => {
         e.preventDefault();
-        post(route('departments.store'), {
+        post('/departments', {
             onSuccess: () => {
                 setIsAddModalOpen(false);
                 reset();
@@ -40,10 +40,10 @@ export default function Departments({ departments }: { departments: Department[]
         e.preventDefault();
 
         if (!editingDepartment) {
-return;
-}
+            return;
+        }
 
-        put(route('departments.update', editingDepartment.id), {
+        put(`/departments/${editingDepartment.id}`, {
             onSuccess: () => {
                 setEditingDepartment(null);
                 reset();
@@ -53,7 +53,7 @@ return;
 
     const handleDelete = (id: number) => {
         if (confirm('Apakah Anda yakin ingin menghapus departemen ini?')) {
-            destroy(route('departments.destroy', id));
+            destroy(`/departments/${id}`);
         }
     };
 

@@ -12,7 +12,7 @@ A **monolithic Laravel + React** application for member attendance tracking and 
 ## 1. Tech Stack Overview
 
 - **Backend**: Laravel 13 (PHP 8.3+) – uses Eloquent ORM, Inertia.js v3, Laravel Fortify for auth.
-- **Database**: SQLite (local, `attendance_pro`), MySQL (`myesc_db`, external read‑only).
+- **Database**: MySQL (`attendance_pro`), MySQL (`myesc_db`, external read‑only).
 - **Frontend**: React 19 with TypeScript, compiled by Vite 8, React Compiler (auto optimization).
 - **UI / Styling**: Tailwind CSS 4, Radix UI components, custom UI wrappers.
 - **Testing**: Pest PHP (modern expressive syntax).
@@ -272,20 +272,30 @@ MemberDetail::create([
 ]);
 ```
 
-### 2. **Dual Database Setup**
-- **Default**: SQLite (`.env: DB_CONNECTION=sqlite`)
+### 2. **Dual Database Setup (MySQL)**
+- **Default**: MySQL (`.env: DB_CONNECTION=mysql`)
 - **External members**: MySQL (`myesc_db`)
-- Both must be configured in production `.env`:
+- Konfigurasi di `.env`:
   ```
-  DB_CONNECTION=sqlite
-  DB_EXTERNAL_DRIVER=mysql
-  DB_EXTERNAL_HOST=...
-  DB_EXTERNAL_DATABASE=myesc_db
-  DB_EXTERNAL_USERNAME=...
-  DB_EXTERNAL_PASSWORD=...
+  DB_CONNECTION=mysql
+  DB_HOST=127.0.0.1
+  DB_DATABASE=attendance_pro
+  DB_USERNAME=root
+  DB_PASSWORD=
+  
+  DB_EXT_CONNECTION=mysql
+  DB_EXT_HOST=...
+  DB_EXT_DATABASE=myey1771_myesc
+  DB_EXT_USERNAME=...
+  DB_EXT_PASSWORD=...
   ```
 
-### 3. **ExternalMember Timestamps Disabled**
+### 3. **Alur Data (Database → Frontend)**
+Aplikasi ini menggunakan MySQL untuk seluruh sistem basis datanya:
+-   **Main (MySQL)**: Menyimpan tabel `events`, `departments`, `member_statuses`, dan `member_details` di database `attendance_pro`.
+-   **External (MySQL)**: Menyimpan data jemaat di model `ExternalMember` (database `myey1771_myesc`).
+
+### 4. **ExternalMember Timestamps Disabled**
 External table has no `created_at`/`updated_at`. Model disables timestamps (`$timestamps = false`) to prevent errors.
 
 ### 4. **Queue Driver is Database**

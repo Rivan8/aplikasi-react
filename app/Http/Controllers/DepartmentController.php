@@ -15,6 +15,9 @@ class DepartmentController extends Controller
     {
         return Inertia::render('departments/index', [
             'departments' => Department::all(),
+            'breadcrumbs' => [
+                ['title' => 'Departemen', 'href' => '/departments'],
+            ]
         ]);
     }
 

@@ -28,9 +28,28 @@ Route::middleware(['auth', 'verified'])->group(function () {
         return inertia('anggota/index', [
             'members' => $members,
             'statuses' => $statuses,
-            'departments' => $departments
+            'departments' => $departments,
+            'breadcrumbs' => [
+                ['title' => 'Member List', 'href' => route('anggota')],
+            ]
         ]);
     })->name('anggota');
+
+    Route::get('anggota/{id}/edit', function ($id) {
+        $member = \App\Models\ExternalMember::with(['member_detail'])->findOrFail($id);
+        $statuses = \App\Models\MemberStatus::all();
+        $departments = \App\Models\Department::all();
+
+        return inertia('anggota/edit', [
+            'member' => $member,
+            'statuses' => $statuses,
+            'departments' => $departments,
+            'breadcrumbs' => [
+                ['title' => 'Member List', 'href' => route('anggota')],
+                ['title' => 'Edit Member', 'href' => '#'],
+            ]
+        ]);
+    })->name('anggota.edit');
 
     Route::post('anggota/{id}/update-details', function (\Illuminate\Http\Request $request, $id) {
         $request->validate([
@@ -50,7 +69,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     })->name('anggota.update-details');
     Route::resource('departments', \App\Http\Controllers\DepartmentController::class)->except(['create', 'edit', 'show']);
 
-    Route::inertia('events', 'events/index')->name('events');
+    Route::resource('events', \App\Http\Controllers\EventController::class)->except(['create', 'edit', 'show']);
     Route::inertia('scan-qr', 'scan-qr/index')->name('scan-qr');
     Route::inertia('attendance-history', 'attendance-history/index')->name('attendance-history');
 });
