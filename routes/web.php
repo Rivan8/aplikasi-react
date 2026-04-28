@@ -9,11 +9,20 @@ Route::inertia('/', 'welcome', [
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::inertia('dashboard', 'dashboard')->name('dashboard');
-    Route::get('anggota', function () {
+    Route::get('anggota', function (\Illuminate\Http\Request $request) {
         try {
-            // Fetch external members with their local detail, status and department
-            $members = \App\Models\ExternalMember::with(['member_detail.status', 'member_detail.department'])
-                ->paginate(10);
+            $query = \App\Models\ExternalMember::with(['member_detail.status', 'member_detail.department']);
+
+            // Handle Search
+            $search = $request->input('search');
+            if (!empty($search)) {
+                $query->where(function($q) use ($search) {
+                    $q->where('namalengkap', 'like', "%{$search}%")
+                      ->orWhere('idjemaat', 'like', "%{$search}%");
+                });
+            }
+
+            $members = $query->paginate(10)->withQueryString();
 
             $statuses = \App\Models\MemberStatus::all();
             $departments = \App\Models\Department::all();
@@ -29,6 +38,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             'members' => $members,
             'statuses' => $statuses,
             'departments' => $departments,
+            'filters' => $request->only(['search']),
             'breadcrumbs' => [
                 ['title' => 'Member List', 'href' => route('anggota')],
             ]

@@ -1,7 +1,8 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import { Edit2, Search } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 const avatarColors = ['bg-primary', 'bg-chart-2', 'bg-chart-3', 'bg-chart-4', 'bg-chart-5'];
 
@@ -43,13 +44,36 @@ interface Option {
 export default function Anggota({
     members,
     statuses = [],
-    departments = []
+    departments = [],
+    filters = { search: '' }
 }: {
     members: MembersData;
     statuses: Option[];
     departments: Option[];
+    filters?: { search: string };
 }) {
     const users = members?.data || [];
+    const [search, setSearch] = useState(filters?.search || '');
+
+    // Handle search logic
+    useEffect(() => {
+        const timeout = setTimeout(() => {
+            // Jika search kosong dan sebelumnya ada filter, atau jika search berubah
+            if (search !== (filters?.search || '')) {
+                router.get(
+                    '/anggota',
+                    { search },
+                    {
+                        preserveState: true,
+                        replace: true,
+                        only: ['members', 'filters'] // Hanya update data members dan filters
+                    }
+                );
+            }
+        }, 300); // Kurangi debounce ke 300ms agar lebih responsif
+
+        return () => clearTimeout(timeout);
+    }, [search]);
 
     return (
         <>
@@ -73,6 +97,8 @@ export default function Anggota({
                                 type="search"
                                 placeholder="Cari nama atau email..."
                                 className="pl-10 bg-muted/30 border-border"
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
                             />
                         </div>
                     </div>
