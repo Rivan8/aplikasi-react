@@ -1,5 +1,6 @@
 import { Head, useForm } from '@inertiajs/react';
 import { Plus, Trash2, Edit2, Search } from 'lucide-react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -8,11 +9,9 @@ import {
     DialogFooter,
     DialogHeader,
     DialogTitle,
-    DialogTrigger,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useState } from 'react';
 
 interface Department {
     id: number;
@@ -39,7 +38,11 @@ export default function Departments({ departments }: { departments: Department[]
 
     const handleEdit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!editingDepartment) return;
+
+        if (!editingDepartment) {
+return;
+}
+
         put(route('departments.update', editingDepartment.id), {
             onSuccess: () => {
                 setEditingDepartment(null);
@@ -105,8 +108,8 @@ export default function Departments({ departments }: { departments: Department[]
                                                 {dept.name}
                                             </td>
                                             <td className="px-6 py-4 text-right flex justify-end gap-2">
-                                                <Button 
-                                                    variant="ghost" 
+                                                <Button
+                                                    variant="ghost"
                                                     size="sm"
                                                     onClick={() => {
                                                         setEditingDepartment(dept);
@@ -115,8 +118,8 @@ export default function Departments({ departments }: { departments: Department[]
                                                 >
                                                     <Edit2 className="h-4 w-4" />
                                                 </Button>
-                                                <Button 
-                                                    variant="ghost" 
+                                                <Button
+                                                    variant="ghost"
                                                     size="sm"
                                                     className="text-destructive hover:text-destructive hover:bg-destructive/10"
                                                     onClick={() => handleDelete(dept.id)}
@@ -143,9 +146,9 @@ export default function Departments({ departments }: { departments: Department[]
                     <form onSubmit={handleAdd} className="space-y-4 py-4">
                         <div className="space-y-2">
                             <Label htmlFor="name">Nama Departemen</Label>
-                            <Input 
-                                id="name" 
-                                value={data.name} 
+                            <Input
+                                id="name"
+                                value={data.name}
                                 onChange={(e) => setData('name', e.target.value)}
                                 placeholder="Contoh: Kids, Media, Usher..."
                                 autoFocus
@@ -170,9 +173,9 @@ export default function Departments({ departments }: { departments: Department[]
                     <form onSubmit={handleEdit} className="space-y-4 py-4">
                         <div className="space-y-2">
                             <Label htmlFor="edit-name">Nama Departemen</Label>
-                            <Input 
-                                id="edit-name" 
-                                value={data.name} 
+                            <Input
+                                id="edit-name"
+                                value={data.name}
                                 onChange={(e) => setData('name', e.target.value)}
                                 autoFocus
                             />

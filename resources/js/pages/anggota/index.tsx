@@ -1,32 +1,7 @@
-import { Head, Link, useForm } from '@inertiajs/react';
-import { MoreHorizontal, Plus, Search, Edit2 } from 'lucide-react';
+import { Head, Link } from '@inertiajs/react';
+import { Search, Edit2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuLabel,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { useState } from 'react';
 import { anggota } from '@/routes';
 
 const avatarColors = ['bg-primary', 'bg-chart-2', 'bg-chart-3', 'bg-chart-4', 'bg-chart-5'];
@@ -66,44 +41,16 @@ interface Option {
     name: string;
 }
 
-export default function Anggota({ 
-    members, 
-    statuses = [], 
-    departments = [] 
-}: { 
+export default function Anggota({
+    members,
+    statuses = [],
+    departments = []
+}: {
     members: MembersData;
     statuses: Option[];
     departments: Option[];
 }) {
     const users = members?.data || [];
-    const [selectedMember, setSelectedMember] = useState<Member | null>(null);
-    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-
-    const { data, setData, post, processing, reset } = useForm({
-        status_id: '',
-        department_id: '',
-    });
-
-    const handleEditClick = (member: Member) => {
-        setSelectedMember(member);
-        setData({
-            status_id: member.member_detail?.status_id?.toString() || '',
-            department_id: member.member_detail?.department_id?.toString() || '',
-        });
-        setIsEditModalOpen(true);
-    };
-
-    const handleUpdate = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!selectedMember) return;
-
-        post(route('anggota.update-details', selectedMember.id), {
-            onSuccess: () => {
-                setIsEditModalOpen(false);
-                reset();
-            },
-        });
-    };
 
     return (
         <>
@@ -154,10 +101,23 @@ export default function Anggota({
                                     users.map((user, idx) => {
                                         const displayName = user.name || user.username || 'User ' + user.id;
                                         const displayEmail = user.email || 'No Email';
-                                        const statusName = user.member_detail?.status?.name || '-';
-                                        const deptName = user.member_detail?.department?.name || 'Belum';
+                                        const statusId = user.member_detail?.status_id;
+                                        const departmentId = user.member_detail?.department_id;
+                                        const statusName =
+                                            user.member_detail?.status?.name ||
+                                            (statusId != null
+                                                ? statuses.find((s) => String(s.id) === String(statusId))?.name
+                                                : null) ||
+                                            user.status ||
+                                            '-';
+                                        const deptName =
+                                            user.member_detail?.department?.name ||
+                                            (departmentId != null
+                                                ? departments.find((d) => String(d.id) === String(departmentId))?.name
+                                                : null) ||
+                                            'Belum';
                                         const dateJoined = user.created_at || user.joined || null;
-                                        
+
                                         return (
                                             <tr key={user.id} className="hover:bg-muted/20 transition-colors">
                                                 <td className="px-6 py-4">
@@ -173,7 +133,7 @@ export default function Anggota({
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                                                        statusName === 'Volunteer' 
+                                                        statusName === 'Volunteer'
                                                             ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400'
                                                             : statusName === 'Jemaat'
                                                             ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400'
@@ -183,21 +143,25 @@ export default function Anggota({
                                                     </span>
                                                 </td>
                                                 <td className="px-6 py-4">
-                                                    <span className="text-foreground/80 font-medium">{deptName}</span>
+                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                                                        deptName === 'Belum'
+                                                            ? 'bg-muted text-muted-foreground'
+                                                            : 'bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-400'
+                                                    }`}>
+                                                        {deptName}
+                                                    </span>
                                                 </td>
                                                 <td className="px-6 py-4 text-muted-foreground font-medium">
                                                     {dateJoined ? new Date(dateJoined).toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' }) : '-'}
                                                 </td>
                                                 <td className="px-6 py-4 text-right">
-                                                    <Button 
-                                                        variant="ghost" 
-                                                        size="sm" 
-                                                        className="text-muted-foreground hover:text-foreground"
-                                                        onClick={() => handleEditClick(user)}
+                                                    <Link
+                                                        href={route('anggota.edit', user.id)}
+                                                        className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
                                                     >
-                                                        <Edit2 className="h-4 w-4 mr-1" />
+                                                        <Edit2 className="h-4 w-4" />
                                                         Edit
-                                                    </Button>
+                                                    </Link>
                                                 </td>
                                             </tr>
                                         );
@@ -228,65 +192,6 @@ export default function Anggota({
                 </div>
             </div>
 
-            {/* Edit Modal */}
-            <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-                <DialogContent className="sm:max-w-[425px]">
-                    <DialogHeader>
-                        <DialogTitle>Edit Status & Departemen</DialogTitle>
-                        <DialogDescription>
-                            Perbarui informasi pelayanan untuk {selectedMember?.name || selectedMember?.username}.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <form onSubmit={handleUpdate} className="grid gap-4 py-4">
-                        <div className="grid gap-2">
-                            <Label htmlFor="status">Status Anggota</Label>
-                            <Select 
-                                value={data.status_id} 
-                                onValueChange={(value) => setData('status_id', value)}
-                            >
-                                <SelectTrigger id="status">
-                                    <SelectValue placeholder="Pilih status..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="none">Belum Set</SelectItem>
-                                    {statuses.map((s) => (
-                                        <SelectItem key={s.id} value={s.id.toString()}>
-                                            {s.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="grid gap-2">
-                            <Label htmlFor="dept">Departemen Pelayanan</Label>
-                            <Select 
-                                value={data.department_id} 
-                                onValueChange={(value) => setData('department_id', value)}
-                            >
-                                <SelectTrigger id="dept">
-                                    <SelectValue placeholder="Pilih departemen..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="none">Belum</SelectItem>
-                                    {departments.map((d) => (
-                                        <SelectItem key={d.id} value={d.id.toString()}>
-                                            {d.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <DialogFooter className="mt-4">
-                            <Button type="button" variant="outline" onClick={() => setIsEditModalOpen(false)}>
-                                Batal
-                            </Button>
-                            <Button type="submit" disabled={processing}>
-                                Simpan Perubahan
-                            </Button>
-                        </DialogFooter>
-                    </form>
-                </DialogContent>
-            </Dialog>
         </>
     );
 }

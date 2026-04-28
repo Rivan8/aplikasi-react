@@ -31,4 +31,9 @@ class ExternalMember extends Authenticatable
      * (Empty because this is read-only)
      */
     protected $guarded = ['*'];
+
+    public function member_detail()
+    {
+        return $this->hasOne(MemberDetail::class, 'member_id', 'id');
+    }
 }

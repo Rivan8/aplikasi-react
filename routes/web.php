@@ -11,23 +11,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::inertia('dashboard', 'dashboard')->name('dashboard');
     Route::get('anggota', function () {
         try {
-            $members = \App\Models\ExternalMember::paginate(10);
-            
-            // Get IDs of members on current page
-            $memberIds = collect($members->items())->pluck('id');
-            
-            // Fetch local details
-            $details = \App\Models\MemberDetail::with(['status', 'department'])
-                ->whereIn('member_id', $memberIds)
-                ->get()
-                ->keyBy('member_id');
-
-            // Merge details into members
-            $members->getCollection()->transform(function ($member) use ($details) {
-                $detail = $details->get($member->id);
-                $member->member_detail = $detail;
-                return $member;
-            });
+            // Fetch external members with their local detail, status and department
+            $members = \App\Models\ExternalMember::with(['member_detail.status', 'member_detail.department'])
+                ->paginate(10);
 
             $statuses = \App\Models\MemberStatus::all();
             $departments = \App\Models\Department::all();
@@ -36,7 +22,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             $members = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 10);
             $statuses = [];
             $departments = [];
-            session()->now('error', 'Could not connect to database: ' . $e->getMessage());
+            session()->now('error', 'Gagal terhubung ke database: ' . $e->getMessage());
         }
 
         return inertia('anggota/index', [
@@ -63,7 +49,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         return back()->with('success', 'Detail anggota berhasil diperbarui');
     })->name('anggota.update-details');
     Route::resource('departments', \App\Http\Controllers\DepartmentController::class)->except(['create', 'edit', 'show']);
-    
+
     Route::inertia('events', 'events/index')->name('events');
     Route::inertia('scan-qr', 'scan-qr/index')->name('scan-qr');
     Route::inertia('attendance-history', 'attendance-history/index')->name('attendance-history');
