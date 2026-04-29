@@ -1,4 +1,4 @@
-import { Link } from '@inertiajs/react';
+import { Link, usePage } from '@inertiajs/react';
 import {
     HelpCircle,
     History,
@@ -27,36 +27,43 @@ const mainNavItems: NavItem[] = [
         title: 'Scan QR Member (Admin)',
         href: '/scan-qr',
         icon: QrCode,
+        roles: ['admin'],
     },
     {
         title: 'Absensi Mandiri',
         href: '/my/scan',
         icon: QrCode,
+        roles: ['jemaat', 'admin'],
     },
     {
         title: 'Event Dashboard',
         href: '/events',
         icon: LayoutDashboard,
+        roles: ['admin'],
     },
     {
         title: 'Attendance History',
         href: '/attendance-history',
         icon: History,
+        roles: ['admin'],
     },
     {
         title: 'Member List',
         href: '/anggota',
         icon: Users,
+        roles: ['admin'],
     },
     {
         title: 'Departemen',
         href: '/departments',
-        icon: Settings, // Or choose another icon
+        icon: Settings,
+        roles: ['admin'],
     },
     {
         title: 'Settings',
         href: '/settings/profile',
         icon: Settings,
+        roles: ['admin', 'jemaat'],
     },
 ];
 
@@ -69,13 +76,21 @@ const footerNavItems: NavItem[] = [
 ];
 
 export function AppSidebar() {
+    const { auth } = usePage().props as any;
+    const userRole = auth.user?.role || 'jemaat';
+
+    const filteredNavItems = mainNavItems.filter((item) => {
+        if (!item.roles) return true;
+        return item.roles.includes(userRole);
+    });
+
     return (
         <Sidebar collapsible="icon" variant="inset">
             <SidebarHeader>
                 <SidebarMenu>
                     <SidebarMenuItem>
                         <SidebarMenuButton size="lg" asChild>
-                            <Link href="/events" prefetch>
+                            <Link href={userRole === 'admin' ? '/events' : '/my/scan'} prefetch>
                                 <AppLogo />
                             </Link>
                         </SidebarMenuButton>
@@ -84,7 +99,7 @@ export function AppSidebar() {
             </SidebarHeader>
 
             <SidebarContent>
-                <NavMain items={mainNavItems} />
+                <NavMain items={filteredNavItems} />
             </SidebarContent>
 
             <SidebarFooter>

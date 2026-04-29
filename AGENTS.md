@@ -119,14 +119,16 @@ tests/                    # Pest test files
 | `image_path` | VARCHAR, nullable | Event image URL |
 | `created_at`, `updated_at` | TIMESTAMP | |
 
-#### `attendances`
+| `created_at`, `updated_at` | TIMESTAMP | |
+
+#### `users` (Local Auth)
 | Column | Type | Purpose |
 |--------|------|---------|
 | `id` | BIGINT | Primary key |
-| `event_id` | BIGINT FK | Event being attended |
-| `member_id` | BIGINT | External member ID (from `myesc_db.jemaat`) |
-| `scan_time` | TIMESTAMP | When member scanned |
-| `status` | VARCHAR | "Present", "Late", etc. |
+| `name`, `email` | VARCHAR | Auth credentials |
+| `password` | VARCHAR | Bcrypt hash |
+| `member_id` | VARCHAR, nullable | Link to `ExternalMember.idjemaat` |
+| `role` | VARCHAR | "admin" or "jemaat" (default: jemaat) |
 | `created_at`, `updated_at` | TIMESTAMP | |
 
 #### `member_details`
@@ -233,11 +235,23 @@ ExternalMember ←─ MemberDetail (1:1 bridge)
 - Tables: plural snake_case (`events`, `attendances`, `member_statuses`)
 - Classes: `CamelCase`; methods: `camelCase`; columns: `snake_case`
 
-**Auth**: Laravel Fortify (2FA, email verification, password reset). Local `User` + read-only `ExternalMember`.
+**Auth**: Laravel Fortify (2FA, email verification, password reset).
+- **Hybrid Login**: Falls back to external `myesc_db.jemaat` (MD5 check) if local login fails. Auto-syncs/creates local accounts and updates to Bcrypt on first successful MD5 login.
+- **Roles**: `admin` (full dashboard access) vs `jemaat` (limited to self-scan and settings).
 
 ---
 
-## 8. Code Quality Standards
+## 8. Attendance System (Dual-Mode QR)
+
+### Mode 1: Admin Scan (Staff-Operated)
+- **Route**: `/scan-qr`
+- **Logic**: Admin selects event → Scans physical card NIK → Lookup `ExternalMember` → Record Attendance.
+- **Tech**: `html5-qrcode` library for real-time camera scanning.
+
+### Mode 2: Self Check-in (User-Operated)
+- **Route**: `/my/scan`
+- **Logic**: User logs in → Scans Event QR Code (generated in Event list) → Record Attendance via logged-in `member_id`.
+- **Tech**: `react-qr-code` for display, `html5-qrcode` for scanning.
 
 **PHP** (Pint preset: Laravel):
 - 4-space indentation
