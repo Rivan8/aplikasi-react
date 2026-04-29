@@ -80,8 +80,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::resource('departments', \App\Http\Controllers\DepartmentController::class)->except(['create', 'edit', 'show']);
 
     Route::resource('events', \App\Http\Controllers\EventController::class)->except(['create', 'edit', 'show']);
-    Route::inertia('scan-qr', 'scan-qr/index')->name('scan-qr');
+    Route::get('scan-qr', function () {
+        return inertia('scan-qr/index', [
+            'events' => \App\Models\Event::orderBy('date', 'desc')->get(),
+        ]);
+    })->name('scan-qr');
     Route::inertia('attendance-history', 'attendance-history/index')->name('attendance-history');
+
+    // QR Attendance Routes
+    Route::get('my/scan', [\App\Http\Controllers\AttendanceController::class, 'showUserScan'])->name('my.scan');
+    Route::post('attendance/{event}/scan-event', [\App\Http\Controllers\AttendanceController::class, 'scanEventQr'])->name('attendance.scan-event');
+    Route::post('attendance/scan-member', [\App\Http\Controllers\AttendanceController::class, 'scanMemberQr'])->name('attendance.scan-member');
 });
 
 require __DIR__.'/settings.php';

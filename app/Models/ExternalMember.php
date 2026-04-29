@@ -58,7 +58,19 @@ class ExternalMember extends Authenticatable
      *
      * @var array
      */
-    protected $appends = ['id', 'name', 'joined'];
+    protected $appends = ['id', 'name', 'joined', 'nik'];
+
+    /**
+     * Scope a query to only include members with a given NIK.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder  $query
+     * @param  string  $nik
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    public function scopeByNik($query, $nik)
+    {
+        return $query->where('NIK', $nik);
+    }
 
     /**
      * Map 'idjemaat' to 'id' for the frontend.
@@ -82,6 +94,14 @@ class ExternalMember extends Authenticatable
     public function getJoinedAttribute()
     {
         return $this->tanggalinsert;
+    }
+
+    /**
+     * Map 'NIK' to 'nik' for the frontend.
+     */
+    public function getNikAttribute()
+    {
+        return $this->NIK ?? null;
     }
 
     public function member_detail()

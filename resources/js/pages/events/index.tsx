@@ -1,6 +1,7 @@
 import { Head, router, useForm } from '@inertiajs/react';
 import { Building, Calendar as CalendarIcon, ChevronDown, ChevronUp, Clock, Edit2, Eye, Image as ImageIcon, Info, MapPin, Plus, QrCode, Search, Trash2, Users, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { QRCode } from 'react-qr-code';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -163,6 +164,7 @@ export default function Events({
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [editingEvent, setEditingEvent] = useState<Event | null>(null);
     const [viewingEvent, setViewingEvent] = useState<Event | null>(null);
+    const [qrEvent, setQrEvent] = useState<Event | null>(null);
     const [openCategories, setOpenCategories] = useState<string[]>(['Worship']);
     const [imagePreview, setImagePreview] = useState<string | null>(null);
 
@@ -419,7 +421,10 @@ newVolunteers.splice(index, 1);
                                             <Eye className="h-3.5 w-3.5" />
                                             Detail
                                         </Button>
-                                        <Button className="flex-1 gap-2 text-xs h-9 bg-primary/10 text-primary hover:bg-primary/20 border-0 shadow-none">
+                                        <Button 
+                                            className="flex-1 gap-2 text-xs h-9 bg-primary/10 text-primary hover:bg-primary/20 border-0 shadow-none"
+                                            onClick={() => setQrEvent(event)}
+                                        >
                                             <QrCode className="h-3.5 w-3.5" />
                                             QR Code
                                         </Button>
@@ -757,12 +762,54 @@ fileInput.value = '';
 
                                 <div className="pt-4 flex justify-end gap-3">
                                     <Button variant="outline" className="rounded-xl h-11 px-6" onClick={() => setViewingEvent(null)}>Tutup</Button>
-                                    <Button className="rounded-xl h-11 px-8 gap-2">
+                                    <Button 
+                                        className="rounded-xl h-11 px-8 gap-2"
+                                        onClick={() => {
+                                            setViewingEvent(null);
+                                            setQrEvent(viewingEvent);
+                                        }}
+                                    >
                                         <QrCode className="h-4 w-4" />
                                         Generate QR
                                     </Button>
                                 </div>
                             </div>
+                        </>
+                    )}
+                </DialogContent>
+            </Dialog>
+            {/* QR Code Modal */}
+            <Dialog open={!!qrEvent} onOpenChange={(open) => !open && setQrEvent(null)}>
+                <DialogContent className="sm:max-w-md">
+                    {qrEvent && (
+                        <>
+                            <DialogHeader>
+                                <DialogTitle className="text-center">{qrEvent.title}</DialogTitle>
+                                <DialogDescription className="text-center">
+                                    Minta jemaat untuk scan QR ini dari HP mereka
+                                </DialogDescription>
+                            </DialogHeader>
+                            <div className="flex flex-col items-center justify-center p-6 space-y-6">
+                                <div className="bg-white p-4 rounded-xl shadow-sm border">
+                                    <QRCode
+                                        value={`${window.location.origin}/attendance/${qrEvent.id}/scan-event`}
+                                        size={256}
+                                        style={{ height: "auto", maxWidth: "100%", width: "100%" }}
+                                        viewBox={`0 0 256 256`}
+                                    />
+                                </div>
+                                <div className="text-center space-y-2">
+                                    <p className="text-sm font-medium text-foreground">
+                                        {qrEvent.date ? new Date(qrEvent.date).toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : '-'} • {qrEvent.time}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">{qrEvent.location}</p>
+                                </div>
+                            </div>
+                            <DialogFooter className="sm:justify-center">
+                                <Button type="button" variant="secondary" onClick={() => setQrEvent(null)}>
+                                    Tutup
+                                </Button>
+                            </DialogFooter>
                         </>
                     )}
                 </DialogContent>
