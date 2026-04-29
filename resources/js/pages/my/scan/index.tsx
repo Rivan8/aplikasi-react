@@ -1,7 +1,7 @@
 import { Head, router, usePage } from '@inertiajs/react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { Camera, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -9,10 +9,19 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 export default function MyScan() {
     const { auth, flash } = usePage().props as any;
     const scannerRef = useRef<Html5Qrcode | null>(null);
+    const readerElementRef = useRef<HTMLDivElement | null>(null);
     const [isScanning, setIsScanning] = useState(false);
     const [scanResult, setScanResult] = useState<string | null>(null);
     const [scanError, setScanError] = useState<string | null>(null);
     const [processing, setProcessing] = useState(false);
+    const isMountedRef = useRef(true);
+
+    useEffect(() => {
+        isMountedRef.current = true;
+        return () => {
+            isMountedRef.current = false;
+        };
+    }, []);
 
     useEffect(() => {
         if (flash?.success) {
@@ -29,47 +38,23 @@ export default function MyScan() {
         }
     }, [flash]);
 
-    const startScanner = async () => {
-        setScanError(null);
-        setScanResult(null);
-        setIsScanning(true);
-
-        try {
-            scannerRef.current = new Html5Qrcode("reader");
-            await scannerRef.current.start(
-                { facingMode: "environment" },
-                {
-                    fps: 10,
-                    qrbox: { width: 250, height: 250 },
-                },
-                (decodedText) => {
-                    // Berhasil scan
-                    stopScanner();
-                    processQrCode(decodedText);
-                },
-                (errorMessage) => {
-                    // Ignore background scan errors
+    const stopScanner = useCallback(async () => {
+        if (scannerRef.current) {
+            try {
+                if (scannerRef.current.isScanning) {
+                    await scannerRef.current.stop();
                 }
-            );
-        } catch (err: any) {
-            console.error("Error starting scanner", err);
-            setIsScanning(false);
-            setScanError("Tidak dapat mengakses kamera. Pastikan Anda telah memberikan izin.");
-        }
-    };
-
-    const stopScanner = async () => {
-        if (scannerRef.current && scannerRef.current.isScanning) {
-            await scannerRef.current.stop();
-            scannerRef.current.clear();
+                scannerRef.current.clear();
+            } catch {
+                // ignore
+            }
+            scannerRef.current = null;
         }
         setIsScanning(false);
-    };
+    }, []);
 
-    const processQrCode = (text: string) => {
+    const processQrCode = useCallback((text: string) => {
         // Asumsi format: https://domain.com/attendance/{id}/scan-event
-        // Kita hanya perlu route path nya.
-        
         try {
             const url = new URL(text);
             const path = url.pathname;
@@ -87,12 +72,83 @@ export default function MyScan() {
         } catch (e) {
             setScanError("Format QR Code tidak dikenali.");
         }
-    };
+    }, []);
 
+    const startScanner = useCallback(async () => {
+        setScanError(null);
+        setScanResult(null);
+        setIsScanning(true);
+
+        // Bersihkan scanner sebelumnya
+        if (scannerRef.current) {
+            try {
+                if (scannerRef.current.isScanning) {
+                    await scannerRef.current.stop();
+                }
+                scannerRef.current.clear();
+            } catch {
+                // ignore
+            }
+            scannerRef.current = null;
+        }
+
+        // Tunggu React selesai render dan DOM stabil
+        // (elemen #reader perlu punya dimensi > 0 sebelum html5-qrcode bisa digunakan)
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                setTimeout(async () => {
+                    if (!isMountedRef.current) return;
+
+                    const element = document.getElementById("reader");
+                    if (!element) {
+                        console.error("Element #reader not found in DOM");
+                        setIsScanning(false);
+                        setScanError("Gagal memulai scanner. Coba muat ulang halaman.");
+                        return;
+                    }
+
+                    try {
+                        const scanner = new Html5Qrcode("reader");
+                        scannerRef.current = scanner;
+
+                        await scanner.start(
+                            { facingMode: "environment" },
+                            {
+                                fps: 10,
+                                qrbox: { width: 250, height: 250 },
+                            },
+                            (decodedText) => {
+                                // Berhasil scan — stop scanner lalu proses
+                                stopScanner();
+                                processQrCode(decodedText);
+                            },
+                            () => {} // Ignore background scan errors
+                        );
+                    } catch (err: any) {
+                        console.error("Error starting scanner:", err);
+                        if (isMountedRef.current) {
+                            setIsScanning(false);
+                            setScanError("Tidak dapat mengakses kamera. Pastikan Anda telah memberikan izin.");
+                        }
+                    }
+                }, 300);
+            });
+        });
+    }, [stopScanner, processQrCode]);
+
+    // Cleanup on unmount
     useEffect(() => {
         return () => {
-            if (scannerRef.current && scannerRef.current.isScanning) {
-                scannerRef.current.stop().catch(console.error);
+            if (scannerRef.current) {
+                if (scannerRef.current.isScanning) {
+                    scannerRef.current.stop().catch(() => {});
+                }
+                try {
+                    scannerRef.current.clear();
+                } catch {
+                    // ignore
+                }
+                scannerRef.current = null;
             }
         };
     }, []);
@@ -188,9 +244,19 @@ export default function MyScan() {
                             {/* State: Ready / Scanning */}
                             {!processing && !scanResult && !scanError && (
                                 <div className="flex flex-col">
+                                    {/* 
+                                        Elemen reader SELALU ada di DOM dengan dimensi nyata.
+                                        html5-qrcode butuh elemen visible dengan ukuran > 0.
+                                    */}
                                     <div 
+                                        ref={readerElementRef}
                                         id="reader" 
-                                        className={`w-full overflow-hidden bg-black ${isScanning ? 'h-80' : 'h-0'}`} 
+                                        className="w-full overflow-hidden bg-black"
+                                        style={{
+                                            height: isScanning ? '320px' : '1px',
+                                            opacity: isScanning ? 1 : 0,
+                                            position: isScanning ? 'relative' : 'absolute',
+                                        }}
                                     />
                                     
                                     {!isScanning && (

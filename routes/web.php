@@ -85,7 +85,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             'events' => \App\Models\Event::orderBy('date', 'desc')->get(),
         ]);
     })->name('scan-qr');
-    Route::inertia('attendance-history', 'attendance-history/index')->name('attendance-history');
+    Route::get('attendance-history', [\App\Http\Controllers\AttendanceController::class, 'history'])->name('attendance-history');
 
     // QR Attendance Routes
     Route::get('my/scan', [\App\Http\Controllers\AttendanceController::class, 'showUserScan'])->name('my.scan');
