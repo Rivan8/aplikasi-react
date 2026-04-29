@@ -1,8 +1,8 @@
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Head, Link, router } from '@inertiajs/react';
 import { Edit2, Search } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 const avatarColors = ['bg-primary', 'bg-chart-2', 'bg-chart-3', 'bg-chart-4', 'bg-chart-5'];
 

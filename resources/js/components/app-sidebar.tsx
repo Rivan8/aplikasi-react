@@ -1,3 +1,12 @@
+import { Link } from '@inertiajs/react';
+import {
+    HelpCircle,
+    History,
+    LayoutDashboard,
+    QrCode,
+    Settings,
+    Users,
+} from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
@@ -12,15 +21,6 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import type { NavItem } from '@/types';
-import { Link } from '@inertiajs/react';
-import {
-    HelpCircle,
-    History,
-    LayoutDashboard,
-    QrCode,
-    Settings,
-    Users,
-} from 'lucide-react';
 
 const mainNavItems: NavItem[] = [
     {

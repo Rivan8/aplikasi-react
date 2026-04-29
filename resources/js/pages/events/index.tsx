@@ -1,3 +1,7 @@
+import { Head, router, useForm } from '@inertiajs/react';
+import { Building, Calendar as CalendarIcon, ChevronDown, ChevronUp, Clock, Edit2, Eye, Image as ImageIcon, Info, MapPin, Plus, QrCode, Search, Trash2, Users, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -13,10 +17,6 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Head, useForm } from '@inertiajs/react';
-import { Building, Calendar as CalendarIcon, ChevronDown, ChevronUp, Clock, Edit2, Eye, Image as ImageIcon, Info, MapPin, Plus, QrCode, Search, Trash2, Users, X } from 'lucide-react';
-import { useMemo, useState } from 'react';
-import { toast } from 'sonner';
 
 interface Volunteer {
     id: number;
@@ -75,7 +75,11 @@ const SearchableSelect = ({
 
     const filteredMembers = useMemo(() => {
         const list = Array.isArray(external_members) ? external_members : [];
-        if (!searchTerm) return list.slice(0, 50);
+
+        if (!searchTerm) {
+return list.slice(0, 50);
+}
+
         return list.filter(m =>
             m.name?.toLowerCase().includes(searchTerm.toLowerCase())
         ).slice(0, 50);
@@ -162,7 +166,7 @@ export default function Events({
     const [openCategories, setOpenCategories] = useState<string[]>(['Worship']);
     const [imagePreview, setImagePreview] = useState<string | null>(null);
 
-    const { data, setData, post, processing, reset, errors, clearErrors, transform } = useForm({
+    const { data, setData, post, put, processing, reset, errors, clearErrors } = useForm({
         title: '',
         date: '',
         time: '',
@@ -174,23 +178,63 @@ export default function Events({
         volunteers: [] as { role_category: string; role_name: string; member_id: string }[],
     });
 
+    // Effect to populate form when editing event changes
+    useEffect(() => {
+        if (editingEvent) {
+            // Update all form fields at once using a callback to ensure they're all set together
+            setData((currentData: any) => ({
+                ...currentData,
+                title: editingEvent.title || '',
+                date: editingEvent.date || '',
+                time: editingEvent.time || '',
+                location: editingEvent.location || '',
+                address: editingEvent.address || '',
+                category: editingEvent.category || 'Ibadah',
+                expected: editingEvent.expected || 0,
+                image: null,
+                volunteers: editingEvent.volunteers?.map(v => ({
+                    role_category: v.role_category,
+                    role_name: v.role_name,
+                    member_id: v.member_id
+                })) || []
+            }));
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            setImagePreview(editingEvent.image_path || null);
+        }
+    }, [editingEvent]);
+
+    const buildFormData = (extra?: Record<string, string>) => {
+        const fd = new FormData();
+        fd.append('title', data.title);
+        fd.append('date', data.date);
+        fd.append('time', data.time);
+        fd.append('location', data.location);
+        fd.append('address', data.address);
+        fd.append('category', data.category);
+        fd.append('expected', String(data.expected));
+        fd.append('volunteers', JSON.stringify(data.volunteers));
+        if (data.image) {
+            fd.append('image', data.image);
+        }
+        if (extra) {
+            Object.entries(extra).forEach(([k, v]) => fd.append(k, v));
+        }
+        return fd;
+    };
+
     const handleAdd = (e: React.FormEvent) => {
         e.preventDefault();
-        
-        transform((data) => ({
-            ...data,
-            volunteers: JSON.stringify(data.volunteers)
-        }));
 
-        post('/events', {
-            forceFormData: true,
+        router.post('/events', buildFormData(), {
             onSuccess: () => {
                 setIsAddModalOpen(false);
                 reset();
                 setImagePreview(null);
+                const fileInput = document.getElementById('image-upload') as HTMLInputElement;
+                if (fileInput) fileInput.value = '';
                 toast.success('Event berhasil ditambahkan');
             },
-            onError: (err) => {
+            onError: (err: any) => {
                 console.error('Add Event Error:', err);
                 toast.error('Gagal menambahkan event. Silakan cek form kembali.');
             }
@@ -199,24 +243,22 @@ export default function Events({
 
     const handleEdit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!editingEvent) return;
 
-        transform((data) => ({
-            ...data,
-            volunteers: JSON.stringify(data.volunteers),
-            _method: 'PUT'
-        }));
+        if (!editingEvent) {
+            console.error('No editing event selected');
+            return;
+        }
 
-        // Use POST with _method=PUT because multipart/form-data doesn't support PUT natively in many environments
-        post(`/events/${editingEvent.id}`, {
-            forceFormData: true,
+        router.post(`/events/${editingEvent.id}`, buildFormData({ _method: 'PUT' }), {
             onSuccess: () => {
                 setEditingEvent(null);
                 reset();
                 setImagePreview(null);
+                const fileInput = document.getElementById('image-upload') as HTMLInputElement;
+                if (fileInput) fileInput.value = '';
                 toast.success('Event berhasil diperbarui');
             },
-            onError: (err) => {
+            onError: (err: any) => {
                 console.error('Edit Event Error:', err);
                 toast.error('Gagal memperbarui event. Silakan cek form kembali.');
             }
@@ -226,34 +268,29 @@ export default function Events({
     const handleDelete = (id: number) => {
         if (confirm('Apakah Anda yakin ingin menghapus event ini?')) {
             post(`/events/${id}`, {
-                data: { _method: 'DELETE' },
+                _method: 'DELETE',
+            }, {
                 onSuccess: () => toast.success('Event berhasil dihapus'),
             });
         }
     };
 
     const openEditModal = (event: Event) => {
+        // Set editing event first - useEffect will populate the form
         setEditingEvent(event);
-        setImagePreview(event.image_path || null);
-        setData({
-            title: event.title,
-            date: event.date,
-            time: event.time,
-            location: event.location,
-            address: event.address,
-            category: event.category,
-            expected: event.expected,
-            image: null,
-            volunteers: event.volunteers?.map(v => ({
-                role_category: v.role_category,
-                role_name: v.role_name,
-                member_id: v.member_id
-            })) || []
-        });
+        setImagePreview(null);
+
+        // Reset file input
+        const fileInput = document.getElementById('image-upload') as HTMLInputElement;
+
+        if (fileInput) {
+            fileInput.value = '';
+        }
     };
 
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
+
         if (file) {
             setData('image', file);
             const reader = new FileReader();
@@ -273,7 +310,9 @@ export default function Events({
         const index = newVolunteers.findIndex(v => v.role_category === category && v.role_name === role);
 
         if (memberId === 'none') {
-            if (index !== -1) newVolunteers.splice(index, 1);
+            if (index !== -1) {
+newVolunteers.splice(index, 1);
+}
         } else {
             if (index !== -1) {
                 newVolunteers[index].member_id = memberId;
@@ -281,6 +320,7 @@ export default function Events({
                 newVolunteers.push({ role_category: category, role_name: role, member_id: memberId });
             }
         }
+
         setData('volunteers', newVolunteers);
     };
 
@@ -401,10 +441,19 @@ export default function Events({
                         setImagePreview(null);
                         clearErrors();
                         reset();
+                        // Reset file input
+                        const fileInput = document.getElementById('image-upload') as HTMLInputElement;
+
+                        if (fileInput) {
+fileInput.value = '';
+}
                     }
                 }}
             >
-                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto p-0">
+                <DialogContent
+                className="!max-w-[99vw] lg:!max-w-[1600px] !w-[min(99vw,1600px)] max-h-[90vh] overflow-y-auto p-0"
+                style={{ width: 'min(99vw, 1600px)', maxWidth: '99vw' }}
+            >
                     <form onSubmit={editingEvent ? handleEdit : handleAdd}>
                         <div className="p-6 pb-0">
                             <DialogHeader>
@@ -638,6 +687,12 @@ export default function Events({
                 <DialogContent className="max-w-2xl p-0 overflow-hidden rounded-2xl">
                     {viewingEvent && (
                         <>
+                            <DialogHeader className="sr-only">
+                                <DialogTitle>Detail Event</DialogTitle>
+                                <DialogDescription>
+                                    Informasi lengkap tentang event pelayanan termasuk tanggal, waktu, lokasi, dan volunteer yang bertugas.
+                                </DialogDescription>
+                            </DialogHeader>
                             <div className="aspect-video w-full bg-muted relative">
                                 {viewingEvent.image_path ? (
                                     <img src={viewingEvent.image_path} alt={viewingEvent.title} className="h-full w-full object-cover" />

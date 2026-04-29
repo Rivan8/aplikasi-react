@@ -1,10 +1,10 @@
+import { Head, Link, useForm } from '@inertiajs/react';
+import { ChevronLeft, Save, User } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Head, Link, useForm } from '@inertiajs/react';
-import { ChevronLeft, Save, User } from 'lucide-react';
-import { toast } from 'sonner';
 
 interface Member {
     id: string | number;
