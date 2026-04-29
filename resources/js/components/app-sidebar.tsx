@@ -24,8 +24,13 @@ import type { NavItem } from '@/types';
 
 const mainNavItems: NavItem[] = [
     {
-        title: 'Scan QR',
+        title: 'Scan QR Member (Admin)',
         href: '/scan-qr',
+        icon: QrCode,
+    },
+    {
+        title: 'Absensi Mandiri',
+        href: '/my/scan',
         icon: QrCode,
     },
     {

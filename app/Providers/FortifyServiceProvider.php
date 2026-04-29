@@ -40,6 +40,44 @@ class FortifyServiceProvider extends ServiceProvider
     {
         Fortify::resetUserPasswordsUsing(ResetUserPassword::class);
         Fortify::createUsersUsing(CreateNewUser::class);
+
+        Fortify::authenticateUsing(function (Request $request) {
+            // First pass: try standard local authentication
+            $user = \App\Models\User::where('email', $request->email)->first();
+
+            if ($user && \Illuminate\Support\Facades\Hash::check($request->password, $user->password)) {
+                return $user;
+            }
+
+            // Second pass: fallback to external DB (MD5 check)
+            $externalMember = \App\Models\ExternalMember::where('email', $request->email)->first();
+
+            if ($externalMember && md5($request->password) === $externalMember->password) {
+                // Password matched MD5 externally. Let's sync!
+                
+                if ($user) {
+                    // Scenario A: User exists locally but had wrong password (changed in old app).
+                    // Update their local password to the new Bcrypt hash.
+                    $user->update([
+                        'password' => \Illuminate\Support\Facades\Hash::make($request->password),
+                        'member_id' => $user->member_id ?? $externalMember->idjemaat // Fallback linking
+                    ]);
+                    return $user;
+                } else {
+                    // Scenario B: User doesn't exist locally at all. Create them.
+                    $newUser = \App\Models\User::create([
+                        'name' => $externalMember->namalengkap ?? 'Unknown',
+                        'email' => $request->email,
+                        'password' => \Illuminate\Support\Facades\Hash::make($request->password),
+                        'member_id' => $externalMember->idjemaat,
+                    ]);
+                    return $newUser;
+                }
+            }
+
+            // Return null indicating authentication failed
+            return null;
+        });
     }
 
     /**
