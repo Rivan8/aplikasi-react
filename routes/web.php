@@ -86,9 +86,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ]);
     })->name('scan-qr');
     Route::get('attendance-history', [\App\Http\Controllers\AttendanceController::class, 'history'])->name('attendance-history');
+    Route::get('attendance-history/export/pdf', [\App\Http\Controllers\AttendanceController::class, 'exportPdf'])->name('attendance-history.export.pdf');
+    Route::get('attendance-history/export/excel', [\App\Http\Controllers\AttendanceController::class, 'exportExcel'])->name('attendance-history.export.excel');
 
     // QR Attendance Routes
     Route::get('my/scan', [\App\Http\Controllers\AttendanceController::class, 'showUserScan'])->name('my.scan');
+    Route::get('attendance/{event}/scan', [\App\Http\Controllers\AttendanceController::class, 'showEventScan'])->name('attendance.scan');
     Route::post('attendance/{event}/scan-event', [\App\Http\Controllers\AttendanceController::class, 'scanEventQr'])->name('attendance.scan-event');
     Route::post('attendance/scan-member', [\App\Http\Controllers\AttendanceController::class, 'scanMemberQr'])->name('attendance.scan-member');
 });

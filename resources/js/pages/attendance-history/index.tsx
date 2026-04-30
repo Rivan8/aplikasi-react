@@ -117,6 +117,19 @@ export default function AttendanceHistory({ attendances, events, filters }: Prop
             .toUpperCase();
     };
 
+    const buildExportUrl = (format: 'pdf' | 'excel') => {
+        const params: Record<string, string> = {};
+
+        if (filterEventId && filterEventId !== 'all') params.event_id = filterEventId;
+        if (filterStatus && filterStatus !== 'all') params.status = filterStatus;
+        if (filterDateFrom) params.date_from = filterDateFrom;
+        if (filterDateTo) params.date_to = filterDateTo;
+        if (searchQuery) params.search = searchQuery;
+
+        const queryString = new URLSearchParams(params).toString();
+        return `/attendance-history/export/${format}${queryString ? `?${queryString}` : ''}`;
+    };
+
     return (
         <>
             <Head title="Riwayat Kehadiran" />
@@ -132,14 +145,18 @@ export default function AttendanceHistory({ attendances, events, filters }: Prop
                         </p>
                     </div>
                     <div className="flex items-center gap-3">
-                        <Button variant="outline" className="flex items-center gap-2 font-medium">
-                            <FileText className="h-4 w-4" />
-                            Export PDF
+                        <Button asChild variant="outline" className="flex items-center gap-2 font-medium">
+                            <a href={buildExportUrl('pdf')} target="_blank" rel="noreferrer">
+                                <FileText className="h-4 w-4" />
+                                Export PDF
+                            </a>
                         </Button>
 
-                        <Button className="flex items-center gap-2 font-medium shadow-sm">
-                            <FileSpreadsheet className="h-4 w-4" />
-                            Export Excel
+                        <Button asChild className="flex items-center gap-2 font-medium shadow-sm">
+                            <a href={buildExportUrl('excel')} target="_blank" rel="noreferrer">
+                                <FileSpreadsheet className="h-4 w-4" />
+                                Export Excel
+                            </a>
                         </Button>
                     </div>
                 </div>

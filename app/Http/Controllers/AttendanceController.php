@@ -2,11 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\AttendanceHistoryExport;
 use App\Models\Event;
 use App\Models\Attendance;
 use App\Models\ExternalMember;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use Maatwebsite\Excel\Facades\Excel;
 
 class AttendanceController extends Controller
 {
@@ -88,10 +91,95 @@ class AttendanceController extends Controller
         ]);
     }
 
+    public function exportPdf(Request $request)
+    {
+        $rows = $this->buildAttendanceExportRows($request);
+
+        $pdf = Pdf::loadView('exports.attendance-history', [
+            'rows' => $rows,
+            'title' => 'Riwayat Kehadiran',
+        ])->setPaper('a4', 'landscape');
+
+        return $pdf->download('attendance-history.pdf');
+    }
+
+    public function exportExcel(Request $request)
+    {
+        $rows = $this->buildAttendanceExportRows($request);
+
+        return Excel::download(new AttendanceHistoryExport($rows), 'attendance-history.xlsx');
+    }
+
+    private function buildAttendanceExportRows(Request $request): array
+    {
+        $query = Attendance::with('event')
+            ->orderBy('scan_time', 'desc');
+
+        if ($request->filled('event_id') && $request->event_id !== 'all') {
+            $query->where('event_id', $request->event_id);
+        }
+
+        if ($request->filled('status') && $request->status !== 'all') {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->filled('date_from')) {
+            $query->whereDate('scan_time', '>=', $request->date_from);
+        }
+        if ($request->filled('date_to')) {
+            $query->whereDate('scan_time', '<=', $request->date_to);
+        }
+
+        $attendances = $query->get();
+
+        $memberIds = $attendances->pluck('member_id')->unique()->values()->toArray();
+        $members = [];
+
+        if (!empty($memberIds)) {
+            try {
+                $externalMembers = ExternalMember::whereIn('idjemaat', $memberIds)->get();
+                foreach ($externalMembers as $member) {
+                    $members[$member->idjemaat] = [
+                        'name' => $member->name,
+                        'nik' => $member->nik,
+                    ];
+                }
+            } catch (\Exception $e) {
+                // Jika external DB gagal, tampilkan member_id saja
+            }
+        }
+
+        return $attendances->map(function ($attendance) use ($members) {
+            $memberInfo = $members[$attendance->member_id] ?? null;
+
+            return [
+                'ID' => $attendance->id,
+                'Nama Jemaat' => $memberInfo ? $memberInfo['name'] : 'Member #' . $attendance->member_id,
+                'NIK' => $memberInfo ? $memberInfo['nik'] : '-',
+                'Event' => $attendance->event?->title ?? 'Event Dihapus',
+                'Lokasi' => $attendance->event?->location ?? '-',
+                'Tanggal Event' => $attendance->event?->date ?? '-',
+                'Waktu Scan' => $attendance->scan_time?->format('d M Y, H:i'),
+                'Status' => $attendance->status,
+            ];
+        })->toArray();
+    }
+
     // Mode 1: Jemaat buka page scan di HP mereka
     public function showUserScan()
     {
         return Inertia::render('my/scan/index');
+    }
+
+    /**
+     * Halaman scan untuk event tertentu (GET route untuk QR code clickable)
+     */
+    public function showEventScan(Event $event)
+    {
+        return Inertia::render('my/scan/index', [
+            'event' => $event,
+            'qr_value' => route('attendance.scan-event', $event)
+        ]);
     }
 
     // Mode 1: Jemaat scan QR Event (POST)

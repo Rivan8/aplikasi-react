@@ -1,7 +1,7 @@
 import { Head, router, useForm } from '@inertiajs/react';
 import { Building, Calendar as CalendarIcon, ChevronDown, ChevronUp, Clock, Edit2, Eye, Image as ImageIcon, Info, MapPin, Plus, QrCode, Search, Trash2, Users, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { QRCode } from 'react-qr-code';
+import QRCode from 'react-qr-code';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -168,6 +168,12 @@ export default function Events({
     const [openCategories, setOpenCategories] = useState<string[]>(['Worship']);
     const [imagePreview, setImagePreview] = useState<string | null>(null);
 
+    // Search and Filter States
+    const [searchQuery, setSearchQuery] = useState('');
+    const [selectedCategory, setSelectedCategory] = useState<string>('all');
+    const [sortBy, setSortBy] = useState<'date-asc' | 'date-desc' | 'title'>('date-desc');
+    const [dateFilter, setDateFilter] = useState<'all' | 'upcoming' | 'past' | 'today'>('all');
+
     const { data, setData, post, put, processing, reset, errors, clearErrors } = useForm({
         title: '',
         date: '',
@@ -269,9 +275,7 @@ export default function Events({
 
     const handleDelete = (id: number) => {
         if (confirm('Apakah Anda yakin ingin menghapus event ini?')) {
-            post(`/events/${id}`, {
-                _method: 'DELETE',
-            }, {
+            post(route('events.destroy', id), {
                 onSuccess: () => toast.success('Event berhasil dihapus'),
             });
         }
@@ -332,6 +336,63 @@ newVolunteers.splice(index, 1);
         );
     };
 
+    // Filter and sort events
+    const filteredAndSortedEvents = useMemo(() => {
+        let filtered = Array.isArray(events) ? [...events] : [];
+
+        // Search filter
+        if (searchQuery.trim()) {
+            const query = searchQuery.toLowerCase();
+            filtered = filtered.filter(event =>
+                event.title.toLowerCase().includes(query) ||
+                event.location.toLowerCase().includes(query) ||
+                event.address.toLowerCase().includes(query)
+            );
+        }
+
+        // Category filter
+        if (selectedCategory !== 'all') {
+            filtered = filtered.filter(event => event.category === selectedCategory);
+        }
+
+        // Date filter
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        if (dateFilter === 'upcoming') {
+            filtered = filtered.filter(event => {
+                const eventDate = new Date(event.date);
+                eventDate.setHours(0, 0, 0, 0);
+                return eventDate >= today;
+            });
+        } else if (dateFilter === 'past') {
+            filtered = filtered.filter(event => {
+                const eventDate = new Date(event.date);
+                eventDate.setHours(0, 0, 0, 0);
+                return eventDate < today;
+            });
+        } else if (dateFilter === 'today') {
+            filtered = filtered.filter(event => {
+                const eventDate = new Date(event.date);
+                eventDate.setHours(0, 0, 0, 0);
+                return eventDate.getTime() === today.getTime();
+            });
+        }
+
+        // Sort
+        filtered.sort((a, b) => {
+            if (sortBy === 'date-asc') {
+                return new Date(a.date).getTime() - new Date(b.date).getTime();
+            } else if (sortBy === 'date-desc') {
+                return new Date(b.date).getTime() - new Date(a.date).getTime();
+            } else { // title
+                return a.title.localeCompare(b.title);
+            }
+        });
+
+        return filtered;
+    }, [events, searchQuery, selectedCategory, dateFilter, sortBy]);
+
     return (
         <>
             <Head title="Event Dashboard" />
@@ -353,16 +414,119 @@ newVolunteers.splice(index, 1);
                     </Button>
                 </div>
 
+                {/* Search and Filter Section */}
+                <div className="rounded-xl border bg-card p-6 shadow-sm">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                                Cari Event
+                            </label>
+                            <div className="relative">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    type="text"
+                                    placeholder="Judul, lokasi, atau alamat..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="pl-10 bg-muted/30 border-border"
+                                />
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                                Kategori
+                            </label>
+                            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                                <SelectTrigger className="bg-muted/30 border-border">
+                                    <SelectValue placeholder="Semua Kategori" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">Semua Kategori</SelectItem>
+                                    {categories.map(cat => (
+                                        <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                                Periode
+                            </label>
+                            <Select value={dateFilter} onValueChange={(value: any) => setDateFilter(value)}>
+                                <SelectTrigger className="bg-muted/30 border-border">
+                                    <SelectValue placeholder="Semua Periode" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">Semua Periode</SelectItem>
+                                    <SelectItem value="upcoming">Mendatang</SelectItem>
+                                    <SelectItem value="today">Hari Ini</SelectItem>
+                                    <SelectItem value="past">Sudah Lewat</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                                Urutkan
+                            </label>
+                            <Select value={sortBy} onValueChange={(value: any) => setSortBy(value)}>
+                                <SelectTrigger className="bg-muted/30 border-border">
+                                    <SelectValue placeholder="Pilih Urutan" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="date-desc">Tanggal Terdekat</SelectItem>
+                                    <SelectItem value="date-asc">Tanggal Terjauh</SelectItem>
+                                    <SelectItem value="title">Nama Event (A-Z)</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                    {(searchQuery || selectedCategory !== 'all' || dateFilter !== 'all') && (
+                        <div className="flex items-center gap-3 mt-4 pt-4 border-t">
+                            <span className="text-sm text-muted-foreground">
+                                Menampilkan {filteredAndSortedEvents.length} dari {events.length} event
+                            </span>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                    setSearchQuery('');
+                                    setSelectedCategory('all');
+                                    setDateFilter('all');
+                                    setSortBy('date-desc');
+                                }}
+                                className="text-muted-foreground hover:text-foreground"
+                            >
+                                Reset Filter
+                            </Button>
+                        </div>
+                    )}
+                </div>
+
                 {/* Events Grid */}
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-                    {(!Array.isArray(events) || events.length === 0) ? (
+                    {filteredAndSortedEvents.length === 0 ? (
                         <div className="col-span-full flex flex-col items-center justify-center py-20 text-muted-foreground border-2 border-dashed rounded-xl">
-                            <CalendarIcon className="h-12 w-12 mb-4 opacity-20" />
-                            <p>Belum ada event yang dibuat.</p>
-                            <Button variant="link" onClick={() => setIsAddModalOpen(true)}>Buat event pertama Anda</Button>
+                            <Search className="h-12 w-12 mb-4 opacity-20" />
+                            <p className="font-medium">
+                                {events.length === 0 ? 'Belum ada event yang dibuat.' : 'Tidak ada event yang sesuai filter.'}
+                            </p>
+                            {events.length === 0 ? (
+                                <Button variant="link" onClick={() => setIsAddModalOpen(true)}>Buat event pertama Anda</Button>
+                            ) : (
+                                <Button
+                                    variant="link"
+                                    onClick={() => {
+                                        setSearchQuery('');
+                                        setSelectedCategory('all');
+                                        setDateFilter('all');
+                                    }}
+                                >
+                                    Reset filter untuk melihat semua event
+                                </Button>
+                            )}
                         </div>
                     ) : (
-                        events.map((event) => (
+                        filteredAndSortedEvents.map((event) => (
                             <Card key={event.id} className="group overflow-hidden border bg-card shadow-sm transition-all hover:shadow-md rounded-xl flex flex-col">
                                 {/* Event Image */}
                                 <div className="aspect-video w-full overflow-hidden bg-muted relative">
@@ -381,6 +545,23 @@ newVolunteers.splice(index, 1);
                                         <Badge variant="secondary" className="bg-background/80 backdrop-blur-sm">
                                             {event.category}
                                         </Badge>
+                                    </div>
+                                    {/* Status Badge */}
+                                    <div className="absolute top-3 right-3">
+                                        {(() => {
+                                            const eventDate = new Date(event.date);
+                                            const today = new Date();
+                                            today.setHours(0, 0, 0, 0);
+                                            eventDate.setHours(0, 0, 0, 0);
+
+                                            if (eventDate.getTime() === today.getTime()) {
+                                                return <Badge className="bg-emerald-500 text-white border-0">Hari Ini</Badge>;
+                                            } else if (eventDate > today) {
+                                                return <Badge variant="outline" className="bg-background/80 backdrop-blur-sm border-primary/20 text-primary">Mendatang</Badge>;
+                                            } else {
+                                                return <Badge variant="outline" className="bg-background/80 backdrop-blur-sm border-muted-foreground/20 text-muted-foreground">Selesai</Badge>;
+                                            }
+                                        })()}
                                     </div>
                                 </div>
 
@@ -421,7 +602,7 @@ newVolunteers.splice(index, 1);
                                             <Eye className="h-3.5 w-3.5" />
                                             Detail
                                         </Button>
-                                        <Button 
+                                        <Button
                                             className="flex-1 gap-2 text-xs h-9 bg-primary/10 text-primary hover:bg-primary/20 border-0 shadow-none"
                                             onClick={() => setQrEvent(event)}
                                         >
@@ -762,7 +943,7 @@ fileInput.value = '';
 
                                 <div className="pt-4 flex justify-end gap-3">
                                     <Button variant="outline" className="rounded-xl h-11 px-6" onClick={() => setViewingEvent(null)}>Tutup</Button>
-                                    <Button 
+                                    <Button
                                         className="rounded-xl h-11 px-8 gap-2"
                                         onClick={() => {
                                             setViewingEvent(null);
@@ -792,10 +973,9 @@ fileInput.value = '';
                             <div className="flex flex-col items-center justify-center p-6 space-y-6">
                                 <div className="bg-white p-4 rounded-xl shadow-sm border">
                                     <QRCode
-                                        value={`${window.location.origin}/attendance/${qrEvent.id}/scan-event`}
+                                        value={`${window.location.origin}/attendance/${qrEvent.id}/scan`}
                                         size={256}
-                                        style={{ height: "auto", maxWidth: "100%", width: "100%" }}
-                                        viewBox={`0 0 256 256`}
+                                        level="H"
                                     />
                                 </div>
                                 <div className="text-center space-y-2">

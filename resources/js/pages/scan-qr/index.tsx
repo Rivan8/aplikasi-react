@@ -35,7 +35,7 @@ export default function ScanQR({ events = [] }: { events: Event[] }) {
     const [lastScanResult, setLastScanResult] = useState<{ type: 'success' | 'info' | 'error'; name: string } | null>(null);
 
     // Recent scans list
-    const [recentScans, setRecentScans] = useState<RecentScan[]>([]);
+    const [recentScans, setRecentScans] = useState<Record<string, RecentScan[]>>({});
 
     useEffect(() => {
         isMountedRef.current = true;
@@ -52,6 +52,8 @@ export default function ScanQR({ events = [] }: { events: Event[] }) {
 
     // Handle flash messages dari backend
     useEffect(() => {
+        const eventKey = selectedEventId || 'default';
+
         if (flash?.success) {
             // Ekstrak nama dari pesan "Kehadiran berhasil dicatat untuk [NAMA]"
             const match = flash.success.match(/untuk (.+)$/);
@@ -60,32 +62,46 @@ export default function ScanQR({ events = [] }: { events: Event[] }) {
             toast.success(flash.success, { duration: 3000 });
             setLastScanResult({ type: 'success', name });
 
-            // Tambahkan ke recent scans
-            setRecentScans(prev => [{
-                id: Date.now(),
-                name: name,
-                time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
-                status: 'success',
-            }, ...prev].slice(0, 20));
+            // Tambahkan ke recent scans untuk event saat ini
+            setRecentScans(prev => {
+                const eventHistory = prev[eventKey] ?? [];
+                const nextHistory = [{
+                    id: Date.now(),
+                    name,
+                    time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+                    status: 'success' as const,
+                }, ...eventHistory].slice(0, 5);
+
+                return {
+                    ...prev,
+                    [eventKey]: nextHistory,
+                };
+            });
         }
 
         if (flash?.error) {
             toast.error(flash.error, { duration: 4000 });
 
-            // Tentukan apakah ini QR tidak dikenali
             const isInvalidQr = flash.error.includes('tidak dikenali');
             setLastScanResult({
                 type: 'error',
                 name: isInvalidQr ? 'QR Tidak Valid' : 'Error',
             });
 
-            // Tambahkan ke recent scans sebagai error
-            setRecentScans(prev => [{
-                id: Date.now(),
-                name: isInvalidQr ? 'QR Tidak Dikenali' : 'Gagal',
-                time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
-                status: 'error',
-            }, ...prev].slice(0, 20));
+            setRecentScans(prev => {
+                const eventHistory = prev[eventKey] ?? [];
+                const nextHistory = [{
+                    id: Date.now(),
+                    name: isInvalidQr ? 'QR Tidak Dikenali' : 'Gagal',
+                    time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+                    status: 'error' as const,
+                }, ...eventHistory].slice(0, 5);
+
+                return {
+                    ...prev,
+                    [eventKey]: nextHistory,
+                };
+            });
         }
 
         if (flash?.info) {
@@ -96,13 +112,20 @@ export default function ScanQR({ events = [] }: { events: Event[] }) {
             toast.info(flash.info, { duration: 3000 });
             setLastScanResult({ type: 'info', name });
 
-            // Tambahkan ke recent scans sebagai duplicate
-            setRecentScans(prev => [{
-                id: Date.now(),
-                name: name + ' (sudah hadir)',
-                time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
-                status: 'duplicate',
-            }, ...prev].slice(0, 20));
+            setRecentScans(prev => {
+                const eventHistory = prev[eventKey] ?? [];
+                const nextHistory = [{
+                    id: Date.now(),
+                    name: name + ' (sudah hadir)',
+                    time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+                    status: 'duplicate' as const,
+                }, ...eventHistory].slice(0, 5);
+
+                return {
+                    ...prev,
+                    [eventKey]: nextHistory,
+                };
+            });
         }
     }, [flash]);
 
@@ -246,7 +269,8 @@ export default function ScanQR({ events = [] }: { events: Event[] }) {
     }, []);
 
     const activeEvent = events.find(e => String(e.id) === selectedEventId);
-    const successCount = recentScans.filter(s => s.status === 'success').length;
+    const currentHistory = selectedEventId ? recentScans[selectedEventId] ?? [] : [];
+    const successCount = currentHistory.filter(s => s.status === 'success').length;
 
     return (
         <>
@@ -262,7 +286,7 @@ export default function ScanQR({ events = [] }: { events: Event[] }) {
                                 </div>
                                 <span className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">Live Scanning</span>
                             </div>
-                            
+
                             <div className="w-full max-w-md pt-2">
                                 <Select value={selectedEventId} onValueChange={setSelectedEventId} disabled={isScanning}>
                                     <SelectTrigger className="h-12 text-lg font-bold">
@@ -310,7 +334,7 @@ export default function ScanQR({ events = [] }: { events: Event[] }) {
                                 Manual Entry
                             </Button>
                         </CardHeader>
-                        
+
                         <div className="relative flex-1 min-h-[400px] md:min-h-[500px] bg-[#1A1A1F] flex flex-col items-center justify-center p-6 overflow-hidden">
                             {/* Reader element — selalu ada di DOM */}
                             <div
@@ -375,28 +399,35 @@ export default function ScanQR({ events = [] }: { events: Event[] }) {
                     {/* Recent Scans Section */}
                     <Card className="border shadow-sm bg-card flex flex-col">
                         <CardHeader className="border-b px-6 py-5 flex flex-row items-center justify-between">
-                            <CardTitle className="text-lg font-semibold text-foreground">Riwayat Scan</CardTitle>
+                            <div className="flex flex-col gap-1">
+                                <CardTitle className="text-lg font-semibold text-foreground">Riwayat Scan</CardTitle>
+                                {activeEvent && (
+                                    <p className="text-sm text-muted-foreground">
+                                        {activeEvent.title} • {activeEvent.location}
+                                    </p>
+                                )}
+                            </div>
                             <History className="h-5 w-5 text-muted-foreground" />
                         </CardHeader>
                         <CardContent className="p-0 flex-1 overflow-y-auto min-h-[400px]">
-                            {recentScans.length === 0 ? (
+                            {currentHistory.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground/50 py-20">
                                     <History className="w-12 h-12 mb-4 opacity-20" />
-                                    <p>Belum ada scan.</p>
+                                    <p>Belum ada scan untuk event ini.</p>
                                 </div>
                             ) : (
                                 <div className="flex flex-col divide-y divide-border/50">
-                                    {recentScans.map((scan) => (
+                                    {currentHistory.map((scan) => (
                                         <div key={scan.id} className="flex items-center justify-between p-4 hover:bg-muted/30 transition-colors">
                                             <div className="flex items-center gap-3.5">
                                                 <Avatar className={`h-10 w-10 border ${
-                                                    scan.status === 'success' ? 'border-emerald-300' 
-                                                    : scan.status === 'duplicate' ? 'border-amber-300' 
+                                                    scan.status === 'success' ? 'border-emerald-300'
+                                                    : scan.status === 'duplicate' ? 'border-amber-300'
                                                     : 'border-red-300'
                                                 }`}>
                                                     <AvatarFallback className={`font-bold text-xs ${
-                                                        scan.status === 'success' ? 'bg-emerald-500/10 text-emerald-600' 
-                                                        : scan.status === 'duplicate' ? 'bg-amber-500/10 text-amber-600' 
+                                                        scan.status === 'success' ? 'bg-emerald-500/10 text-emerald-600'
+                                                        : scan.status === 'duplicate' ? 'bg-amber-500/10 text-amber-600'
                                                         : 'bg-red-500/10 text-red-600'
                                                     }`}>
                                                         {scan.status === 'success' ? scan.name.substring(0, 2).toUpperCase()

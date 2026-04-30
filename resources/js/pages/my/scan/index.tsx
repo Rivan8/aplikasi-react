@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 
-export default function MyScan() {
+export default function MyScan({ event, qr_value }: { event?: any, qr_value?: string }) {
     const { auth, flash } = usePage().props as any;
     const scannerRef = useRef<Html5Qrcode | null>(null);
     const readerElementRef = useRef<HTMLDivElement | null>(null);
@@ -38,6 +38,16 @@ export default function MyScan() {
         }
     }, [flash]);
 
+    // Handle direct QR code processing when qr_value is provided (from clicked QR code)
+    useEffect(() => {
+        if (qr_value) {
+            setProcessing(true);
+            router.post(qr_value, {}, {
+                onFinish: () => setProcessing(false)
+            });
+        }
+    }, [qr_value]);
+
     const stopScanner = useCallback(async () => {
         if (scannerRef.current) {
             try {
@@ -58,7 +68,7 @@ export default function MyScan() {
         try {
             const url = new URL(text);
             const path = url.pathname;
-            
+
             if (!path.includes('/attendance/') || !path.includes('/scan-event')) {
                 setScanError("QR Code tidak valid untuk absensi event ini.");
                 return;
@@ -68,7 +78,7 @@ export default function MyScan() {
             router.post(path, {}, {
                 onFinish: () => setProcessing(false)
             });
-            
+
         } catch (e) {
             setScanError("Format QR Code tidak dikenali.");
         }
@@ -181,7 +191,7 @@ export default function MyScan() {
     return (
         <>
             <Head title="Scan Kehadiran Event" />
-            
+
             <div className="flex flex-col min-h-screen bg-muted/20 pb-20">
                 {/* Mobile Header */}
                 <header className="bg-primary text-primary-foreground p-6 rounded-b-3xl shadow-sm">
@@ -192,12 +202,17 @@ export default function MyScan() {
                 <main className="flex-1 p-6 flex flex-col items-center">
                     <Card className="w-full max-w-md overflow-hidden border-0 shadow-lg mt-4">
                         <CardHeader className="text-center bg-card border-b">
-                            <CardTitle>Scan QR Event</CardTitle>
+                            <CardTitle>
+                                {event ? `Absensi: ${event.title}` : 'Scan QR Event'}
+                            </CardTitle>
                             <CardDescription>
-                                Arahkan kamera ke layar yang menampilkan QR Code event.
+                                {event
+                                    ? `Event: ${event.date ? new Date(event.date).toLocaleDateString('id-ID') : ''} ${event.time} - ${event.location}`
+                                    : 'Arahkan kamera ke layar yang menampilkan QR Code event.'
+                                }
                             </CardDescription>
                         </CardHeader>
-                        
+
                         <CardContent className="p-0">
                             {/* State: Processing */}
                             {processing && (
@@ -244,13 +259,13 @@ export default function MyScan() {
                             {/* State: Ready / Scanning */}
                             {!processing && !scanResult && !scanError && (
                                 <div className="flex flex-col">
-                                    {/* 
+                                    {/*
                                         Elemen reader SELALU ada di DOM dengan dimensi nyata.
                                         html5-qrcode butuh elemen visible dengan ukuran > 0.
                                     */}
-                                    <div 
+                                    <div
                                         ref={readerElementRef}
-                                        id="reader" 
+                                        id="reader"
                                         className="w-full overflow-hidden bg-black"
                                         style={{
                                             height: isScanning ? '320px' : '1px',
@@ -258,7 +273,7 @@ export default function MyScan() {
                                             position: isScanning ? 'relative' : 'absolute',
                                         }}
                                     />
-                                    
+
                                     {!isScanning && (
                                         <div className="h-80 flex flex-col items-center justify-center p-6 bg-muted/10">
                                             <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mb-6">
