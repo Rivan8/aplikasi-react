@@ -80,11 +80,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::resource('departments', \App\Http\Controllers\DepartmentController::class)->except(['create', 'edit', 'show']);
 
     Route::resource('events', \App\Http\Controllers\EventController::class)->except(['create', 'edit', 'show']);
-    Route::get('scan-qr', function () {
-        return inertia('scan-qr/index', [
-            'events' => \App\Models\Event::orderBy('date', 'desc')->get(),
-        ]);
-    })->name('scan-qr');
+    Route::get('scan-qr', [\App\Http\Controllers\AttendanceController::class, 'showAdminScan'])->name('scan-qr');
     Route::get('attendance-history', [\App\Http\Controllers\AttendanceController::class, 'history'])->name('attendance-history');
     Route::get('attendance-history/export/pdf', [\App\Http\Controllers\AttendanceController::class, 'exportPdf'])->name('attendance-history.export.pdf');
     Route::get('attendance-history/export/excel', [\App\Http\Controllers\AttendanceController::class, 'exportExcel'])->name('attendance-history.export.excel');

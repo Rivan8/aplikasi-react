@@ -172,6 +172,68 @@ class AttendanceController extends Controller
     }
 
     /**
+     * Halaman scan kartu member (Admin)
+     */
+    public function showAdminScan(Request $request)
+    {
+        $events = Event::orderBy('date', 'desc')->get();
+        
+        // Jika tidak ada event_id di request, redirect ke event pertama agar URL "sticky"
+        if (!$request->has('event_id') && $events->isNotEmpty()) {
+            return redirect()->route('scan-qr', ['event_id' => $events->first()->id]);
+        }
+
+        $selectedEventId = $request->input('event_id');
+        $selectedEventIdStr = (string) $selectedEventId;
+
+        $recentAttendances = [];
+        $totalScanned = 0;
+
+        if ($selectedEventId) {
+            $attendances = Attendance::where('event_id', $selectedEventId)
+                ->orderBy('scan_time', 'desc')
+                ->take(10)
+                ->get();
+
+            $totalScanned = Attendance::where('event_id', $selectedEventId)->count();
+
+            $memberIds = $attendances->pluck('member_id')->unique()->toArray();
+            $members = [];
+
+            if (!empty($memberIds)) {
+                try {
+                    $externalMembers = ExternalMember::whereIn('idjemaat', $memberIds)->get();
+                    foreach ($externalMembers as $member) {
+                        $members[$member->idjemaat] = [
+                            'name' => $member->name,
+                        ];
+                    }
+                } catch (\Exception $e) {
+                    // Fail silently
+                }
+            }
+
+            $recentAttendances = $attendances->map(function ($att) use ($members) {
+                return [
+                    'id' => $att->id,
+                    'name' => $members[$att->member_id]['name'] ?? 'Member #' . $att->member_id,
+                    'time' => $att->scan_time->diffForHumans(),
+                    'status' => $att->status,
+                ];
+            });
+        }
+
+        return Inertia::render('scan-qr/index', [
+            'events' => $events,
+            'recentScans' => $recentAttendances,
+            'totalScanned' => $totalScanned,
+            'filters' => [
+                'event_id' => $selectedEventIdStr
+            ]
+        ]);
+    }
+
+    /**
      * Halaman scan untuk event tertentu (GET route untuk QR code clickable)
      */
     public function showEventScan(Event $event)
@@ -200,14 +262,20 @@ class AttendanceController extends Controller
             return back()->with('info', 'Anda sudah melakukan absensi untuk event ini.');
         }
 
+        // Tentukan status (Present vs Late) berdasarkan waktu event
+        // Kita beri toleransi 1 menit
+        $eventDateTime = \Carbon\Carbon::parse($event->date . ' ' . $event->time)->addMinute();
+        $status = now()->greaterThan($eventDateTime) ? 'Late' : 'Present';
+
         Attendance::create([
             'event_id' => $event->id,
             'member_id' => $user->member_id,
             'scan_time' => now(),
-            'status' => 'Present',
+            'status' => $status,
         ]);
 
-        return back()->with('success', 'Absensi berhasil dicatat!');
+        $message = $status === 'Late' ? 'Absensi dicatat (Terlambat).' : 'Absensi berhasil dicatat!';
+        return back()->with('success', $message);
     }
 
     // Mode 2: Admin scan NIK jemaat dari kartu (POST)
@@ -236,13 +304,23 @@ class AttendanceController extends Controller
             return back()->with('info', $member->name . ' sudah tercatat hadir di event ini.');
         }
 
+        // Ambil data event untuk mengecek waktu
+        $event = Event::find($request->event_id);
+        // Kita beri toleransi 1 menit
+        $eventDateTime = \Carbon\Carbon::parse($event->date . ' ' . $event->time)->addMinute();
+        $status = now()->greaterThan($eventDateTime) ? 'Late' : 'Present';
+
         Attendance::create([
             'event_id' => $request->event_id,
             'member_id' => $member->id,
             'scan_time' => now(),
-            'status' => 'Present',
+            'status' => $status,
         ]);
 
-        return back()->with('success', 'Kehadiran berhasil dicatat untuk ' . $member->name);
+        $message = $status === 'Late'
+            ? 'Kehadiran ' . $member->name . ' dicatat (Terlambat).'
+            : 'Kehadiran berhasil dicatat untuk ' . $member->name;
+
+        return back()->with('success', $message);
     }
 }

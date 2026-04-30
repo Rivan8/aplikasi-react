@@ -1,8 +1,3 @@
-import { Head, router, useForm } from '@inertiajs/react';
-import { Building, Calendar as CalendarIcon, ChevronDown, ChevronUp, Clock, Edit2, Eye, Image as ImageIcon, Info, MapPin, Plus, QrCode, Search, Trash2, Users, X } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
-import QRCode from 'react-qr-code';
-import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -18,6 +13,14 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Head, router, useForm } from '@inertiajs/react';
+import { Building, Calendar as CalendarIcon, ChevronDown, ChevronUp, Clock, Edit2, Eye, Image as ImageIcon, Info, MapPin, Plus, QrCode, Search, Trash2, Users, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import QRCode from 'react-qr-code';
+import { toast } from 'sonner';
+
+// Fix for QRCode component in Vite/ESM environments
+const QRCodeComponent = (QRCode as any).default || QRCode;
 
 interface Volunteer {
     id: number;
@@ -972,7 +975,7 @@ fileInput.value = '';
                             </DialogHeader>
                             <div className="flex flex-col items-center justify-center p-6 space-y-6">
                                 <div className="bg-white p-4 rounded-xl shadow-sm border">
-                                    <QRCode
+                                    <QRCodeComponent
                                         value={`${window.location.origin}/attendance/${qrEvent.id}/scan`}
                                         size={256}
                                         level="H"

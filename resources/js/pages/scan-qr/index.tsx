@@ -1,13 +1,13 @@
-import { Head, router, usePage } from '@inertiajs/react';
-import { Html5Qrcode } from 'html5-qrcode';
-import { Aperture, History, Keyboard, StopCircle, UserCheck, AlertTriangle, Info } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { toast } from 'sonner';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Head, router, usePage } from '@inertiajs/react';
+import { Html5Qrcode } from 'html5-qrcode';
+import { AlertTriangle, Aperture, History, Info, Keyboard, StopCircle, UserCheck } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 
 interface Event {
     id: number;
@@ -21,21 +21,43 @@ interface RecentScan {
     id: number;
     name: string;
     time: string;
-    status: 'success' | 'duplicate' | 'error';
+    status: string;
 }
 
-export default function ScanQR({ events = [] }: { events: Event[] }) {
-    const { flash, errors } = usePage().props as any;
+export default function ScanQR({
+    events = [],
+    recentScans = [],
+    totalScanned = 0,
+    filters = { event_id: '' }
+}: {
+    events: Event[];
+    recentScans?: RecentScan[];
+    totalScanned?: number;
+    filters?: { event_id: string };
+}) {
+    const { flash } = usePage().props as any;
     const scannerRef = useRef<Html5Qrcode | null>(null);
     const readerElementRef = useRef<HTMLDivElement | null>(null);
     const [isScanning, setIsScanning] = useState(false);
-    const [selectedEventId, setSelectedEventId] = useState<string>('');
+    const [selectedEventId, setSelectedEventId] = useState<string>(filters.event_id || '');
     const [processing, setProcessing] = useState(false);
     const isMountedRef = useRef(true);
     const [lastScanResult, setLastScanResult] = useState<{ type: 'success' | 'info' | 'error'; name: string } | null>(null);
 
-    // Recent scans list
-    const [recentScans, setRecentScans] = useState<Record<string, RecentScan[]>>({});
+    // Auto-refresh data setiap 5 detik untuk sinkronisasi antar komputer
+    useEffect(() => {
+        const interval = setInterval(() => {
+            if (!isScanning && !processing) {
+                router.reload({
+                    only: ['recentScans', 'totalScanned'],
+                    preserveScroll: true,
+                    preserveState: true
+                });
+            }
+        }, 5000);
+
+        return () => clearInterval(interval);
+    }, [isScanning, processing]);
 
     useEffect(() => {
         isMountedRef.current = true;
@@ -45,87 +67,45 @@ export default function ScanQR({ events = [] }: { events: Event[] }) {
     }, []);
 
     useEffect(() => {
-        if (events.length > 0 && !selectedEventId) {
-            setSelectedEventId(String(events[0].id));
+        if (filters.event_id && filters.event_id !== selectedEventId) {
+            setSelectedEventId(filters.event_id);
         }
-    }, [events]);
+    }, [filters.event_id]);
+
+    // Handle event selection change
+    const handleEventChange = (value: string) => {
+        setSelectedEventId(value);
+        // Memaksa reload halaman secara menyeluruh untuk memastikan data tersinkronisasi
+        router.get(`/scan-qr`, { event_id: value }, {
+            preserveState: false,
+            preserveScroll: false,
+            replace: true
+        });
+    };
 
     // Handle flash messages dari backend
     useEffect(() => {
-        const eventKey = selectedEventId || 'default';
-
         if (flash?.success) {
-            // Ekstrak nama dari pesan "Kehadiran berhasil dicatat untuk [NAMA]"
             const match = flash.success.match(/untuk (.+)$/);
             const name = match ? match[1] : 'Member';
-
             toast.success(flash.success, { duration: 3000 });
             setLastScanResult({ type: 'success', name });
-
-            // Tambahkan ke recent scans untuk event saat ini
-            setRecentScans(prev => {
-                const eventHistory = prev[eventKey] ?? [];
-                const nextHistory = [{
-                    id: Date.now(),
-                    name,
-                    time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
-                    status: 'success' as const,
-                }, ...eventHistory].slice(0, 5);
-
-                return {
-                    ...prev,
-                    [eventKey]: nextHistory,
-                };
-            });
         }
 
         if (flash?.error) {
             toast.error(flash.error, { duration: 4000 });
-
             const isInvalidQr = flash.error.includes('tidak dikenali');
             setLastScanResult({
                 type: 'error',
                 name: isInvalidQr ? 'QR Tidak Valid' : 'Error',
             });
-
-            setRecentScans(prev => {
-                const eventHistory = prev[eventKey] ?? [];
-                const nextHistory = [{
-                    id: Date.now(),
-                    name: isInvalidQr ? 'QR Tidak Dikenali' : 'Gagal',
-                    time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
-                    status: 'error' as const,
-                }, ...eventHistory].slice(0, 5);
-
-                return {
-                    ...prev,
-                    [eventKey]: nextHistory,
-                };
-            });
         }
 
         if (flash?.info) {
-            // Sudah pernah absen — ekstrak nama
             const match = flash.info.match(/^(.+?) sudah/);
             const name = match ? match[1] : 'Member';
-
             toast.info(flash.info, { duration: 3000 });
             setLastScanResult({ type: 'info', name });
-
-            setRecentScans(prev => {
-                const eventHistory = prev[eventKey] ?? [];
-                const nextHistory = [{
-                    id: Date.now(),
-                    name: name + ' (sudah hadir)',
-                    time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
-                    status: 'duplicate' as const,
-                }, ...eventHistory].slice(0, 5);
-
-                return {
-                    ...prev,
-                    [eventKey]: nextHistory,
-                };
-            });
         }
     }, [flash]);
 
@@ -269,8 +249,6 @@ export default function ScanQR({ events = [] }: { events: Event[] }) {
     }, []);
 
     const activeEvent = events.find(e => String(e.id) === selectedEventId);
-    const currentHistory = selectedEventId ? recentScans[selectedEventId] ?? [] : [];
-    const successCount = currentHistory.filter(s => s.status === 'success').length;
 
     return (
         <>
@@ -288,7 +266,7 @@ export default function ScanQR({ events = [] }: { events: Event[] }) {
                             </div>
 
                             <div className="w-full max-w-md pt-2">
-                                <Select value={selectedEventId} onValueChange={setSelectedEventId} disabled={isScanning}>
+                                <Select value={selectedEventId} onValueChange={handleEventChange} disabled={isScanning}>
                                     <SelectTrigger className="h-12 text-lg font-bold">
                                         <SelectValue placeholder="Pilih Event Aktif..." />
                                     </SelectTrigger>
@@ -308,8 +286,10 @@ export default function ScanQR({ events = [] }: { events: Event[] }) {
                         <div className="flex shrink-0">
                             <div className="flex items-center divide-x divide-border rounded-xl border bg-muted/50 py-3 px-6">
                                 <div className="flex flex-col items-center pr-6">
-                                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Berhasil Scan</span>
-                                    <span className="text-2xl font-bold text-primary leading-none">{successCount}</span>
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Scanned Today</span>
+                                    <span className="text-2xl font-bold text-primary leading-none">
+                                        {totalScanned} <span className="text-sm text-muted-foreground font-normal">/ {activeEvent?.expected || 0}</span>
+                                    </span>
                                 </div>
                                 <div className="flex flex-col items-center pl-6">
                                     <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Expected</span>
@@ -336,103 +316,79 @@ export default function ScanQR({ events = [] }: { events: Event[] }) {
                         </CardHeader>
 
                         <div className="relative flex-1 min-h-[400px] md:min-h-[500px] bg-[#1A1A1F] flex flex-col items-center justify-center p-6 overflow-hidden">
-                            {/* Reader element — selalu ada di DOM */}
-                            <div
-                                ref={readerElementRef}
-                                id="admin-reader"
-                                className="w-full max-w-md rounded-lg overflow-hidden"
-                                style={{
-                                    minHeight: isScanning ? '300px' : '1px',
-                                    height: isScanning ? 'auto' : '1px',
-                                    width: isScanning ? '100%' : '1px',
-                                    opacity: isScanning ? 1 : 0,
-                                    position: isScanning ? 'relative' : 'absolute',
-                                    overflow: 'hidden',
-                                }}
-                            />
+                            <div className="flex flex-col items-center w-full h-full">
+                                <div
+                                    id="admin-reader"
+                                    className={`w-full max-w-md bg-black rounded-lg overflow-hidden transition-opacity duration-300 ${isScanning ? 'opacity-100 z-10 relative' : 'opacity-0 z-0 absolute invisible'}`}
+                                    style={{ minHeight: '300px' }}
+                                    ref={readerElementRef}
+                                />
 
-                            {!isScanning && (
-                                <div className="flex flex-col items-center justify-center space-y-4">
-                                    <Button size="lg" onClick={startScanner} className="h-14 px-8 text-lg">
-                                        Mulai Scan Kartu
-                                    </Button>
-                                    <p className="text-muted-foreground text-sm">Pilih event terlebih dahulu sebelum mulai.</p>
-                                </div>
-                            )}
-
-                            {isScanning && (
-                                <div className="flex flex-col items-center z-20 w-full">
-                                    {/* Hasil scan terakhir */}
-                                    {lastScanResult && (
-                                        <div className={`mt-4 mb-2 px-5 py-3 rounded-xl flex items-center gap-3 text-sm font-semibold shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-300 ${
-                                            lastScanResult.type === 'success'
-                                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                                                : lastScanResult.type === 'info'
-                                                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                                                : 'bg-red-500/20 text-red-300 border border-red-500/30'
-                                        }`}>
-                                            {lastScanResult.type === 'success' && <UserCheck className="w-5 h-5" />}
-                                            {lastScanResult.type === 'info' && <Info className="w-5 h-5" />}
-                                            {lastScanResult.type === 'error' && <AlertTriangle className="w-5 h-5" />}
-                                            <span>
-                                                {lastScanResult.type === 'success' && `✓ ${lastScanResult.name} — Berhasil!`}
-                                                {lastScanResult.type === 'info' && `${lastScanResult.name} — Sudah tercatat hadir`}
-                                                {lastScanResult.type === 'error' && `✗ ${lastScanResult.name}`}
+                                {lastScanResult && isScanning && (
+                                    <div className={`absolute top-10 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl border animate-in fade-in zoom-in slide-in-from-top-4 duration-300 ${
+                                        lastScanResult.type === 'success' ? 'bg-emerald-500 text-white border-emerald-400' :
+                                        lastScanResult.type === 'info' ? 'bg-amber-500 text-white border-amber-400' :
+                                        'bg-destructive text-white border-destructive/50'
+                                    }`}>
+                                        {lastScanResult.type === 'success' ? <UserCheck className="w-8 h-8" /> :
+                                         lastScanResult.type === 'info' ? <Info className="w-8 h-8" /> :
+                                         <AlertTriangle className="w-8 h-8" />}
+                                        <div className="flex flex-col">
+                                            <span className="text-xs font-bold uppercase tracking-widest opacity-80">
+                                                {lastScanResult.type === 'success' ? 'Berhasil' :
+                                                 lastScanResult.type === 'info' ? 'Sudah Hadir' : 'Gagal'}
                                             </span>
+                                            <span className="text-xl font-black leading-tight">{lastScanResult.name}</span>
                                         </div>
-                                    )}
+                                    </div>
+                                )}
 
-                                    {processing && (
-                                        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground px-4 py-2 rounded-full font-medium shadow-lg animate-pulse">
-                                            Memproses...
-                                        </div>
-                                    )}
+                                {!isScanning && (
+                                    <div className="flex flex-col items-center justify-center space-y-4 z-20">
+                                        <Button size="lg" onClick={startScanner} className="h-14 px-8 text-lg">
+                                            Mulai Scan Kartu
+                                        </Button>
+                                        <p className="text-muted-foreground text-sm">Pilih event terlebih dahulu sebelum mulai.</p>
+                                    </div>
+                                )}
 
-                                    <Button variant="destructive" className="mt-4 gap-2" onClick={stopScanner}>
-                                        <StopCircle className="w-4 h-4" /> Stop Scanner
-                                    </Button>
-                                </div>
-                            )}
+                                {isScanning && (
+                                    <div className="flex flex-col items-center z-20">
+                                        <Button variant="destructive" className="mt-6 gap-2" onClick={stopScanner}>
+                                            <StopCircle className="w-4 h-4" /> Stop Scanner
+                                        </Button>
+
+                                        {processing && (
+                                            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground px-4 py-2 rounded-full font-medium shadow-lg animate-pulse">
+                                                Memproses...
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </Card>
 
                     {/* Recent Scans Section */}
                     <Card className="border shadow-sm bg-card flex flex-col">
                         <CardHeader className="border-b px-6 py-5 flex flex-row items-center justify-between">
-                            <div className="flex flex-col gap-1">
-                                <CardTitle className="text-lg font-semibold text-foreground">Riwayat Scan</CardTitle>
-                                {activeEvent && (
-                                    <p className="text-sm text-muted-foreground">
-                                        {activeEvent.title} • {activeEvent.location}
-                                    </p>
-                                )}
-                            </div>
+                            <CardTitle className="text-lg font-semibold text-foreground">Recent Scans</CardTitle>
                             <History className="h-5 w-5 text-muted-foreground" />
                         </CardHeader>
                         <CardContent className="p-0 flex-1 overflow-y-auto min-h-[400px]">
-                            {currentHistory.length === 0 ? (
+                            {recentScans.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground/50 py-20">
                                     <History className="w-12 h-12 mb-4 opacity-20" />
-                                    <p>Belum ada scan untuk event ini.</p>
+                                    <p>Belum ada scan.</p>
                                 </div>
                             ) : (
                                 <div className="flex flex-col divide-y divide-border/50">
-                                    {currentHistory.map((scan) => (
+                                    {recentScans.map((scan) => (
                                         <div key={scan.id} className="flex items-center justify-between p-4 hover:bg-muted/30 transition-colors">
                                             <div className="flex items-center gap-3.5">
-                                                <Avatar className={`h-10 w-10 border ${
-                                                    scan.status === 'success' ? 'border-emerald-300'
-                                                    : scan.status === 'duplicate' ? 'border-amber-300'
-                                                    : 'border-red-300'
-                                                }`}>
-                                                    <AvatarFallback className={`font-bold text-xs ${
-                                                        scan.status === 'success' ? 'bg-emerald-500/10 text-emerald-600'
-                                                        : scan.status === 'duplicate' ? 'bg-amber-500/10 text-amber-600'
-                                                        : 'bg-red-500/10 text-red-600'
-                                                    }`}>
-                                                        {scan.status === 'success' ? scan.name.substring(0, 2).toUpperCase()
-                                                         : scan.status === 'duplicate' ? '⚠'
-                                                         : '✗'}
+                                                <Avatar className="h-10 w-10 border border-border">
+                                                    <AvatarFallback className="bg-primary/10 text-primary font-bold text-xs uppercase">
+                                                        {scan.name.substring(0, 2)}
                                                     </AvatarFallback>
                                                 </Avatar>
                                                 <div className="flex flex-col">
@@ -444,14 +400,10 @@ export default function ScanQR({ events = [] }: { events: Event[] }) {
                                                 <Badge
                                                     variant="outline"
                                                     className={`px-2 py-0 h-5 text-[10px] uppercase font-bold rounded-full ${
-                                                        scan.status === 'success'
-                                                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/30'
-                                                            : scan.status === 'duplicate'
-                                                            ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/30'
-                                                            : 'bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/30'
+                                                        scan.status === 'Present' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'
                                                     }`}
                                                 >
-                                                    {scan.status === 'success' ? 'Hadir' : scan.status === 'duplicate' ? 'Duplikat' : 'Gagal'}
+                                                    {scan.status === 'Present' ? 'Hadir' : 'Terlambat'}
                                                 </Badge>
                                             </div>
                                         </div>
