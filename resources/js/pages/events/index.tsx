@@ -33,6 +33,24 @@ interface Volunteer {
     };
 }
 
+interface CategoryRole {
+    id: number;
+    category_id: number;
+    department_id: number;
+    role_name: string;
+    department?: {
+        id: number;
+        name: string;
+    };
+}
+
+interface Category {
+    id: number;
+    name: string;
+    description: string;
+    roles: CategoryRole[];
+}
+
 interface Event {
     id: number;
     title: string;
@@ -51,16 +69,9 @@ interface ExternalMember {
     name: string;
 }
 
-const categories = ['Ibadah', 'Pelayanan', 'Seminar', 'Kelas', 'Rapat', 'Lainnya'];
-
-const VOLUNTEER_ROLES = [
-    { category: 'Worship', roles: ['WL 1', 'WL 2', 'Drummer', 'Guitar', 'Bass', 'Keyboard Lead', 'Keyboard Filler'] },
-    { category: 'Visual', roles: ['Resolume', 'Freeshow', 'Switcher', 'Streaming'] },
-    { category: 'Prayer', roles: ['1', '2', '3', '4', '5', '6', '7', '8'] },
-    { category: 'Event', roles: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'] },
-    { category: 'Host', roles: ['1', '2'] },
-    { category: 'Preacher', roles: ['Preacher'] },
-];
+// Remove hardcoded categories and roles as they will come from props
+// const categories = ['Ibadah', 'Pelayanan', 'Seminar', 'Kelas', 'Rapat', 'Lainnya'];
+// const VOLUNTEER_ROLES = [...];
 
 // Move SearchableSelect outside to avoid re-renders and re-definitions
 const SearchableSelect = ({
@@ -159,16 +170,18 @@ return list.slice(0, 50);
 
 export default function Events({
     events = [],
-    external_members = []
+    external_members = [],
+    categories = []
 }: {
     events: Event[],
-    external_members: ExternalMember[]
+    external_members: ExternalMember[],
+    categories: Category[]
 }) {
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [editingEvent, setEditingEvent] = useState<Event | null>(null);
     const [viewingEvent, setViewingEvent] = useState<Event | null>(null);
     const [qrEvent, setQrEvent] = useState<Event | null>(null);
-    const [openCategories, setOpenCategories] = useState<string[]>(['Worship']);
+    const [openCategories, setOpenCategories] = useState<string[]>([]);
     const [imagePreview, setImagePreview] = useState<string | null>(null);
 
     // Search and Filter States
@@ -183,11 +196,50 @@ export default function Events({
         time: '',
         location: '',
         address: '',
-        category: 'Ibadah',
+        category: '', // Start empty
         expected: 0,
         image: null as File | null,
         volunteers: [] as { role_category: string; role_name: string; member_id: string }[],
     });
+
+    // Get current category roles
+    const currentCategory = useMemo(() => {
+        return categories.find(c => c.name === data.category);
+    }, [data.category, categories]);
+
+    const volunteerGroups = useMemo(() => {
+        if (!currentCategory) return [];
+
+        const groups: Record<string, string[]> = {};
+        currentCategory.roles.forEach(role => {
+            const deptName = role.department?.name || 'Lainnya';
+            if (!groups[deptName]) groups[deptName] = [];
+            groups[deptName].push(role.role_name);
+        });
+
+        return Object.entries(groups).map(([category, roles]) => ({
+            category,
+            roles
+        }));
+    }, [currentCategory]);
+
+    // Populate volunteers when category changes (only for new events)
+    useEffect(() => {
+        if (!editingEvent && currentCategory) {
+            const newVolunteers = currentCategory.roles.map(role => ({
+                role_category: role.department?.name || 'Lainnya',
+                role_name: role.role_name,
+                member_id: 'none'
+            }));
+            setData('volunteers', newVolunteers);
+
+            // Auto open the first category
+            if (currentCategory.roles.length > 0) {
+                const firstDept = currentCategory.roles[0].department?.name;
+                if (firstDept) setOpenCategories([firstDept]);
+            }
+        }
+    }, [data.category, editingEvent, currentCategory]);
 
     // Effect to populate form when editing event changes
     useEffect(() => {
@@ -446,7 +498,7 @@ newVolunteers.splice(index, 1);
                                 <SelectContent>
                                     <SelectItem value="all">Semua Kategori</SelectItem>
                                     {categories.map(cat => (
-                                        <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                                        <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
@@ -719,7 +771,7 @@ fileInput.value = '';
                                                 </SelectTrigger>
                                                 <SelectContent>
                                                     {categories.map((cat) => (
-                                                        <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                                                        <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>
                                                     ))}
                                                 </SelectContent>
                                             </Select>
@@ -820,33 +872,39 @@ fileInput.value = '';
                                 </div>
                                 <div className="border rounded-xl overflow-hidden bg-muted/10">
                                     <div className="max-h-[600px] overflow-y-auto p-4 space-y-3">
-                                        {VOLUNTEER_ROLES.map((group) => (
-                                            <Collapsible
-                                                key={group.category}
-                                                open={openCategories.includes(group.category)}
-                                                onOpenChange={() => toggleCategory(group.category)}
-                                                className="border rounded-lg bg-background"
-                                            >
-                                                <CollapsibleTrigger asChild>
-                                                    <Button variant="ghost" className="w-full flex items-center justify-between p-3 h-auto hover:bg-muted/50">
-                                                        <span className="font-bold text-xs uppercase tracking-tight text-foreground/70">{group.category}</span>
-                                                        {openCategories.includes(group.category) ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                                                    </Button>
-                                                </CollapsibleTrigger>
-                                                <CollapsibleContent className="space-y-4 px-3 pb-4">
-                                                    {group.roles.map((role) => (
-                                                        <div key={role} className="space-y-1.5">
-                                                            <Label className="text-[10px] font-bold uppercase text-muted-foreground/80 pl-1">{role}</Label>
-                                                            <SearchableSelect
-                                                                value={getVolunteerValue(group.category, role)}
-                                                                onSelect={(val) => setVolunteerValue(group.category, role, val)}
-                                                                external_members={external_members}
-                                                            />
-                                                        </div>
-                                                    ))}
-                                                </CollapsibleContent>
-                                            </Collapsible>
-                                        ))}
+                                        {volunteerGroups.length > 0 ? (
+                                            volunteerGroups.map((group) => (
+                                                <Collapsible
+                                                    key={group.category}
+                                                    open={openCategories.includes(group.category)}
+                                                    onOpenChange={() => toggleCategory(group.category)}
+                                                    className="border rounded-lg bg-background"
+                                                >
+                                                    <CollapsibleTrigger asChild>
+                                                        <Button variant="ghost" className="w-full flex items-center justify-between p-3 h-auto hover:bg-muted/50">
+                                                            <span className="font-bold text-xs uppercase tracking-tight text-foreground/70">{group.category}</span>
+                                                            {openCategories.includes(group.category) ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                                                        </Button>
+                                                    </CollapsibleTrigger>
+                                                    <CollapsibleContent className="space-y-4 px-3 pb-4">
+                                                        {group.roles.map((role) => (
+                                                            <div key={role} className="space-y-1.5">
+                                                                <Label className="text-[10px] font-bold uppercase text-muted-foreground/80 pl-1">{role}</Label>
+                                                                <SearchableSelect
+                                                                    value={getVolunteerValue(group.category, role)}
+                                                                    onSelect={(val) => setVolunteerValue(group.category, role, val)}
+                                                                    external_members={external_members}
+                                                                />
+                                                            </div>
+                                                        ))}
+                                                    </CollapsibleContent>
+                                                </Collapsible>
+                                            ))
+                                        ) : (
+                                            <div className="text-center py-10 text-muted-foreground">
+                                                <p className="text-sm">Pilih kategori untuk melihat daftar volunteer.</p>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>

@@ -8,12 +8,15 @@ use App\Models\EventVolunteer;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
+use App\Models\Category;
+
 class EventController extends Controller
 {
     public function index()
     {
         return Inertia::render('events/index', [
             'events' => Event::with(['volunteers.member'])->orderBy('date', 'desc')->get(),
+            'categories' => Category::with('roles.department')->get(),
             'external_members' => ExternalMember::select('idjemaat', 'namalengkap')->get()->map(function($m) {
                 return [
                     'id' => $m->idjemaat,
