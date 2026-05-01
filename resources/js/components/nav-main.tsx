@@ -5,16 +5,24 @@ import {
     SidebarMenu,
     SidebarMenuButton,
     SidebarMenuItem,
+    useSidebar,
 } from '@/components/ui/sidebar';
 import { useCurrentUrl } from '@/hooks/use-current-url';
 import type { NavItem } from '@/types';
 
 export function NavMain({ items = [] }: { items: NavItem[] }) {
     const { isCurrentUrl } = useCurrentUrl();
+    const { isMobile, setOpenMobile } = useSidebar();
+
+    const closeMobileSidebar = () => {
+        if (isMobile) {
+            setOpenMobile(false);
+        }
+    };
 
     return (
         <SidebarGroup className="px-2 py-0">
-            <SidebarGroupLabel className="text-sidebar-foreground/40 uppercase text-[10px] tracking-widest font-bold mb-1">
+            <SidebarGroupLabel className="mb-1 text-[10px] font-bold tracking-widest text-sidebar-foreground/40 uppercase">
                 Navigation
             </SidebarGroupLabel>
             <SidebarMenu>
@@ -25,7 +33,11 @@ export function NavMain({ items = [] }: { items: NavItem[] }) {
                             isActive={isCurrentUrl(item.href)}
                             tooltip={{ children: item.title }}
                         >
-                            <Link href={item.href} prefetch>
+                            <Link
+                                href={item.href}
+                                prefetch
+                                onClick={closeMobileSidebar}
+                            >
                                 {item.icon && <item.icon />}
                                 <span>{item.title}</span>
                             </Link>

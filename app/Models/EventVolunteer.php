@@ -18,6 +18,13 @@ class EventVolunteer extends Model
         'role_category',
         'role_name',
         'member_id',
+        'response_status',
+        'response_reason',
+        'responded_at',
+    ];
+
+    protected $casts = [
+        'responded_at' => 'datetime',
     ];
 
     public function event()

@@ -28,4 +28,9 @@ class Event extends Model
     {
         return $this->hasMany(EventVolunteer::class);
     }
+
+    public function attendances()
+    {
+        return $this->hasMany(Attendance::class);
+    }
 }

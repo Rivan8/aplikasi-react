@@ -1,3 +1,13 @@
+import { Link, usePage } from '@inertiajs/react';
+import {
+    HelpCircle,
+    History,
+    LayoutDashboard,
+    LayoutGrid,
+    QrCode,
+    Settings,
+    Users,
+} from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
@@ -12,18 +22,14 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import type { NavItem } from '@/types';
-import { Link, usePage } from '@inertiajs/react';
-import {
-    HelpCircle,
-    History,
-    LayoutDashboard,
-    LayoutGrid,
-    QrCode,
-    Settings,
-    Users,
-} from 'lucide-react';
 
 const mainNavItems: NavItem[] = [
+    {
+        title: 'Dashboard',
+        href: '/dashboard',
+        icon: LayoutDashboard,
+        roles: ['admin', 'jemaat'],
+    },
     {
         title: 'Scan QR Member (Admin)',
         href: '/scan-qr',
@@ -87,7 +93,10 @@ export function AppSidebar() {
     const userRole = auth.user?.role || 'jemaat';
 
     const filteredNavItems = mainNavItems.filter((item) => {
-        if (!item.roles) return true;
+        if (!item.roles) {
+            return true;
+        }
+
         return item.roles.includes(userRole);
     });
 
@@ -97,7 +106,14 @@ export function AppSidebar() {
                 <SidebarMenu>
                     <SidebarMenuItem>
                         <SidebarMenuButton size="lg" asChild>
-                            <Link href={userRole === 'admin' ? '/events' : '/my/scan'} prefetch>
+                            <Link
+                                href={
+                                    userRole === 'admin'
+                                        ? '/events'
+                                        : '/my/scan'
+                                }
+                                prefetch
+                            >
                                 <AppLogo />
                             </Link>
                         </SidebarMenuButton>
