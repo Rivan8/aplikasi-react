@@ -5,6 +5,7 @@ import {
     LayoutDashboard,
     LayoutGrid,
     QrCode,
+    Radio,
     Settings,
     Users,
 } from 'lucide-react';
@@ -46,6 +47,12 @@ const mainNavItems: NavItem[] = [
         title: 'Event Dashboard',
         href: '/events',
         icon: LayoutDashboard,
+        roles: ['admin'],
+    },
+    {
+        title: 'Live Event',
+        href: '/live-events',
+        icon: Radio,
         roles: ['admin'],
     },
     {

@@ -1,7 +1,11 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import {
+    Collapsible,
+    CollapsibleContent,
+    CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 import {
     Dialog,
     DialogContent,
@@ -12,9 +16,38 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { Head, router, useForm } from '@inertiajs/react';
-import { Building, Calendar as CalendarIcon, ChevronDown, ChevronUp, Clock, Edit2, Eye, Image as ImageIcon, Info, MapPin, Plus, QrCode, Search, Trash2, Users, X } from 'lucide-react';
+import {
+    Building,
+    Calendar as CalendarIcon,
+    ChevronDown,
+    ChevronUp,
+    Clock,
+    Edit2,
+    Eye,
+    Image as ImageIcon,
+    Info,
+    ListChecks,
+    MapPin,
+    Minus,
+    Pause,
+    Play,
+    Plus,
+    QrCode,
+    RotateCcw,
+    Search,
+    Timer,
+    Trash2,
+    Users,
+    X,
+} from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import QRCode from 'react-qr-code';
 import { toast } from 'sonner';
@@ -62,11 +95,25 @@ interface Event {
     expected: number;
     image_path?: string;
     volunteers?: Volunteer[];
+    rundown_segments?: EventRundownSegment[];
 }
 
 interface ExternalMember {
     id: string;
     name: string;
+}
+
+interface EventRundownItem {
+    id?: number;
+    title: string;
+    duration_seconds: number;
+}
+
+interface EventRundownSegment {
+    id?: number;
+    title: string;
+    duration_seconds: number;
+    items: EventRundownItem[];
 }
 
 // Remove hardcoded categories and roles as they will come from props
@@ -78,12 +125,12 @@ const SearchableSelect = ({
     value,
     onSelect,
     external_members = [],
-    placeholder = "Pilih Jemaat..."
+    placeholder = 'Pilih Jemaat...',
 }: {
-    value: string,
-    onSelect: (val: string) => void,
-    external_members: ExternalMember[],
-    placeholder?: string
+    value: string;
+    onSelect: (val: string) => void;
+    external_members: ExternalMember[];
+    placeholder?: string;
 }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [isOpen, setIsOpen] = useState(false);
@@ -92,31 +139,37 @@ const SearchableSelect = ({
         const list = Array.isArray(external_members) ? external_members : [];
 
         if (!searchTerm) {
-return list.slice(0, 50);
-}
+            return list.slice(0, 50);
+        }
 
-        return list.filter(m =>
-            m.name?.toLowerCase().includes(searchTerm.toLowerCase())
-        ).slice(0, 50);
+        return list
+            .filter((m) =>
+                m.name?.toLowerCase().includes(searchTerm.toLowerCase()),
+            )
+            .slice(0, 50);
     }, [searchTerm, external_members]);
 
-    const selectedMember = Array.isArray(external_members) ? external_members.find(m => m.id === value) : null;
+    const selectedMember = Array.isArray(external_members)
+        ? external_members.find((m) => m.id === value)
+        : null;
 
     return (
         <div className="relative w-full">
             <Button
                 type="button"
                 variant="outline"
-                className="w-full justify-between h-9 text-xs font-normal bg-background"
+                className="h-9 w-full justify-between bg-background text-xs font-normal"
                 onClick={() => setIsOpen(!isOpen)}
             >
-                <span className="truncate">{selectedMember ? selectedMember.name : placeholder}</span>
-                <ChevronDown className="h-3 w-3 opacity-50 shrink-0" />
+                <span className="truncate">
+                    {selectedMember ? selectedMember.name : placeholder}
+                </span>
+                <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
             </Button>
 
             {isOpen && (
-                <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover text-popover-foreground shadow-md outline-none animate-in fade-in-0 zoom-in-95">
-                    <div className="flex items-center border-b px-3 h-9">
+                <div className="absolute z-50 mt-1 w-full animate-in rounded-md border bg-popover text-popover-foreground shadow-md fade-in-0 outline-none zoom-in-95">
+                    <div className="flex h-9 items-center border-b px-3">
                         <Search className="mr-2 h-3 w-3 shrink-0 opacity-50" />
                         <input
                             className="flex w-full rounded-md bg-transparent py-2 text-xs outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
@@ -138,7 +191,7 @@ return list.slice(0, 50);
                     </div>
                     <div className="max-h-60 overflow-y-auto p-1">
                         <div
-                            className="relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 px-2 text-xs outline-none hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+                            className="relative flex w-full cursor-default items-center rounded-sm px-2 py-1.5 text-xs outline-none select-none hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
                             onClick={() => {
                                 onSelect('none');
                                 setIsOpen(false);
@@ -149,7 +202,7 @@ return list.slice(0, 50);
                         {filteredMembers.map((member) => (
                             <div
                                 key={member.id}
-                                className={`relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 px-2 text-xs outline-none hover:bg-accent hover:text-accent-foreground ${value === member.id ? 'bg-accent' : ''}`}
+                                className={`relative flex w-full cursor-default items-center rounded-sm px-2 py-1.5 text-xs outline-none select-none hover:bg-accent hover:text-accent-foreground ${value === member.id ? 'bg-accent' : ''}`}
                                 onClick={() => {
                                     onSelect(member.id);
                                     setIsOpen(false);
@@ -159,7 +212,9 @@ return list.slice(0, 50);
                             </div>
                         ))}
                         {filteredMembers.length === 0 && (
-                            <div className="py-6 text-center text-xs text-muted-foreground">Tidak ditemukan.</div>
+                            <div className="py-6 text-center text-xs text-muted-foreground">
+                                Tidak ditemukan.
+                            </div>
                         )}
                     </div>
                 </div>
@@ -168,50 +223,122 @@ return list.slice(0, 50);
     );
 };
 
+const createRundownSegment = (): EventRundownSegment => ({
+    title: '',
+    duration_seconds: 0,
+    items: [],
+});
+
+const createRundownItem = (): EventRundownItem => ({
+    title: '',
+    duration_seconds: 0,
+});
+
+const minutesToSeconds = (value: string) => {
+    const parsed = Number(value);
+
+    return Number.isFinite(parsed) ? Math.max(0, Math.round(parsed * 60)) : 0;
+};
+
+const secondsToMinutesInput = (seconds: number) => {
+    if (!seconds) {
+        return '';
+    }
+
+    return Number((seconds / 60).toFixed(2)).toString();
+};
+
+const formatDuration = (seconds: number) => {
+    const safeSeconds = Math.max(0, Math.floor(seconds));
+    const hours = Math.floor(safeSeconds / 3600);
+    const minutes = Math.floor((safeSeconds % 3600) / 60);
+    const remainingSeconds = safeSeconds % 60;
+
+    if (hours > 0) {
+        return `${hours}:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+    }
+
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+};
+
+const getRundownTotalSeconds = (segments: EventRundownSegment[] = []) => {
+    return segments.reduce((total, segment) => {
+        const itemTotal =
+            segment.items?.reduce(
+                (sum, item) => sum + (Number(item.duration_seconds) || 0),
+                0,
+            ) || 0;
+
+        return total + (Number(segment.duration_seconds) || itemTotal);
+    }, 0);
+};
+
+const getItemTotalSeconds = (segment: EventRundownSegment) => {
+    return (
+        segment.items?.reduce(
+            (sum, item) => sum + (Number(item.duration_seconds) || 0),
+            0,
+        ) || 0
+    );
+};
+
 export default function Events({
     events = [],
     external_members = [],
-    categories = []
+    categories = [],
 }: {
-    events: Event[],
-    external_members: ExternalMember[],
-    categories: Category[]
+    events: Event[];
+    external_members: ExternalMember[];
+    categories: Category[];
 }) {
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [editingEvent, setEditingEvent] = useState<Event | null>(null);
     const [viewingEvent, setViewingEvent] = useState<Event | null>(null);
     const [qrEvent, setQrEvent] = useState<Event | null>(null);
+    const [rundownEvent, setRundownEvent] = useState<Event | null>(null);
+    const [timerRunning, setTimerRunning] = useState(false);
+    const [elapsedSeconds, setElapsedSeconds] = useState(0);
     const [openCategories, setOpenCategories] = useState<string[]>([]);
     const [imagePreview, setImagePreview] = useState<string | null>(null);
 
     // Search and Filter States
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCategory, setSelectedCategory] = useState<string>('all');
-    const [sortBy, setSortBy] = useState<'date-asc' | 'date-desc' | 'title'>('date-desc');
-    const [dateFilter, setDateFilter] = useState<'all' | 'upcoming' | 'past' | 'today'>('all');
+    const [sortBy, setSortBy] = useState<'date-asc' | 'date-desc' | 'title'>(
+        'date-desc',
+    );
+    const [dateFilter, setDateFilter] = useState<
+        'all' | 'upcoming' | 'past' | 'today'
+    >('all');
 
-    const { data, setData, post, put, processing, reset, errors, clearErrors } = useForm({
-        title: '',
-        date: '',
-        time: '',
-        location: '',
-        address: '',
-        category: '', // Start empty
-        expected: 0,
-        image: null as File | null,
-        volunteers: [] as { role_category: string; role_name: string; member_id: string }[],
-    });
+    const { data, setData, post, put, processing, reset, errors, clearErrors } =
+        useForm({
+            title: '',
+            date: '',
+            time: '',
+            location: '',
+            address: '',
+            category: '', // Start empty
+            expected: 0,
+            image: null as File | null,
+            volunteers: [] as {
+                role_category: string;
+                role_name: string;
+                member_id: string;
+            }[],
+            rundown_segments: [] as EventRundownSegment[],
+        });
 
     // Get current category roles
     const currentCategory = useMemo(() => {
-        return categories.find(c => c.name === data.category);
+        return categories.find((c) => c.name === data.category);
     }, [data.category, categories]);
 
     const volunteerGroups = useMemo(() => {
         if (!currentCategory) return [];
 
         const groups: Record<string, string[]> = {};
-        currentCategory.roles.forEach(role => {
+        currentCategory.roles.forEach((role) => {
             const deptName = role.department?.name || 'Lainnya';
             if (!groups[deptName]) groups[deptName] = [];
             groups[deptName].push(role.role_name);
@@ -219,17 +346,17 @@ export default function Events({
 
         return Object.entries(groups).map(([category, roles]) => ({
             category,
-            roles
+            roles,
         }));
     }, [currentCategory]);
 
     // Populate volunteers when category changes (only for new events)
     useEffect(() => {
         if (!editingEvent && currentCategory) {
-            const newVolunteers = currentCategory.roles.map(role => ({
+            const newVolunteers = currentCategory.roles.map((role) => ({
                 role_category: role.department?.name || 'Lainnya',
                 role_name: role.role_name,
-                member_id: 'none'
+                member_id: 'none',
             }));
             setData('volunteers', newVolunteers);
 
@@ -255,16 +382,46 @@ export default function Events({
                 category: editingEvent.category || 'Ibadah',
                 expected: editingEvent.expected || 0,
                 image: null,
-                volunteers: editingEvent.volunteers?.map(v => ({
-                    role_category: v.role_category,
-                    role_name: v.role_name,
-                    member_id: v.member_id
-                })) || []
+                volunteers:
+                    editingEvent.volunteers?.map((v) => ({
+                        role_category: v.role_category,
+                        role_name: v.role_name,
+                        member_id: v.member_id,
+                    })) || [],
+                rundown_segments:
+                    editingEvent.rundown_segments?.map((segment) => ({
+                        title: segment.title,
+                        duration_seconds: segment.duration_seconds || 0,
+                        items:
+                            segment.items?.map((item) => ({
+                                title: item.title,
+                                duration_seconds: item.duration_seconds || 0,
+                            })) || [],
+                    })) || [],
             }));
             // eslint-disable-next-line react-hooks/set-state-in-effect
             setImagePreview(editingEvent.image_path || null);
         }
     }, [editingEvent]);
+
+    useEffect(() => {
+        if (!timerRunning) {
+            return;
+        }
+
+        const interval = window.setInterval(() => {
+            setElapsedSeconds((current) => current + 1);
+        }, 1000);
+
+        return () => window.clearInterval(interval);
+    }, [timerRunning]);
+
+    useEffect(() => {
+        if (!rundownEvent) {
+            setTimerRunning(false);
+            setElapsedSeconds(0);
+        }
+    }, [rundownEvent]);
 
     const buildFormData = (extra?: Record<string, string>) => {
         const fd = new FormData();
@@ -276,6 +433,7 @@ export default function Events({
         fd.append('category', data.category);
         fd.append('expected', String(data.expected));
         fd.append('volunteers', JSON.stringify(data.volunteers));
+        fd.append('rundown_segments', JSON.stringify(data.rundown_segments));
         if (data.image) {
             fd.append('image', data.image);
         }
@@ -293,14 +451,18 @@ export default function Events({
                 setIsAddModalOpen(false);
                 reset();
                 setImagePreview(null);
-                const fileInput = document.getElementById('image-upload') as HTMLInputElement;
+                const fileInput = document.getElementById(
+                    'image-upload',
+                ) as HTMLInputElement;
                 if (fileInput) fileInput.value = '';
                 toast.success('Event berhasil ditambahkan');
             },
             onError: (err: any) => {
                 console.error('Add Event Error:', err);
-                toast.error('Gagal menambahkan event. Silakan cek form kembali.');
-            }
+                toast.error(
+                    'Gagal menambahkan event. Silakan cek form kembali.',
+                );
+            },
         });
     };
 
@@ -312,20 +474,28 @@ export default function Events({
             return;
         }
 
-        router.post(`/events/${editingEvent.id}`, buildFormData({ _method: 'PUT' }), {
-            onSuccess: () => {
-                setEditingEvent(null);
-                reset();
-                setImagePreview(null);
-                const fileInput = document.getElementById('image-upload') as HTMLInputElement;
-                if (fileInput) fileInput.value = '';
-                toast.success('Event berhasil diperbarui');
+        router.post(
+            `/events/${editingEvent.id}`,
+            buildFormData({ _method: 'PUT' }),
+            {
+                onSuccess: () => {
+                    setEditingEvent(null);
+                    reset();
+                    setImagePreview(null);
+                    const fileInput = document.getElementById(
+                        'image-upload',
+                    ) as HTMLInputElement;
+                    if (fileInput) fileInput.value = '';
+                    toast.success('Event berhasil diperbarui');
+                },
+                onError: (err: any) => {
+                    console.error('Edit Event Error:', err);
+                    toast.error(
+                        'Gagal memperbarui event. Silakan cek form kembali.',
+                    );
+                },
             },
-            onError: (err: any) => {
-                console.error('Edit Event Error:', err);
-                toast.error('Gagal memperbarui event. Silakan cek form kembali.');
-            }
-        });
+        );
     };
 
     const handleDelete = (id: number) => {
@@ -342,7 +512,9 @@ export default function Events({
         setImagePreview(null);
 
         // Reset file input
-        const fileInput = document.getElementById('image-upload') as HTMLInputElement;
+        const fileInput = document.getElementById(
+            'image-upload',
+        ) as HTMLInputElement;
 
         if (fileInput) {
             fileInput.value = '';
@@ -363,22 +535,36 @@ export default function Events({
     };
 
     const getVolunteerValue = (category: string, role: string) => {
-        return data.volunteers.find(v => v.role_category === category && v.role_name === role)?.member_id || 'none';
+        return (
+            data.volunteers.find(
+                (v) => v.role_category === category && v.role_name === role,
+            )?.member_id || 'none'
+        );
     };
 
-    const setVolunteerValue = (category: string, role: string, memberId: string) => {
+    const setVolunteerValue = (
+        category: string,
+        role: string,
+        memberId: string,
+    ) => {
         const newVolunteers = [...data.volunteers];
-        const index = newVolunteers.findIndex(v => v.role_category === category && v.role_name === role);
+        const index = newVolunteers.findIndex(
+            (v) => v.role_category === category && v.role_name === role,
+        );
 
         if (memberId === 'none') {
             if (index !== -1) {
-newVolunteers.splice(index, 1);
-}
+                newVolunteers.splice(index, 1);
+            }
         } else {
             if (index !== -1) {
                 newVolunteers[index].member_id = memberId;
             } else {
-                newVolunteers.push({ role_category: category, role_name: role, member_id: memberId });
+                newVolunteers.push({
+                    role_category: category,
+                    role_name: role,
+                    member_id: memberId,
+                });
             }
         }
 
@@ -386,8 +572,89 @@ newVolunteers.splice(index, 1);
     };
 
     const toggleCategory = (category: string) => {
-        setOpenCategories(prev =>
-            prev.includes(category) ? prev.filter(c => c !== category) : [...prev, category]
+        setOpenCategories((prev) =>
+            prev.includes(category)
+                ? prev.filter((c) => c !== category)
+                : [...prev, category],
+        );
+    };
+
+    const addRundownSegment = () => {
+        setData('rundown_segments', [
+            ...data.rundown_segments,
+            createRundownSegment(),
+        ]);
+    };
+
+    const updateRundownSegment = (
+        segmentIndex: number,
+        changes: Partial<EventRundownSegment>,
+    ) => {
+        setData(
+            'rundown_segments',
+            data.rundown_segments.map((segment, index) =>
+                index === segmentIndex ? { ...segment, ...changes } : segment,
+            ),
+        );
+    };
+
+    const removeRundownSegment = (segmentIndex: number) => {
+        setData(
+            'rundown_segments',
+            data.rundown_segments.filter((_, index) => index !== segmentIndex),
+        );
+    };
+
+    const addRundownItem = (segmentIndex: number) => {
+        setData(
+            'rundown_segments',
+            data.rundown_segments.map((segment, index) =>
+                index === segmentIndex
+                    ? {
+                          ...segment,
+                          items: [...segment.items, createRundownItem()],
+                      }
+                    : segment,
+            ),
+        );
+    };
+
+    const updateRundownItem = (
+        segmentIndex: number,
+        itemIndex: number,
+        changes: Partial<EventRundownItem>,
+    ) => {
+        setData(
+            'rundown_segments',
+            data.rundown_segments.map((segment, index) =>
+                index === segmentIndex
+                    ? {
+                          ...segment,
+                          items: segment.items.map((item, currentItemIndex) =>
+                              currentItemIndex === itemIndex
+                                  ? { ...item, ...changes }
+                                  : item,
+                          ),
+                      }
+                    : segment,
+            ),
+        );
+    };
+
+    const removeRundownItem = (segmentIndex: number, itemIndex: number) => {
+        setData(
+            'rundown_segments',
+            data.rundown_segments.map((segment, index) =>
+                index === segmentIndex
+                    ? {
+                          ...segment,
+                          items: segment.items.filter(
+                              (_, currentItemIndex) =>
+                                  currentItemIndex !== itemIndex,
+                          ),
+                      }
+                    : segment,
+            ),
         );
     };
 
@@ -398,16 +665,19 @@ newVolunteers.splice(index, 1);
         // Search filter
         if (searchQuery.trim()) {
             const query = searchQuery.toLowerCase();
-            filtered = filtered.filter(event =>
-                event.title.toLowerCase().includes(query) ||
-                event.location.toLowerCase().includes(query) ||
-                event.address.toLowerCase().includes(query)
+            filtered = filtered.filter(
+                (event) =>
+                    event.title.toLowerCase().includes(query) ||
+                    event.location.toLowerCase().includes(query) ||
+                    event.address.toLowerCase().includes(query),
             );
         }
 
         // Category filter
         if (selectedCategory !== 'all') {
-            filtered = filtered.filter(event => event.category === selectedCategory);
+            filtered = filtered.filter(
+                (event) => event.category === selectedCategory,
+            );
         }
 
         // Date filter
@@ -415,19 +685,19 @@ newVolunteers.splice(index, 1);
         today.setHours(0, 0, 0, 0);
 
         if (dateFilter === 'upcoming') {
-            filtered = filtered.filter(event => {
+            filtered = filtered.filter((event) => {
                 const eventDate = new Date(event.date);
                 eventDate.setHours(0, 0, 0, 0);
                 return eventDate >= today;
             });
         } else if (dateFilter === 'past') {
-            filtered = filtered.filter(event => {
+            filtered = filtered.filter((event) => {
                 const eventDate = new Date(event.date);
                 eventDate.setHours(0, 0, 0, 0);
                 return eventDate < today;
             });
         } else if (dateFilter === 'today') {
-            filtered = filtered.filter(event => {
+            filtered = filtered.filter((event) => {
                 const eventDate = new Date(event.date);
                 eventDate.setHours(0, 0, 0, 0);
                 return eventDate.getTime() === today.getTime();
@@ -440,13 +710,41 @@ newVolunteers.splice(index, 1);
                 return new Date(a.date).getTime() - new Date(b.date).getTime();
             } else if (sortBy === 'date-desc') {
                 return new Date(b.date).getTime() - new Date(a.date).getTime();
-            } else { // title
+            } else {
+                // title
                 return a.title.localeCompare(b.title);
             }
         });
 
         return filtered;
     }, [events, searchQuery, selectedCategory, dateFilter, sortBy]);
+
+    const rundownTimerPlan = useMemo(() => {
+        let cursor = 0;
+
+        return (rundownEvent?.rundown_segments || []).map((segment, index) => {
+            const duration =
+                Number(segment.duration_seconds) ||
+                getItemTotalSeconds(segment);
+            const startsAt = cursor;
+            const endsAt = startsAt + duration;
+            cursor = endsAt;
+
+            return {
+                ...segment,
+                index,
+                duration,
+                startsAt,
+                endsAt,
+            };
+        });
+    }, [rundownEvent]);
+
+    const rundownTotalSeconds = rundownTimerPlan.reduce(
+        (total, segment) => total + segment.duration,
+        0,
+    );
+    const overdueSeconds = Math.max(0, elapsedSeconds - rundownTotalSeconds);
 
     return (
         <>
@@ -463,7 +761,10 @@ newVolunteers.splice(index, 1);
                         </p>
                     </div>
 
-                    <Button onClick={() => setIsAddModalOpen(true)} className="flex items-center gap-2">
+                    <Button
+                        onClick={() => setIsAddModalOpen(true)}
+                        className="flex items-center gap-2"
+                    >
                         <Plus className="h-4 w-4" />
                         Tambah Event Baru
                     </Button>
@@ -471,74 +772,111 @@ newVolunteers.splice(index, 1);
 
                 {/* Search and Filter Section */}
                 <div className="rounded-xl border bg-card p-6 shadow-sm">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
                         <div className="space-y-2">
-                            <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                            <label className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
                                 Cari Event
                             </label>
                             <div className="relative">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                                 <Input
                                     type="text"
                                     placeholder="Judul, lokasi, atau alamat..."
                                     value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="pl-10 bg-muted/30 border-border"
+                                    onChange={(e) =>
+                                        setSearchQuery(e.target.value)
+                                    }
+                                    className="border-border bg-muted/30 pl-10"
                                 />
                             </div>
                         </div>
                         <div className="space-y-2">
-                            <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                            <label className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
                                 Kategori
                             </label>
-                            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                                <SelectTrigger className="bg-muted/30 border-border">
+                            <Select
+                                value={selectedCategory}
+                                onValueChange={setSelectedCategory}
+                            >
+                                <SelectTrigger className="border-border bg-muted/30">
                                     <SelectValue placeholder="Semua Kategori" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="all">Semua Kategori</SelectItem>
-                                    {categories.map(cat => (
-                                        <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>
+                                    <SelectItem value="all">
+                                        Semua Kategori
+                                    </SelectItem>
+                                    {categories.map((cat) => (
+                                        <SelectItem
+                                            key={cat.id}
+                                            value={cat.name}
+                                        >
+                                            {cat.name}
+                                        </SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
                         </div>
                         <div className="space-y-2">
-                            <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                            <label className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
                                 Periode
                             </label>
-                            <Select value={dateFilter} onValueChange={(value: any) => setDateFilter(value)}>
-                                <SelectTrigger className="bg-muted/30 border-border">
+                            <Select
+                                value={dateFilter}
+                                onValueChange={(value: any) =>
+                                    setDateFilter(value)
+                                }
+                            >
+                                <SelectTrigger className="border-border bg-muted/30">
                                     <SelectValue placeholder="Semua Periode" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="all">Semua Periode</SelectItem>
-                                    <SelectItem value="upcoming">Mendatang</SelectItem>
-                                    <SelectItem value="today">Hari Ini</SelectItem>
-                                    <SelectItem value="past">Sudah Lewat</SelectItem>
+                                    <SelectItem value="all">
+                                        Semua Periode
+                                    </SelectItem>
+                                    <SelectItem value="upcoming">
+                                        Mendatang
+                                    </SelectItem>
+                                    <SelectItem value="today">
+                                        Hari Ini
+                                    </SelectItem>
+                                    <SelectItem value="past">
+                                        Sudah Lewat
+                                    </SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
                         <div className="space-y-2">
-                            <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                            <label className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
                                 Urutkan
                             </label>
-                            <Select value={sortBy} onValueChange={(value: any) => setSortBy(value)}>
-                                <SelectTrigger className="bg-muted/30 border-border">
+                            <Select
+                                value={sortBy}
+                                onValueChange={(value: any) => setSortBy(value)}
+                            >
+                                <SelectTrigger className="border-border bg-muted/30">
                                     <SelectValue placeholder="Pilih Urutan" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="date-desc">Tanggal Terdekat</SelectItem>
-                                    <SelectItem value="date-asc">Tanggal Terjauh</SelectItem>
-                                    <SelectItem value="title">Nama Event (A-Z)</SelectItem>
+                                    <SelectItem value="date-desc">
+                                        Tanggal Terdekat
+                                    </SelectItem>
+                                    <SelectItem value="date-asc">
+                                        Tanggal Terjauh
+                                    </SelectItem>
+                                    <SelectItem value="title">
+                                        Nama Event (A-Z)
+                                    </SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
                     </div>
-                    {(searchQuery || selectedCategory !== 'all' || dateFilter !== 'all') && (
-                        <div className="flex items-center gap-3 mt-4 pt-4 border-t">
+                    {(searchQuery ||
+                        selectedCategory !== 'all' ||
+                        dateFilter !== 'all') && (
+                        <div className="mt-4 flex items-center gap-3 border-t pt-4">
                             <span className="text-sm text-muted-foreground">
-                                Menampilkan {filteredAndSortedEvents.length} dari {events.length} event
+                                Menampilkan {filteredAndSortedEvents.length}{' '}
+                                dari {events.length} event
                             </span>
                             <Button
                                 variant="ghost"
@@ -560,13 +898,20 @@ newVolunteers.splice(index, 1);
                 {/* Events Grid */}
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
                     {filteredAndSortedEvents.length === 0 ? (
-                        <div className="col-span-full flex flex-col items-center justify-center py-20 text-muted-foreground border-2 border-dashed rounded-xl">
-                            <Search className="h-12 w-12 mb-4 opacity-20" />
+                        <div className="col-span-full flex flex-col items-center justify-center rounded-xl border-2 border-dashed py-20 text-muted-foreground">
+                            <Search className="mb-4 h-12 w-12 opacity-20" />
                             <p className="font-medium">
-                                {events.length === 0 ? 'Belum ada event yang dibuat.' : 'Tidak ada event yang sesuai filter.'}
+                                {events.length === 0
+                                    ? 'Belum ada event yang dibuat.'
+                                    : 'Tidak ada event yang sesuai filter.'}
                             </p>
                             {events.length === 0 ? (
-                                <Button variant="link" onClick={() => setIsAddModalOpen(true)}>Buat event pertama Anda</Button>
+                                <Button
+                                    variant="link"
+                                    onClick={() => setIsAddModalOpen(true)}
+                                >
+                                    Buat event pertama Anda
+                                </Button>
                             ) : (
                                 <Button
                                     variant="link"
@@ -582,9 +927,12 @@ newVolunteers.splice(index, 1);
                         </div>
                     ) : (
                         filteredAndSortedEvents.map((event) => (
-                            <Card key={event.id} className="group overflow-hidden border bg-card shadow-sm transition-all hover:shadow-md rounded-xl flex flex-col">
+                            <Card
+                                key={event.id}
+                                className="group flex flex-col overflow-hidden rounded-xl border bg-card shadow-sm transition-all hover:shadow-md"
+                            >
                                 {/* Event Image */}
-                                <div className="aspect-video w-full overflow-hidden bg-muted relative">
+                                <div className="relative aspect-video w-full overflow-hidden bg-muted">
                                     {event.image_path ? (
                                         <img
                                             src={event.image_path}
@@ -597,68 +945,142 @@ newVolunteers.splice(index, 1);
                                         </div>
                                     )}
                                     <div className="absolute top-3 left-3">
-                                        <Badge variant="secondary" className="bg-background/80 backdrop-blur-sm">
+                                        <Badge
+                                            variant="secondary"
+                                            className="bg-background/80 backdrop-blur-sm"
+                                        >
                                             {event.category}
                                         </Badge>
                                     </div>
                                     {/* Status Badge */}
                                     <div className="absolute top-3 right-3">
                                         {(() => {
-                                            const eventDate = new Date(event.date);
+                                            const eventDate = new Date(
+                                                event.date,
+                                            );
                                             const today = new Date();
                                             today.setHours(0, 0, 0, 0);
                                             eventDate.setHours(0, 0, 0, 0);
 
-                                            if (eventDate.getTime() === today.getTime()) {
-                                                return <Badge className="bg-emerald-500 text-white border-0">Hari Ini</Badge>;
+                                            if (
+                                                eventDate.getTime() ===
+                                                today.getTime()
+                                            ) {
+                                                return (
+                                                    <Badge className="border-0 bg-emerald-500 text-white">
+                                                        Hari Ini
+                                                    </Badge>
+                                                );
                                             } else if (eventDate > today) {
-                                                return <Badge variant="outline" className="bg-background/80 backdrop-blur-sm border-primary/20 text-primary">Mendatang</Badge>;
+                                                return (
+                                                    <Badge
+                                                        variant="outline"
+                                                        className="border-primary/20 bg-background/80 text-primary backdrop-blur-sm"
+                                                    >
+                                                        Mendatang
+                                                    </Badge>
+                                                );
                                             } else {
-                                                return <Badge variant="outline" className="bg-background/80 backdrop-blur-sm border-muted-foreground/20 text-muted-foreground">Selesai</Badge>;
+                                                return (
+                                                    <Badge
+                                                        variant="outline"
+                                                        className="border-muted-foreground/20 bg-background/80 text-muted-foreground backdrop-blur-sm"
+                                                    >
+                                                        Selesai
+                                                    </Badge>
+                                                );
                                             }
                                         })()}
                                     </div>
                                 </div>
 
-                                <CardContent className="p-5 flex-1 flex flex-col">
+                                <CardContent className="flex flex-1 flex-col p-5">
                                     <div className="flex items-start justify-between gap-2">
-                                        <h3 className="text-lg font-bold text-foreground line-clamp-2 leading-tight">{event.title}</h3>
-                                        <div className="flex gap-1 shrink-0">
-                                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditModal(event)}>
+                                        <h3 className="line-clamp-2 text-lg leading-tight font-bold text-foreground">
+                                            {event.title}
+                                        </h3>
+                                        <div className="flex shrink-0 gap-1">
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-8 w-8"
+                                                onClick={() =>
+                                                    openEditModal(event)
+                                                }
+                                            >
                                                 <Edit2 className="h-3.5 w-3.5" />
                                             </Button>
-                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDelete(event.id)}>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-8 w-8 text-destructive"
+                                                onClick={() =>
+                                                    handleDelete(event.id)
+                                                }
+                                            >
                                                 <Trash2 className="h-3.5 w-3.5" />
                                             </Button>
                                         </div>
                                     </div>
 
-                                    <div className="mt-4 space-y-2.5 flex-1">
+                                    <div className="mt-4 flex-1 space-y-2.5">
                                         <div className="flex items-center gap-3 text-sm text-muted-foreground">
                                             <CalendarIcon className="h-4 w-4 shrink-0 text-primary" />
-                                            <span>{event.date ? new Date(event.date).toLocaleDateString('id-ID', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' }) : '-'}</span>
+                                            <span>
+                                                {event.date
+                                                    ? new Date(
+                                                          event.date,
+                                                      ).toLocaleDateString(
+                                                          'id-ID',
+                                                          {
+                                                              weekday: 'short',
+                                                              year: 'numeric',
+                                                              month: 'short',
+                                                              day: 'numeric',
+                                                          },
+                                                      )
+                                                    : '-'}
+                                            </span>
                                         </div>
                                         <div className="flex items-center gap-3 text-sm text-muted-foreground">
                                             <Clock className="h-4 w-4 shrink-0 text-primary" />
                                             <span>{event.time}</span>
                                         </div>
                                         <div className="flex items-start gap-3 text-sm text-muted-foreground">
-                                            <MapPin className="h-4 w-4 shrink-0 text-primary mt-0.5" />
-                                            <span className="line-clamp-1">{event.location}</span>
+                                            <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                                            <span className="line-clamp-1">
+                                                {event.location}
+                                            </span>
                                         </div>
+                                        {(event.rundown_segments?.length || 0) >
+                                            0 && (
+                                            <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                                                <ListChecks className="h-4 w-4 shrink-0 text-primary" />
+                                                <span>
+                                                    {formatDuration(
+                                                        getRundownTotalSeconds(
+                                                            event.rundown_segments,
+                                                        ),
+                                                    )}{' '}
+                                                    rundown
+                                                </span>
+                                            </div>
+                                        )}
                                     </div>
 
                                     <div className="mt-6 flex gap-2">
                                         <Button
                                             variant="outline"
-                                            className="flex-1 gap-2 text-xs h-9"
-                                            onClick={() => setViewingEvent(event)}
+                                            className="h-9 flex-1 gap-2 text-xs"
+                                            onClick={() =>
+                                                setViewingEvent(event)
+                                            }
                                         >
                                             <Eye className="h-3.5 w-3.5" />
                                             Detail
                                         </Button>
                                         <Button
-                                            className="flex-1 gap-2 text-xs h-9 bg-primary/10 text-primary hover:bg-primary/20 border-0 shadow-none"
+                                            className="h-9 flex-1 gap-2 border-0 bg-primary/10 text-xs text-primary shadow-none hover:bg-primary/20"
                                             onClick={() => setQrEvent(event)}
                                         >
                                             <QrCode className="h-3.5 w-3.5" />
@@ -683,156 +1105,469 @@ newVolunteers.splice(index, 1);
                         clearErrors();
                         reset();
                         // Reset file input
-                        const fileInput = document.getElementById('image-upload') as HTMLInputElement;
+                        const fileInput = document.getElementById(
+                            'image-upload',
+                        ) as HTMLInputElement;
 
                         if (fileInput) {
-fileInput.value = '';
-}
+                            fileInput.value = '';
+                        }
                     }
                 }}
             >
                 <DialogContent
-                className="!max-w-[99vw] lg:!max-w-[1600px] !w-[min(99vw,1600px)] max-h-[90vh] overflow-y-auto p-0"
-                style={{ width: 'min(99vw, 1600px)', maxWidth: '99vw' }}
-            >
+                    className="max-h-[90vh] !w-[min(99vw,1600px)] !max-w-[99vw] overflow-y-auto p-0 lg:!max-w-[1600px]"
+                    style={{ width: 'min(99vw, 1600px)', maxWidth: '99vw' }}
+                >
                     <form onSubmit={editingEvent ? handleEdit : handleAdd}>
                         <div className="p-6 pb-0">
                             <DialogHeader>
-                                <DialogTitle className="text-2xl">{editingEvent ? 'Edit Event' : 'Buat Event Baru'}</DialogTitle>
+                                <DialogTitle className="text-2xl">
+                                    {editingEvent
+                                        ? 'Edit Event'
+                                        : 'Buat Event Baru'}
+                                </DialogTitle>
                                 <DialogDescription>
-                                    Isi informasi detail untuk event pelayanan dan pilih volunteer yang melayani.
+                                    Isi informasi detail untuk event pelayanan
+                                    dan pilih volunteer yang melayani.
                                 </DialogDescription>
                             </DialogHeader>
                         </div>
 
-                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-0 py-6 px-6">
+                        <div className="grid grid-cols-1 gap-0 px-6 py-6 lg:grid-cols-12">
                             {/* Left Column: Basic Info */}
-                            <div className="lg:col-span-7 space-y-6 lg:pr-8 lg:border-r">
+                            <div className="space-y-6 lg:col-span-7 lg:border-r lg:pr-8">
                                 <div className="space-y-4">
-                                    <div className="flex items-center gap-2 text-sm font-semibold text-primary uppercase tracking-wider">
+                                    <div className="flex items-center gap-2 text-sm font-semibold tracking-wider text-primary uppercase">
                                         <Info className="h-4 w-4" />
                                         Informasi Dasar
                                     </div>
 
                                     <div className="space-y-2">
-                                        <Label htmlFor="title">Judul Event</Label>
+                                        <Label htmlFor="title">
+                                            Judul Event
+                                        </Label>
                                         <Input
                                             id="title"
                                             value={data.title}
-                                            onChange={(e) => setData('title', e.target.value)}
+                                            onChange={(e) =>
+                                                setData('title', e.target.value)
+                                            }
                                             placeholder="Contoh: Sunday Service"
                                             className="h-10"
                                         />
-                                        {errors.title && <p className="text-xs text-destructive">{errors.title}</p>}
+                                        {errors.title && (
+                                            <p className="text-xs text-destructive">
+                                                {errors.title}
+                                            </p>
+                                        )}
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="space-y-2">
-                                            <Label htmlFor="date">Tanggal</Label>
-                                            <div className="relative group">
+                                            <Label htmlFor="date">
+                                                Tanggal
+                                            </Label>
+                                            <div className="group relative">
                                                 <Input
                                                     id="date"
                                                     type="date"
                                                     value={data.date}
-                                                    onChange={(e) => setData('date', e.target.value)}
-                                                    onClick={(e) => (e.target as any).showPicker?.()}
-                                                    className="h-10 pl-10 cursor-pointer block w-full"
+                                                    onChange={(e) =>
+                                                        setData(
+                                                            'date',
+                                                            e.target.value,
+                                                        )
+                                                    }
+                                                    onClick={(e) =>
+                                                        (
+                                                            e.target as any
+                                                        ).showPicker?.()
+                                                    }
+                                                    className="block h-10 w-full cursor-pointer pl-10"
                                                 />
-                                                <CalendarIcon className="absolute left-3 top-3 h-4 w-4 text-muted-foreground pointer-events-none group-focus-within:text-primary transition-colors" />
+                                                <CalendarIcon className="pointer-events-none absolute top-3 left-3 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
                                             </div>
-                                            {errors.date && <p className="text-xs text-destructive">{errors.date}</p>}
+                                            {errors.date && (
+                                                <p className="text-xs text-destructive">
+                                                    {errors.date}
+                                                </p>
+                                            )}
                                         </div>
                                         <div className="space-y-2">
                                             <Label htmlFor="time">Waktu</Label>
-                                            <div className="relative group">
+                                            <div className="group relative">
                                                 <Input
                                                     id="time"
                                                     type="time"
                                                     value={data.time}
-                                                    onChange={(e) => setData('time', e.target.value)}
-                                                    onClick={(e) => (e.target as any).showPicker?.()}
-                                                    className="h-10 pl-10 cursor-pointer block w-full"
+                                                    onChange={(e) =>
+                                                        setData(
+                                                            'time',
+                                                            e.target.value,
+                                                        )
+                                                    }
+                                                    onClick={(e) =>
+                                                        (
+                                                            e.target as any
+                                                        ).showPicker?.()
+                                                    }
+                                                    className="block h-10 w-full cursor-pointer pl-10"
                                                 />
-                                                <Clock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground pointer-events-none group-focus-within:text-primary transition-colors" />
+                                                <Clock className="pointer-events-none absolute top-3 left-3 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
                                             </div>
-                                            {errors.time && <p className="text-xs text-destructive">{errors.time}</p>}
+                                            {errors.time && (
+                                                <p className="text-xs text-destructive">
+                                                    {errors.time}
+                                                </p>
+                                            )}
                                         </div>
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="space-y-2">
-                                            <Label htmlFor="category">Kategori</Label>
+                                            <Label htmlFor="category">
+                                                Kategori
+                                            </Label>
                                             <Select
                                                 value={data.category}
-                                                onValueChange={(value) => setData('category', value)}
+                                                onValueChange={(value) =>
+                                                    setData('category', value)
+                                                }
                                             >
-                                                <SelectTrigger id="category" className="h-10">
+                                                <SelectTrigger
+                                                    id="category"
+                                                    className="h-10"
+                                                >
                                                     <SelectValue placeholder="Pilih kategori" />
                                                 </SelectTrigger>
                                                 <SelectContent>
                                                     {categories.map((cat) => (
-                                                        <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>
+                                                        <SelectItem
+                                                            key={cat.id}
+                                                            value={cat.name}
+                                                        >
+                                                            {cat.name}
+                                                        </SelectItem>
                                                     ))}
                                                 </SelectContent>
                                             </Select>
-                                            {errors.category && <p className="text-xs text-destructive">{errors.category}</p>}
+                                            {errors.category && (
+                                                <p className="text-xs text-destructive">
+                                                    {errors.category}
+                                                </p>
+                                            )}
                                         </div>
                                         <div className="space-y-2">
-                                            <Label htmlFor="expected">Target Peserta</Label>
+                                            <Label htmlFor="expected">
+                                                Target Peserta
+                                            </Label>
                                             <div className="relative">
                                                 <Input
                                                     id="expected"
                                                     type="number"
                                                     value={data.expected}
-                                                    onChange={(e) => setData('expected', parseInt(e.target.value) || 0)}
+                                                    onChange={(e) =>
+                                                        setData(
+                                                            'expected',
+                                                            parseInt(
+                                                                e.target.value,
+                                                            ) || 0,
+                                                        )
+                                                    }
                                                     className="h-10 pl-10"
                                                 />
-                                                <Users className="absolute left-3 top-3 h-4 w-4 text-muted-foreground pointer-events-none" />
+                                                <Users className="pointer-events-none absolute top-3 left-3 h-4 w-4 text-muted-foreground" />
                                             </div>
-                                            {errors.expected && <p className="text-xs text-destructive">{errors.expected}</p>}
+                                            {errors.expected && (
+                                                <p className="text-xs text-destructive">
+                                                    {errors.expected}
+                                                </p>
+                                            )}
                                         </div>
                                     </div>
 
                                     <div className="space-y-2">
-                                        <Label htmlFor="location">Lokasi (Nama Ruangan)</Label>
+                                        <Label htmlFor="location">
+                                            Lokasi (Nama Ruangan)
+                                        </Label>
                                         <div className="relative">
                                             <Input
                                                 id="location"
                                                 value={data.location}
-                                                onChange={(e) => setData('location', e.target.value)}
+                                                onChange={(e) =>
+                                                    setData(
+                                                        'location',
+                                                        e.target.value,
+                                                    )
+                                                }
                                                 placeholder="Contoh: Main Hall"
                                                 className="h-10 pl-10"
                                             />
-                                            <Building className="absolute left-3 top-3 h-4 w-4 text-muted-foreground pointer-events-none" />
+                                            <Building className="pointer-events-none absolute top-3 left-3 h-4 w-4 text-muted-foreground" />
                                         </div>
-                                        {errors.location && <p className="text-xs text-destructive">{errors.location}</p>}
+                                        {errors.location && (
+                                            <p className="text-xs text-destructive">
+                                                {errors.location}
+                                            </p>
+                                        )}
                                     </div>
 
                                     <div className="space-y-2">
-                                        <Label htmlFor="address">Alamat Lengkap</Label>
+                                        <Label htmlFor="address">
+                                            Alamat Lengkap
+                                        </Label>
                                         <div className="relative">
                                             <Input
                                                 id="address"
                                                 value={data.address}
-                                                onChange={(e) => setData('address', e.target.value)}
+                                                onChange={(e) =>
+                                                    setData(
+                                                        'address',
+                                                        e.target.value,
+                                                    )
+                                                }
                                                 placeholder="Jl. Gajah Mada No. 1..."
                                                 className="h-10 pl-10"
                                             />
-                                            <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground pointer-events-none" />
+                                            <MapPin className="pointer-events-none absolute top-3 left-3 h-4 w-4 text-muted-foreground" />
                                         </div>
-                                        {errors.address && <p className="text-xs text-destructive">{errors.address}</p>}
+                                        {errors.address && (
+                                            <p className="text-xs text-destructive">
+                                                {errors.address}
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
 
                                 <div className="space-y-4">
-                                    <div className="flex items-center gap-2 text-sm font-semibold text-primary uppercase tracking-wider">
+                                    <div className="flex items-center justify-between gap-4">
+                                        <div className="flex items-center gap-2 text-sm font-semibold tracking-wider text-primary uppercase">
+                                            <ListChecks className="h-4 w-4" />
+                                            Rundown Event
+                                        </div>
+                                        <Badge
+                                            variant="outline"
+                                            className="rounded-md"
+                                        >
+                                            {formatDuration(
+                                                getRundownTotalSeconds(
+                                                    data.rundown_segments,
+                                                ),
+                                            )}
+                                        </Badge>
+                                    </div>
+
+                                    <div className="space-y-3 rounded-xl border bg-muted/10 p-4">
+                                        {data.rundown_segments.length === 0 && (
+                                            <div className="py-6 text-center text-sm text-muted-foreground">
+                                                Belum ada rundown untuk event
+                                                ini.
+                                            </div>
+                                        )}
+
+                                        {data.rundown_segments.map(
+                                            (segment, segmentIndex) => (
+                                                <div
+                                                    key={segmentIndex}
+                                                    className="space-y-3 rounded-lg border bg-background p-3"
+                                                >
+                                                    <div className="grid gap-3 md:grid-cols-[1fr_140px_36px] md:items-end">
+                                                        <div className="space-y-1.5">
+                                                            <Label className="text-[10px] font-bold text-muted-foreground uppercase">
+                                                                Segment
+                                                            </Label>
+                                                            <Input
+                                                                value={
+                                                                    segment.title
+                                                                }
+                                                                onChange={(e) =>
+                                                                    updateRundownSegment(
+                                                                        segmentIndex,
+                                                                        {
+                                                                            title: e
+                                                                                .target
+                                                                                .value,
+                                                                        },
+                                                                    )
+                                                                }
+                                                                placeholder="Praise and Worship"
+                                                                className="h-9"
+                                                            />
+                                                        </div>
+                                                        <div className="space-y-1.5">
+                                                            <Label className="text-[10px] font-bold text-muted-foreground uppercase">
+                                                                Menit
+                                                            </Label>
+                                                            <Input
+                                                                type="number"
+                                                                min="0"
+                                                                step="0.5"
+                                                                value={secondsToMinutesInput(
+                                                                    segment.duration_seconds,
+                                                                )}
+                                                                onChange={(e) =>
+                                                                    updateRundownSegment(
+                                                                        segmentIndex,
+                                                                        {
+                                                                            duration_seconds:
+                                                                                minutesToSeconds(
+                                                                                    e
+                                                                                        .target
+                                                                                        .value,
+                                                                                ),
+                                                                        },
+                                                                    )
+                                                                }
+                                                                placeholder="20"
+                                                                className="h-9"
+                                                            />
+                                                        </div>
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-9 w-9 text-destructive"
+                                                            onClick={() =>
+                                                                removeRundownSegment(
+                                                                    segmentIndex,
+                                                                )
+                                                            }
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    </div>
+
+                                                    <div className="space-y-2 border-l pl-3">
+                                                        {segment.items.map(
+                                                            (
+                                                                item,
+                                                                itemIndex,
+                                                            ) => (
+                                                                <div
+                                                                    key={
+                                                                        itemIndex
+                                                                    }
+                                                                    className="grid gap-2 md:grid-cols-[1fr_120px_32px] md:items-center"
+                                                                >
+                                                                    <Input
+                                                                        value={
+                                                                            item.title
+                                                                        }
+                                                                        onChange={(
+                                                                            e,
+                                                                        ) =>
+                                                                            updateRundownItem(
+                                                                                segmentIndex,
+                                                                                itemIndex,
+                                                                                {
+                                                                                    title: e
+                                                                                        .target
+                                                                                        .value,
+                                                                                },
+                                                                            )
+                                                                        }
+                                                                        placeholder="Lagu 1"
+                                                                        className="h-8 text-xs"
+                                                                    />
+                                                                    <Input
+                                                                        type="number"
+                                                                        min="0"
+                                                                        step="0.5"
+                                                                        value={secondsToMinutesInput(
+                                                                            item.duration_seconds,
+                                                                        )}
+                                                                        onChange={(
+                                                                            e,
+                                                                        ) =>
+                                                                            updateRundownItem(
+                                                                                segmentIndex,
+                                                                                itemIndex,
+                                                                                {
+                                                                                    duration_seconds:
+                                                                                        minutesToSeconds(
+                                                                                            e
+                                                                                                .target
+                                                                                                .value,
+                                                                                        ),
+                                                                                },
+                                                                            )
+                                                                        }
+                                                                        placeholder="3"
+                                                                        className="h-8 text-xs"
+                                                                    />
+                                                                    <Button
+                                                                        type="button"
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                                                        onClick={() =>
+                                                                            removeRundownItem(
+                                                                                segmentIndex,
+                                                                                itemIndex,
+                                                                            )
+                                                                        }
+                                                                    >
+                                                                        <Minus className="h-3.5 w-3.5" />
+                                                                    </Button>
+                                                                </div>
+                                                            ),
+                                                        )}
+
+                                                        <div className="flex items-center justify-between gap-3">
+                                                            <Button
+                                                                type="button"
+                                                                variant="outline"
+                                                                size="sm"
+                                                                className="h-8 gap-2 text-xs"
+                                                                onClick={() =>
+                                                                    addRundownItem(
+                                                                        segmentIndex,
+                                                                    )
+                                                                }
+                                                            >
+                                                                <Plus className="h-3.5 w-3.5" />
+                                                                Tambah Item
+                                                            </Button>
+                                                            <span className="text-xs text-muted-foreground">
+                                                                Detail:{' '}
+                                                                {formatDuration(
+                                                                    getItemTotalSeconds(
+                                                                        segment,
+                                                                    ),
+                                                                )}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ),
+                                        )}
+
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            className="w-full gap-2"
+                                            onClick={addRundownSegment}
+                                        >
+                                            <Plus className="h-4 w-4" />
+                                            Tambah Segment Rundown
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <div className="flex items-center gap-2 text-sm font-semibold tracking-wider text-primary uppercase">
                                         <ImageIcon className="h-4 w-4" />
                                         Poster / Gambar Event
                                     </div>
                                     <div className="flex flex-col gap-4">
                                         {imagePreview ? (
-                                            <div className="relative aspect-video w-full rounded-lg overflow-hidden border bg-muted">
-                                                <img src={imagePreview} alt="Preview" className="h-full w-full object-cover" />
+                                            <div className="relative aspect-video w-full overflow-hidden rounded-lg border bg-muted">
+                                                <img
+                                                    src={imagePreview}
+                                                    alt="Preview"
+                                                    className="h-full w-full object-cover"
+                                                />
                                                 <Button
                                                     type="button"
                                                     variant="destructive"
@@ -849,60 +1584,115 @@ fileInput.value = '';
                                         ) : (
                                             <label
                                                 htmlFor="image-upload"
-                                                className="flex flex-col items-center justify-center aspect-video w-full border-2 border-dashed rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
+                                                className="flex aspect-video w-full cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed transition-colors hover:bg-muted/50"
                                             >
                                                 <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                                                    <Plus className="w-8 h-8 mb-3 text-muted-foreground" />
-                                                    <p className="mb-2 text-sm text-muted-foreground font-medium">Klik untuk upload gambar</p>
-                                                    <p className="text-xs text-muted-foreground/60">PNG, JPG atau GIF (Maks. 2MB)</p>
+                                                    <Plus className="mb-3 h-8 w-8 text-muted-foreground" />
+                                                    <p className="mb-2 text-sm font-medium text-muted-foreground">
+                                                        Klik untuk upload gambar
+                                                    </p>
+                                                    <p className="text-xs text-muted-foreground/60">
+                                                        PNG, JPG atau GIF (Maks.
+                                                        2MB)
+                                                    </p>
                                                 </div>
-                                                <input id="image-upload" type="file" className="hidden" accept="image/*" onChange={handleImageChange} />
+                                                <input
+                                                    id="image-upload"
+                                                    type="file"
+                                                    className="hidden"
+                                                    accept="image/*"
+                                                    onChange={handleImageChange}
+                                                />
                                             </label>
                                         )}
-                                        {errors.image && <p className="text-xs text-destructive">{errors.image}</p>}
+                                        {errors.image && (
+                                            <p className="text-xs text-destructive">
+                                                {errors.image}
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
                             </div>
 
                             {/* Right Column: Volunteers */}
-                            <div className="lg:col-span-5 space-y-4 mt-8 lg:mt-0 lg:pl-8">
-                                <div className="flex items-center gap-2 text-sm font-semibold text-primary uppercase tracking-wider">
+                            <div className="mt-8 space-y-4 lg:col-span-5 lg:mt-0 lg:pl-8">
+                                <div className="flex items-center gap-2 text-sm font-semibold tracking-wider text-primary uppercase">
                                     <Users className="h-4 w-4" />
                                     Penugasan Volunteer
                                 </div>
-                                <div className="border rounded-xl overflow-hidden bg-muted/10">
-                                    <div className="max-h-[600px] overflow-y-auto p-4 space-y-3">
+                                <div className="overflow-hidden rounded-xl border bg-muted/10">
+                                    <div className="max-h-[600px] space-y-3 overflow-y-auto p-4">
                                         {volunteerGroups.length > 0 ? (
                                             volunteerGroups.map((group) => (
                                                 <Collapsible
                                                     key={group.category}
-                                                    open={openCategories.includes(group.category)}
-                                                    onOpenChange={() => toggleCategory(group.category)}
-                                                    className="border rounded-lg bg-background"
+                                                    open={openCategories.includes(
+                                                        group.category,
+                                                    )}
+                                                    onOpenChange={() =>
+                                                        toggleCategory(
+                                                            group.category,
+                                                        )
+                                                    }
+                                                    className="rounded-lg border bg-background"
                                                 >
                                                     <CollapsibleTrigger asChild>
-                                                        <Button variant="ghost" className="w-full flex items-center justify-between p-3 h-auto hover:bg-muted/50">
-                                                            <span className="font-bold text-xs uppercase tracking-tight text-foreground/70">{group.category}</span>
-                                                            {openCategories.includes(group.category) ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                                                        <Button
+                                                            variant="ghost"
+                                                            className="flex h-auto w-full items-center justify-between p-3 hover:bg-muted/50"
+                                                        >
+                                                            <span className="text-xs font-bold tracking-tight text-foreground/70 uppercase">
+                                                                {group.category}
+                                                            </span>
+                                                            {openCategories.includes(
+                                                                group.category,
+                                                            ) ? (
+                                                                <ChevronUp className="h-4 w-4" />
+                                                            ) : (
+                                                                <ChevronDown className="h-4 w-4" />
+                                                            )}
                                                         </Button>
                                                     </CollapsibleTrigger>
                                                     <CollapsibleContent className="space-y-4 px-3 pb-4">
-                                                        {group.roles.map((role) => (
-                                                            <div key={role} className="space-y-1.5">
-                                                                <Label className="text-[10px] font-bold uppercase text-muted-foreground/80 pl-1">{role}</Label>
-                                                                <SearchableSelect
-                                                                    value={getVolunteerValue(group.category, role)}
-                                                                    onSelect={(val) => setVolunteerValue(group.category, role, val)}
-                                                                    external_members={external_members}
-                                                                />
-                                                            </div>
-                                                        ))}
+                                                        {group.roles.map(
+                                                            (role) => (
+                                                                <div
+                                                                    key={role}
+                                                                    className="space-y-1.5"
+                                                                >
+                                                                    <Label className="pl-1 text-[10px] font-bold text-muted-foreground/80 uppercase">
+                                                                        {role}
+                                                                    </Label>
+                                                                    <SearchableSelect
+                                                                        value={getVolunteerValue(
+                                                                            group.category,
+                                                                            role,
+                                                                        )}
+                                                                        onSelect={(
+                                                                            val,
+                                                                        ) =>
+                                                                            setVolunteerValue(
+                                                                                group.category,
+                                                                                role,
+                                                                                val,
+                                                                            )
+                                                                        }
+                                                                        external_members={
+                                                                            external_members
+                                                                        }
+                                                                    />
+                                                                </div>
+                                                            ),
+                                                        )}
                                                     </CollapsibleContent>
                                                 </Collapsible>
                                             ))
                                         ) : (
-                                            <div className="text-center py-10 text-muted-foreground">
-                                                <p className="text-sm">Pilih kategori untuk melihat daftar volunteer.</p>
+                                            <div className="py-10 text-center text-muted-foreground">
+                                                <p className="text-sm">
+                                                    Pilih kategori untuk melihat
+                                                    daftar volunteer.
+                                                </p>
                                             </div>
                                         )}
                                     </div>
@@ -910,18 +1700,31 @@ fileInput.value = '';
                             </div>
                         </div>
 
-                        <div className="p-6 pt-4 border-t bg-muted/20">
+                        <div className="border-t bg-muted/20 p-6 pt-4">
                             <DialogFooter className="flex-row justify-end gap-3">
-                                <Button type="button" variant="outline" className="h-10" onClick={() => {
-                                    setIsAddModalOpen(false);
-                                    setEditingEvent(null);
-                                    setImagePreview(null);
-                                    reset();
-                                }}>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="h-10"
+                                    onClick={() => {
+                                        setIsAddModalOpen(false);
+                                        setEditingEvent(null);
+                                        setImagePreview(null);
+                                        reset();
+                                    }}
+                                >
                                     Batal
                                 </Button>
-                                <Button type="submit" disabled={processing} className="h-10 px-8">
-                                    {processing ? 'Menyimpan...' : (editingEvent ? 'Simpan Perubahan' : 'Buat Event')}
+                                <Button
+                                    type="submit"
+                                    disabled={processing}
+                                    className="h-10 px-8"
+                                >
+                                    {processing
+                                        ? 'Menyimpan...'
+                                        : editingEvent
+                                          ? 'Simpan Perubahan'
+                                          : 'Buat Event'}
                                 </Button>
                             </DialogFooter>
                         </div>
@@ -930,82 +1733,253 @@ fileInput.value = '';
             </Dialog>
 
             {/* Detail Modal */}
-            <Dialog open={!!viewingEvent} onOpenChange={(open) => !open && setViewingEvent(null)}>
-                <DialogContent className="max-w-2xl p-0 overflow-hidden rounded-2xl">
+            <Dialog
+                open={!!viewingEvent}
+                onOpenChange={(open) => !open && setViewingEvent(null)}
+            >
+                <DialogContent className="max-w-2xl overflow-hidden rounded-2xl p-0">
                     {viewingEvent && (
                         <>
                             <DialogHeader className="sr-only">
                                 <DialogTitle>Detail Event</DialogTitle>
                                 <DialogDescription>
-                                    Informasi lengkap tentang event pelayanan termasuk tanggal, waktu, lokasi, dan volunteer yang bertugas.
+                                    Informasi lengkap tentang event pelayanan
+                                    termasuk tanggal, waktu, lokasi, dan
+                                    volunteer yang bertugas.
                                 </DialogDescription>
                             </DialogHeader>
-                            <div className="aspect-video w-full bg-muted relative">
+                            <div className="relative aspect-video w-full bg-muted">
                                 {viewingEvent.image_path ? (
-                                    <img src={viewingEvent.image_path} alt={viewingEvent.title} className="h-full w-full object-cover" />
+                                    <img
+                                        src={viewingEvent.image_path}
+                                        alt={viewingEvent.title}
+                                        className="h-full w-full object-cover"
+                                    />
                                 ) : (
                                     <div className="flex h-full w-full items-center justify-center text-muted-foreground/30">
                                         <ImageIcon className="h-16 w-16" />
                                     </div>
                                 )}
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-                                <div className="absolute bottom-6 left-6 right-6 text-white">
-                                    <Badge className="mb-3 bg-primary text-primary-foreground border-0">{viewingEvent.category}</Badge>
-                                    <h2 className="text-3xl font-bold tracking-tight">{viewingEvent.title}</h2>
+                                <div className="absolute right-6 bottom-6 left-6 text-white">
+                                    <Badge className="mb-3 border-0 bg-primary text-primary-foreground">
+                                        {viewingEvent.category}
+                                    </Badge>
+                                    <h2 className="text-3xl font-bold tracking-tight">
+                                        {viewingEvent.title}
+                                    </h2>
                                 </div>
                             </div>
 
-                            <div className="p-8 space-y-8">
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                            <div className="space-y-8 p-8">
+                                <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
                                     <div className="space-y-1">
-                                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Tanggal</p>
-                                        <p className="text-sm font-semibold">{viewingEvent.date ? new Date(viewingEvent.date).toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : '-'}</p>
+                                        <p className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
+                                            Tanggal
+                                        </p>
+                                        <p className="text-sm font-semibold">
+                                            {viewingEvent.date
+                                                ? new Date(
+                                                      viewingEvent.date,
+                                                  ).toLocaleDateString(
+                                                      'id-ID',
+                                                      {
+                                                          weekday: 'long',
+                                                          year: 'numeric',
+                                                          month: 'long',
+                                                          day: 'numeric',
+                                                      },
+                                                  )
+                                                : '-'}
+                                        </p>
                                     </div>
                                     <div className="space-y-1">
-                                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Waktu</p>
-                                        <p className="text-sm font-semibold">{viewingEvent.time}</p>
+                                        <p className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
+                                            Waktu
+                                        </p>
+                                        <p className="text-sm font-semibold">
+                                            {viewingEvent.time}
+                                        </p>
                                     </div>
                                     <div className="space-y-1">
-                                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Lokasi</p>
-                                        <p className="text-sm font-semibold">{viewingEvent.location}</p>
+                                        <p className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
+                                            Lokasi
+                                        </p>
+                                        <p className="text-sm font-semibold">
+                                            {viewingEvent.location}
+                                        </p>
                                     </div>
                                     <div className="space-y-1">
-                                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Target</p>
-                                        <p className="text-sm font-semibold">{viewingEvent.expected} Peserta</p>
+                                        <p className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
+                                            Target
+                                        </p>
+                                        <p className="text-sm font-semibold">
+                                            {viewingEvent.expected} Peserta
+                                        </p>
                                     </div>
                                 </div>
 
                                 <div className="space-y-4">
-                                    <h4 className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-primary">
+                                    <h4 className="flex items-center gap-2 text-sm font-bold tracking-widest text-primary uppercase">
                                         <MapPin className="h-4 w-4" />
                                         Alamat Lokasi
                                     </h4>
-                                    <p className="text-sm text-muted-foreground leading-relaxed bg-muted/50 p-4 rounded-xl border">
+                                    <p className="rounded-xl border bg-muted/50 p-4 text-sm leading-relaxed text-muted-foreground">
                                         {viewingEvent.address}
                                     </p>
                                 </div>
 
-                                {viewingEvent.volunteers && viewingEvent.volunteers.length > 0 && (
+                                {(viewingEvent.rundown_segments?.length || 0) >
+                                    0 && (
                                     <div className="space-y-4">
-                                        <h4 className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-primary">
-                                            <Users className="h-4 w-4" />
-                                            Volunteer Melayani
-                                        </h4>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3 bg-muted/30 p-5 rounded-2xl border border-primary/10">
-                                            {viewingEvent.volunteers.map((v) => (
-                                                <div key={v.id} className="flex items-center justify-between py-1.5 border-b border-muted last:border-0">
-                                                    <span className="text-xs font-medium text-muted-foreground">{v.role_category} - {v.role_name}</span>
-                                                    <span className="text-xs font-bold text-foreground">{v.member?.namalengkap || 'Unknown'}</span>
-                                                </div>
-                                            ))}
+                                        <div className="flex items-center justify-between gap-4">
+                                            <h4 className="flex items-center gap-2 text-sm font-bold tracking-widest text-primary uppercase">
+                                                <ListChecks className="h-4 w-4" />
+                                                Rundown Event
+                                            </h4>
+                                            <Badge
+                                                variant="outline"
+                                                className="rounded-md"
+                                            >
+                                                Total{' '}
+                                                {formatDuration(
+                                                    getRundownTotalSeconds(
+                                                        viewingEvent.rundown_segments,
+                                                    ),
+                                                )}
+                                            </Badge>
+                                        </div>
+                                        <div className="space-y-3 rounded-2xl border bg-muted/30 p-5">
+                                            {viewingEvent.rundown_segments?.map(
+                                                (segment, segmentIndex) => (
+                                                    <div
+                                                        key={
+                                                            segment.id ??
+                                                            segmentIndex
+                                                        }
+                                                        className="rounded-lg border bg-background p-4"
+                                                    >
+                                                        <div className="flex items-center justify-between gap-4">
+                                                            <div>
+                                                                <p className="text-sm font-bold text-foreground">
+                                                                    {segmentIndex +
+                                                                        1}
+                                                                    .{' '}
+                                                                    {
+                                                                        segment.title
+                                                                    }
+                                                                </p>
+                                                                <p className="text-xs text-muted-foreground">
+                                                                    Detail item{' '}
+                                                                    {formatDuration(
+                                                                        getItemTotalSeconds(
+                                                                            segment,
+                                                                        ),
+                                                                    )}
+                                                                </p>
+                                                            </div>
+                                                            <Badge
+                                                                variant="secondary"
+                                                                className="rounded-md"
+                                                            >
+                                                                {formatDuration(
+                                                                    segment.duration_seconds,
+                                                                )}
+                                                            </Badge>
+                                                        </div>
+                                                        {segment.items.length >
+                                                            0 && (
+                                                            <div className="mt-3 divide-y">
+                                                                {segment.items.map(
+                                                                    (
+                                                                        item,
+                                                                        itemIndex,
+                                                                    ) => (
+                                                                        <div
+                                                                            key={
+                                                                                item.id ??
+                                                                                itemIndex
+                                                                            }
+                                                                            className="flex items-center justify-between gap-3 py-2 text-sm"
+                                                                        >
+                                                                            <span className="text-muted-foreground">
+                                                                                {
+                                                                                    item.title
+                                                                                }
+                                                                            </span>
+                                                                            <span className="font-medium">
+                                                                                {formatDuration(
+                                                                                    item.duration_seconds,
+                                                                                )}
+                                                                            </span>
+                                                                        </div>
+                                                                    ),
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ),
+                                            )}
                                         </div>
                                     </div>
                                 )}
 
-                                <div className="pt-4 flex justify-end gap-3">
-                                    <Button variant="outline" className="rounded-xl h-11 px-6" onClick={() => setViewingEvent(null)}>Tutup</Button>
+                                {viewingEvent.volunteers &&
+                                    viewingEvent.volunteers.length > 0 && (
+                                        <div className="space-y-4">
+                                            <h4 className="flex items-center gap-2 text-sm font-bold tracking-widest text-primary uppercase">
+                                                <Users className="h-4 w-4" />
+                                                Volunteer Melayani
+                                            </h4>
+                                            <div className="grid grid-cols-1 gap-x-8 gap-y-3 rounded-2xl border border-primary/10 bg-muted/30 p-5 md:grid-cols-2">
+                                                {viewingEvent.volunteers.map(
+                                                    (v) => (
+                                                        <div
+                                                            key={v.id}
+                                                            className="flex items-center justify-between border-b border-muted py-1.5 last:border-0"
+                                                        >
+                                                            <span className="text-xs font-medium text-muted-foreground">
+                                                                {
+                                                                    v.role_category
+                                                                }{' '}
+                                                                - {v.role_name}
+                                                            </span>
+                                                            <span className="text-xs font-bold text-foreground">
+                                                                {v.member
+                                                                    ?.namalengkap ||
+                                                                    'Unknown'}
+                                                            </span>
+                                                        </div>
+                                                    ),
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                <div className="flex justify-end gap-3 pt-4">
                                     <Button
-                                        className="rounded-xl h-11 px-8 gap-2"
+                                        variant="outline"
+                                        className="h-11 rounded-xl px-6"
+                                        onClick={() => setViewingEvent(null)}
+                                    >
+                                        Tutup
+                                    </Button>
+                                    {(viewingEvent.rundown_segments?.length ||
+                                        0) > 0 && (
+                                        <Button
+                                            variant="outline"
+                                            className="h-11 gap-2 rounded-xl px-6"
+                                            onClick={() => {
+                                                setViewingEvent(null);
+                                                setRundownEvent(viewingEvent);
+                                            }}
+                                        >
+                                            <Timer className="h-4 w-4" />
+                                            Jalankan Rundown
+                                        </Button>
+                                    )}
+                                    <Button
+                                        className="h-11 gap-2 rounded-xl px-8"
                                         onClick={() => {
                                             setViewingEvent(null);
                                             setQrEvent(viewingEvent);
@@ -1020,34 +1994,247 @@ fileInput.value = '';
                     )}
                 </DialogContent>
             </Dialog>
+
+            {/* Rundown Timer Modal */}
+            <Dialog
+                open={!!rundownEvent}
+                onOpenChange={(open) => !open && setRundownEvent(null)}
+            >
+                <DialogContent className="max-w-4xl overflow-hidden rounded-2xl p-0">
+                    {rundownEvent && (
+                        <>
+                            <DialogHeader className="border-b p-6">
+                                <DialogTitle className="flex items-center gap-2 text-2xl">
+                                    <Timer className="h-5 w-5 text-primary" />
+                                    Timer Rundown
+                                </DialogTitle>
+                                <DialogDescription>
+                                    {rundownEvent.title} - total rencana{' '}
+                                    {formatDuration(rundownTotalSeconds)}
+                                </DialogDescription>
+                            </DialogHeader>
+
+                            <div className="grid gap-0 lg:grid-cols-[320px_1fr]">
+                                <div
+                                    className={`border-b p-6 lg:border-r lg:border-b-0 ${overdueSeconds > 0 ? 'bg-red-50 text-red-950 dark:bg-red-950/20 dark:text-red-100' : 'bg-muted/20'}`}
+                                >
+                                    <p className="text-xs font-bold tracking-widest text-muted-foreground uppercase">
+                                        Waktu Berjalan
+                                    </p>
+                                    <div
+                                        className={`mt-3 font-mono text-6xl font-bold tracking-tight ${overdueSeconds > 0 ? 'text-red-600 dark:text-red-300' : 'text-foreground'}`}
+                                    >
+                                        {formatDuration(elapsedSeconds)}
+                                    </div>
+                                    <div className="mt-4 grid grid-cols-2 gap-3">
+                                        <div className="rounded-lg border bg-background/80 p-3">
+                                            <p className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
+                                                Target
+                                            </p>
+                                            <p className="mt-1 font-mono text-lg font-semibold">
+                                                {formatDuration(
+                                                    rundownTotalSeconds,
+                                                )}
+                                            </p>
+                                        </div>
+                                        <div
+                                            className={`rounded-lg border p-3 ${overdueSeconds > 0 ? 'border-red-200 bg-red-100 dark:border-red-900 dark:bg-red-950/30' : 'bg-background/80'}`}
+                                        >
+                                            <p className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
+                                                Lewat
+                                            </p>
+                                            <p
+                                                className={`mt-1 font-mono text-lg font-semibold ${overdueSeconds > 0 ? 'text-red-700 dark:text-red-300' : ''}`}
+                                            >
+                                                {formatDuration(overdueSeconds)}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-6 flex gap-2">
+                                        <Button
+                                            className="flex-1 gap-2"
+                                            onClick={() =>
+                                                setTimerRunning(
+                                                    (current) => !current,
+                                                )
+                                            }
+                                        >
+                                            {timerRunning ? (
+                                                <Pause className="h-4 w-4" />
+                                            ) : (
+                                                <Play className="h-4 w-4" />
+                                            )}
+                                            {timerRunning ? 'Pause' : 'Start'}
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            size="icon"
+                                            onClick={() => {
+                                                setTimerRunning(false);
+                                                setElapsedSeconds(0);
+                                            }}
+                                        >
+                                            <RotateCcw className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                <div className="max-h-[70vh] overflow-y-auto p-6">
+                                    <div className="space-y-3">
+                                        {rundownTimerPlan.map((segment) => {
+                                            const isActive =
+                                                elapsedSeconds >=
+                                                    segment.startsAt &&
+                                                elapsedSeconds < segment.endsAt;
+                                            const isDone =
+                                                elapsedSeconds >=
+                                                segment.endsAt;
+                                            const isLate =
+                                                isActive &&
+                                                elapsedSeconds > segment.endsAt;
+
+                                            return (
+                                                <div
+                                                    key={
+                                                        segment.id ??
+                                                        segment.index
+                                                    }
+                                                    className={`rounded-xl border p-4 transition-colors ${
+                                                        isActive
+                                                            ? 'border-primary bg-primary/5'
+                                                            : isDone
+                                                              ? 'bg-muted/30 text-muted-foreground'
+                                                              : 'bg-background'
+                                                    } ${isLate ? 'border-red-300 bg-red-50 dark:border-red-900 dark:bg-red-950/20' : ''}`}
+                                                >
+                                                    <div className="flex items-center justify-between gap-4">
+                                                        <div>
+                                                            <p className="text-sm font-bold">
+                                                                {segment.index +
+                                                                    1}
+                                                                .{' '}
+                                                                {segment.title}
+                                                            </p>
+                                                            <p className="mt-1 text-xs text-muted-foreground">
+                                                                {formatDuration(
+                                                                    segment.startsAt,
+                                                                )}{' '}
+                                                                -{' '}
+                                                                {formatDuration(
+                                                                    segment.endsAt,
+                                                                )}
+                                                            </p>
+                                                        </div>
+                                                        <Badge
+                                                            className="rounded-md"
+                                                            variant={
+                                                                isActive
+                                                                    ? 'default'
+                                                                    : 'outline'
+                                                            }
+                                                        >
+                                                            {isActive
+                                                                ? 'Berjalan'
+                                                                : isDone
+                                                                  ? 'Selesai'
+                                                                  : formatDuration(
+                                                                        segment.duration,
+                                                                    )}
+                                                        </Badge>
+                                                    </div>
+
+                                                    {segment.items.length >
+                                                        0 && (
+                                                        <div className="mt-3 divide-y">
+                                                            {segment.items.map(
+                                                                (
+                                                                    item,
+                                                                    itemIndex,
+                                                                ) => (
+                                                                    <div
+                                                                        key={
+                                                                            item.id ??
+                                                                            itemIndex
+                                                                        }
+                                                                        className="flex items-center justify-between gap-3 py-2 text-sm"
+                                                                    >
+                                                                        <span className="text-muted-foreground">
+                                                                            {
+                                                                                item.title
+                                                                            }
+                                                                        </span>
+                                                                        <span className="font-medium">
+                                                                            {formatDuration(
+                                                                                item.duration_seconds,
+                                                                            )}
+                                                                        </span>
+                                                                    </div>
+                                                                ),
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+                        </>
+                    )}
+                </DialogContent>
+            </Dialog>
+
             {/* QR Code Modal */}
-            <Dialog open={!!qrEvent} onOpenChange={(open) => !open && setQrEvent(null)}>
+            <Dialog
+                open={!!qrEvent}
+                onOpenChange={(open) => !open && setQrEvent(null)}
+            >
                 <DialogContent className="sm:max-w-md">
                     {qrEvent && (
                         <>
                             <DialogHeader>
-                                <DialogTitle className="text-center">{qrEvent.title}</DialogTitle>
+                                <DialogTitle className="text-center">
+                                    {qrEvent.title}
+                                </DialogTitle>
                                 <DialogDescription className="text-center">
-                                    Minta jemaat untuk scan QR ini dari HP mereka
+                                    Minta jemaat untuk scan QR ini dari HP
+                                    mereka
                                 </DialogDescription>
                             </DialogHeader>
-                            <div className="flex flex-col items-center justify-center p-6 space-y-6">
-                                <div className="bg-white p-4 rounded-xl shadow-sm border">
+                            <div className="flex flex-col items-center justify-center space-y-6 p-6">
+                                <div className="rounded-xl border bg-white p-4 shadow-sm">
                                     <QRCodeComponent
                                         value={`${window.location.origin}/attendance/${qrEvent.id}/scan`}
                                         size={256}
                                         level="H"
                                     />
                                 </div>
-                                <div className="text-center space-y-2">
+                                <div className="space-y-2 text-center">
                                     <p className="text-sm font-medium text-foreground">
-                                        {qrEvent.date ? new Date(qrEvent.date).toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : '-'} • {qrEvent.time}
+                                        {qrEvent.date
+                                            ? new Date(
+                                                  qrEvent.date,
+                                              ).toLocaleDateString('id-ID', {
+                                                  weekday: 'long',
+                                                  year: 'numeric',
+                                                  month: 'long',
+                                                  day: 'numeric',
+                                              })
+                                            : '-'}{' '}
+                                        • {qrEvent.time}
                                     </p>
-                                    <p className="text-xs text-muted-foreground">{qrEvent.location}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                        {qrEvent.location}
+                                    </p>
                                 </div>
                             </div>
                             <DialogFooter className="sm:justify-center">
-                                <Button type="button" variant="secondary" onClick={() => setQrEvent(null)}>
+                                <Button
+                                    type="button"
+                                    variant="secondary"
+                                    onClick={() => setQrEvent(null)}
+                                >
                                     Tutup
                                 </Button>
                             </DialogFooter>

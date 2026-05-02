@@ -4,6 +4,7 @@ use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\EventController;
+use App\Http\Controllers\LiveEventController;
 use App\Models\Attendance;
 use App\Models\Category;
 use App\Models\CategoryRole;
@@ -298,6 +299,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::resource('departments', DepartmentController::class)->except(['create', 'edit', 'show']);
 
     Route::resource('events', EventController::class)->except(['create', 'edit', 'show']);
+    Route::get('live-events', [LiveEventController::class, 'index'])->name('live-events.index');
+    Route::post('live-events/{event}/start', [LiveEventController::class, 'start'])->name('live-events.start');
+    Route::post('live-events/{event}/next', [LiveEventController::class, 'next'])->name('live-events.next');
+    Route::post('live-events/{event}/finish', [LiveEventController::class, 'finish'])->name('live-events.finish');
     Route::resource('categories', CategoryController::class)->except(['create', 'edit', 'show']);
     Route::get('scan-qr', [AttendanceController::class, 'showAdminScan'])->name('scan-qr');
     Route::get('attendance-history', [AttendanceController::class, 'history'])->name('attendance-history');

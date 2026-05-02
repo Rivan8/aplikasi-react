@@ -29,6 +29,16 @@ class Event extends Model
         return $this->hasMany(EventVolunteer::class);
     }
 
+    public function rundownSegments()
+    {
+        return $this->hasMany(EventRundownSegment::class)->orderBy('sort_order');
+    }
+
+    public function liveSession()
+    {
+        return $this->hasOne(EventLiveSession::class);
+    }
+
     public function attendances()
     {
         return $this->hasMany(Attendance::class);
