@@ -1,3 +1,13 @@
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { Head, router } from '@inertiajs/react';
 import {
     AlertCircle,
@@ -14,16 +24,6 @@ import {
     Timer,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
 
 interface RundownItem {
     id: number;
@@ -127,68 +127,74 @@ export default function LiveEvents({
     selected_event: LiveEvent | null;
     server_now: string;
 }) {
-    const [now, setNow] = useState(() => new Date(server_now).getTime());
-    const serverOffset = useMemo(
-        () => new Date(server_now).getTime() - Date.now(),
-        [server_now],
-    );
+    // 1. Calculate server offset once when server_now changes
+    const serverOffset = useMemo(() => {
+        const serverTime = new Date(server_now).getTime();
+        const clientTime = Date.now();
+        return serverTime - clientTime;
+    }, [server_now]);
 
-    useEffect(() => {
-        setNow(Date.now() + serverOffset);
-    }, [serverOffset]);
+    // 2. Track current time in state, updated every 100ms for smoother timer
+    const [now, setNow] = useState(() => Date.now());
 
     useEffect(() => {
         const interval = window.setInterval(() => {
-            setNow(Date.now() + serverOffset);
-        }, 1000);
+            setNow(Date.now());
+        }, 100); // 100ms for responsiveness
 
         return () => window.clearInterval(interval);
-    }, [serverOffset]);
+    }, []);
 
+    // 3. Polling to keep the session data fresh from the server
     useEffect(() => {
-        if (!selected_event) {
-            return;
-        }
+        if (!selected_event || selected_event.live_session?.status !== 'running') return;
+
+        const pollInterval = window.setInterval(() => {
+            router.reload({
+                only: ['selected_event', 'server_now'],
+                preserveScroll: true,
+                preserveState: true,
+            });
+        }, 3000); // Poll every 3 seconds while running
+
+        return () => window.clearInterval(pollInterval);
+    }, [selected_event?.id, selected_event?.live_session?.status]);
+
+    // 4. Handle visibility change to refresh data
+    useEffect(() => {
+        if (!selected_event) return;
 
         const handleVisibilityChange = () => {
-            if (document.hidden) {
-                return;
-            }
-
-            router.get(
-                '/live-events',
-                { event_id: selected_event.id },
-                {
+            if (!document.hidden) {
+                router.reload({
                     only: ['events', 'selected_event', 'server_now'],
                     preserveScroll: true,
                     preserveState: true,
-                    replace: true,
-                },
-            );
+                });
+            }
         };
 
         document.addEventListener('visibilitychange', handleVisibilityChange);
-
-        return () => {
-            document.removeEventListener(
-                'visibilitychange',
-                handleVisibilityChange,
-            );
-        };
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
     }, [selected_event?.id]);
 
+    // 5. Derived state for timers
     const session = selected_event?.live_session;
     const isRunning = session?.status === 'running';
+
+    // Use a memo for segment calculation to avoid unnecessary re-renders
+    const segmentElapsedSeconds = useMemo(() => {
+        if (!isRunning || !session?.segment_started_at) return 0;
+
+        const segmentStartedAt = new Date(session.segment_started_at).getTime();
+        // now + serverOffset gives the current server-synced time
+        return Math.max(0, Math.floor((now + serverOffset - segmentStartedAt) / 1000));
+    }, [now, serverOffset, isRunning, session?.segment_started_at]);
+
     const currentSegment =
         selected_event?.rundown_segments[session?.current_segment_index ?? 0] ??
         null;
-    const segmentStartedAt = session?.segment_started_at
-        ? new Date(session.segment_started_at).getTime()
-        : null;
-    const segmentElapsedSeconds =
-        isRunning && segmentStartedAt
-            ? Math.max(0, Math.floor((now - segmentStartedAt) / 1000))
-            : 0;
+
     const currentPlannedSeconds = currentSegment?.duration_seconds || 0;
     const currentOverrunSeconds = Math.max(
         0,
