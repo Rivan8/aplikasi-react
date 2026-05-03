@@ -177,7 +177,7 @@ class AttendanceController extends Controller
     public function showAdminScan(Request $request)
     {
         $events = Event::orderBy('date', 'desc')->get();
-        
+
         // Jika tidak ada event_id di request, redirect ke event pertama agar URL "sticky"
         if (!$request->has('event_id') && $events->isNotEmpty()) {
             return redirect()->route('scan-qr', ['event_id' => $events->first()->id]);
@@ -262,9 +262,12 @@ class AttendanceController extends Controller
             return back()->with('info', 'Anda sudah melakukan absensi untuk event ini.');
         }
 
-        // Tentukan status (Present vs Late) berdasarkan waktu event
-        // Kita beri toleransi 1 menit
-        $eventDateTime = \Carbon\Carbon::parse($event->date . ' ' . $event->time)->addMinute();
+        // Tentukan status (Present vs Late) berdasarkan waktu absensi yang fleksibel
+        // Prioritas: 1. attendance_start_time, 2. event time (default)
+        $compareTime = $event->attendance_start_time ?? $event->time;
+
+        // Beri toleransi 1 menit
+        $eventDateTime = \Carbon\Carbon::parse($event->date . ' ' . $compareTime)->addMinute();
         $status = now()->greaterThan($eventDateTime) ? 'Late' : 'Present';
 
         Attendance::create([
@@ -306,8 +309,13 @@ class AttendanceController extends Controller
 
         // Ambil data event untuk mengecek waktu
         $event = Event::find($request->event_id);
-        // Kita beri toleransi 1 menit
-        $eventDateTime = \Carbon\Carbon::parse($event->date . ' ' . $event->time)->addMinute();
+
+        // Tentukan status (Present vs Late) berdasarkan waktu absensi yang fleksibel
+        // Prioritas: 1. attendance_start_time, 2. event time (default)
+        $compareTime = $event->attendance_start_time ?? $event->time;
+
+        // Beri toleransi 1 menit
+        $eventDateTime = \Carbon\Carbon::parse($event->date . ' ' . $compareTime)->addMinute();
         $status = now()->greaterThan($eventDateTime) ? 'Late' : 'Present';
 
         Attendance::create([

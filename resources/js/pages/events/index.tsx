@@ -94,6 +94,7 @@ interface Event {
     category: string;
     expected: number;
     image_path?: string;
+    attendance_start_time?: string;
     volunteers?: Volunteer[];
     rundown_segments?: EventRundownSegment[];
 }
@@ -319,6 +320,7 @@ export default function Events({
             location: '',
             address: '',
             category: '', // Start empty
+            attendance_start_time: '',
             expected: 0,
             image: null as File | null,
             volunteers: [] as {
@@ -380,6 +382,7 @@ export default function Events({
                 location: editingEvent.location || '',
                 address: editingEvent.address || '',
                 category: editingEvent.category || 'Ibadah',
+                attendance_start_time: editingEvent.attendance_start_time || '',
                 expected: editingEvent.expected || 0,
                 image: null,
                 volunteers:
@@ -1258,6 +1261,62 @@ export default function Events({
                                                 </p>
                                             )}
                                         </div>
+
+                                        <div className="space-y-2">
+                                            <div className="flex items-center justify-between">
+                                                <Label htmlFor="attendance_start_time">Waktu Absensi (Batas Telat)</Label>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-6 px-2 text-[10px] text-primary"
+                                                    onClick={() => {
+                                                        if (data.time) {
+                                                            const [hours, minutes] = data.time.split(':').map(Number);
+                                                            const date = new Date();
+                                                            date.setHours(hours, minutes, 0);
+                                                            // Subtract 1 hour 30 minutes (90 minutes)
+                                                            date.setMinutes(date.getMinutes() - 90);
+                                                            const newTime = `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+                                                            setData('attendance_start_time', newTime);
+                                                        }
+                                                    }}
+                                                >
+                                                    Set 1.5 Jam Awal
+                                                </Button>
+                                            </div>
+                                            <div className="group relative">
+                                                <Input
+                                                    id="attendance_start_time"
+                                                    type="time"
+                                                    value={data.attendance_start_time}
+                                                    onChange={(e) =>
+                                                        setData(
+                                                            'attendance_start_time',
+                                                            e.target.value,
+                                                        )
+                                                    }
+                                                    onClick={(e) =>
+                                                        (
+                                                            e.target as any
+                                                        ).showPicker?.()
+                                                    }
+                                                    className="block h-10 w-full cursor-pointer pl-10"
+                                                />
+                                                <Timer className="pointer-events-none absolute top-3 left-3 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+                                            </div>
+                                            <p className="text-[10px] text-muted-foreground italic leading-none">
+                                                Kosong = Mengikuti waktu event.
+                                            </p>
+                                            {errors.attendance_start_time && (
+                                                <p className="text-xs text-destructive">
+                                                    {errors.attendance_start_time}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
                                         <div className="space-y-2">
                                             <Label htmlFor="expected">
                                                 Target Peserta

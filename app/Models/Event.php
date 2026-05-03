@@ -17,6 +17,7 @@ class Event extends Model
         'title',
         'date',
         'time',
+        'attendance_start_time',
         'location',
         'address',
         'category',

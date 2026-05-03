@@ -1,3 +1,5 @@
+import AppLogoIcon from '@/components/app-logo-icon';
+import { dashboard, login, register } from '@/routes';
 import { Head, Link, usePage } from '@inertiajs/react';
 import {
     CalendarCheck,
@@ -12,8 +14,6 @@ import {
     Sparkles,
     Users,
 } from 'lucide-react';
-import AppLogoIcon from '@/components/app-logo-icon';
-import { dashboard, login, register } from '@/routes';
 
 const features = [
     {
@@ -45,13 +45,13 @@ const serviceFlow = [
 
 const teamRows = [
     {
-        name: 'Maria Lestari',
+        name: 'Imelda Blegur',
         role: 'Worship Leader',
         status: 'Accepted',
         tone: 'bg-emerald-50 text-emerald-700 border-emerald-200',
     },
     {
-        name: 'Daniel Wijaya',
+        name: 'Indra Kurniawan',
         role: 'Camera 1',
         status: 'Pending',
         tone: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -87,7 +87,7 @@ function ProductPreview() {
                             </div>
                             <div>
                                 <p className="text-sm font-bold text-white">
-                                    Attendance Pro
+                                    ESC Planning Center
                                 </p>
                                 <p className="text-xs text-white/45">
                                     Service Center
