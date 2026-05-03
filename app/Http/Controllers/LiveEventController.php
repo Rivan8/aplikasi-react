@@ -30,6 +30,23 @@ class LiveEventController extends Controller
         ]);
     }
 
+    public function timeKeeper(Request $request)
+    {
+        $events = Event::with(['rundownSegments.items', 'liveSession.runs'])
+            ->whereHas('rundownSegments')
+            ->orderBy('date', 'desc')
+            ->orderBy('time', 'desc')
+            ->get();
+
+        $selectedEvent = $events->firstWhere('id', (int) $request->input('event_id')) ?? $events->first();
+
+        return Inertia::render('live-events/time-keeper', [
+            'events' => $events->map(fn (Event $event) => $this->serializeEvent($event)),
+            'selected_event' => $selectedEvent ? $this->serializeEvent($selectedEvent) : null,
+            'server_now' => now()->toISOString(),
+        ]);
+    }
+
     public function start(Event $event)
     {
         $segments = $event->rundownSegments()->orderBy('sort_order')->get();

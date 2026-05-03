@@ -17,6 +17,7 @@ import {
     Clock,
     ListChecks,
     MapPin,
+    MonitorPlay,
     Play,
     Radio,
     RotateCcw,
@@ -72,18 +73,17 @@ interface LiveEvent {
 }
 
 function formatDuration(seconds: number) {
-    const safeSeconds = Math.max(0, Math.floor(seconds));
+    const isNegative = seconds < 0;
+    const safeSeconds = Math.max(0, Math.floor(Math.abs(seconds)));
     const hours = Math.floor(safeSeconds / 3600);
     const minutes = Math.floor((safeSeconds % 3600) / 60);
     const remainingSeconds = safeSeconds % 60;
 
-    if (hours > 0) {
-        return `${hours}:${minutes.toString().padStart(2, '0')}:${remainingSeconds
-            .toString()
-            .padStart(2, '0')}`;
-    }
+    const formatted = hours > 0
+        ? `${hours}:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`
+        : `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
 
-    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+    return isNegative ? `-${formatted}` : formatted;
 }
 
 function formatDelta(seconds: number) {
@@ -196,6 +196,9 @@ export default function LiveEvents({
         null;
 
     const currentPlannedSeconds = currentSegment?.duration_seconds || 0;
+    const countdownSeconds = isRunning
+        ? currentPlannedSeconds - segmentElapsedSeconds
+        : 0;
     const currentOverrunSeconds = Math.max(
         0,
         segmentElapsedSeconds - currentPlannedSeconds,
@@ -275,7 +278,7 @@ export default function LiveEvents({
                         </p>
                     </div>
 
-                    <div className="w-full lg:w-[360px]">
+                    <div className="flex w-full flex-col gap-3 lg:w-[360px]">
                         <Select
                             value={selected_event?.id?.toString() ?? ''}
                             onValueChange={selectEvent}
@@ -294,6 +297,22 @@ export default function LiveEvents({
                                 ))}
                             </SelectContent>
                         </Select>
+
+                        {selected_event && (
+                            <Button
+                                variant="outline"
+                                className="w-full gap-2 border-primary/20 bg-primary/5 text-primary hover:bg-primary/10"
+                                onClick={() =>
+                                    window.open(
+                                        `/live-events/time-keeper?event_id=${selected_event.id}`,
+                                        '_blank',
+                                    )
+                                }
+                            >
+                                <MonitorPlay className="h-4 w-4" />
+                                Buka Time Keeper (Full Screen)
+                            </Button>
+                        )}
                     </div>
                 </div>
 
@@ -428,14 +447,17 @@ export default function LiveEvents({
 
                                         <div
                                             className={`mt-6 font-mono text-7xl font-bold tracking-tight ${
-                                                currentOverrunSeconds > 0
-                                                    ? 'text-red-600 dark:text-red-300'
-                                                    : 'text-foreground'
+                                                countdownSeconds < 0
+                                                    ? 'text-red-600 dark:text-red-400'
+                                                    : countdownSeconds <= 30
+                                                      ? 'text-orange-500 animate-pulse'
+                                                      : 'text-foreground'
                                             }`}
                                         >
-                                            {formatDuration(
-                                                segmentElapsedSeconds,
-                                            )}
+                                            {isRunning
+                                                ? formatDuration(countdownSeconds)
+                                                : formatDuration(currentPlannedSeconds)
+                                            }
                                         </div>
 
                                         <div className="mt-6 grid gap-3 md:grid-cols-3">

@@ -300,6 +300,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::resource('events', EventController::class)->except(['create', 'edit', 'show']);
     Route::get('live-events', [LiveEventController::class, 'index'])->name('live-events.index');
+    Route::get('live-events/time-keeper', [LiveEventController::class, 'timeKeeper'])->name('live-events.time-keeper');
     Route::post('live-events/{event}/start', [LiveEventController::class, 'start'])->name('live-events.start');
     Route::post('live-events/{event}/next', [LiveEventController::class, 'next'])->name('live-events.next');
     Route::post('live-events/{event}/finish', [LiveEventController::class, 'finish'])->name('live-events.finish');
