@@ -1,21 +1,3 @@
-import { Head, Link, router, usePage } from '@inertiajs/react';
-import {
-    AlertCircle,
-    CalendarDays,
-    CheckCircle2,
-    ChevronRight,
-    Clock,
-    ClipboardList,
-    History,
-    MapPin,
-    QrCode,
-    Radio,
-    ShieldCheck,
-    Sparkles,
-    Users,
-    XCircle,
-} from 'lucide-react';
-import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -28,6 +10,29 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { dashboard } from '@/routes';
+import { Head, Link, router, usePage } from '@inertiajs/react';
+import {
+    AlertCircle,
+    CalendarDays,
+    CheckCircle2,
+    ChevronRight,
+    ClipboardList,
+    Clock,
+    History,
+    MapPin,
+    QrCode,
+    Radio,
+    RotateCcw,
+    Search,
+    ShieldCheck,
+    Sparkles,
+    Trash2,
+    Users,
+    X,
+    XCircle,
+    ChevronDown,
+} from 'lucide-react';
+import { useState } from 'react';
 
 interface DashboardStats {
     active_events: number;
@@ -71,6 +76,28 @@ interface DashboardData {
     readiness_items: ReadinessItem[];
     live_check_ins: LiveCheckIn[];
     user_assignments?: UserAssignment[];
+    admin_assignments?: AdminAssignment[];
+    external_members?: ExternalMember[];
+}
+
+interface AdminAssignment {
+    id: number;
+    role_category: string;
+    role_name: string;
+    response_status: 'pending' | 'accepted' | 'declined' | string;
+    response_reason?: string | null;
+    member_id: string;
+    member_name: string;
+    event: {
+        id: number;
+        title: string;
+        date: string;
+    };
+}
+
+interface ExternalMember {
+    id: string;
+    name: string;
 }
 
 interface UserAssignment {
@@ -191,6 +218,99 @@ function getResponseBadge(status: string) {
             'rounded-md border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300',
     };
 }
+
+const SearchableSelect = ({
+    value,
+    onSelect,
+    external_members = [],
+    placeholder = 'Pilih Jemaat...',
+}: {
+    value: string;
+    onSelect: (val: string) => void;
+    external_members: ExternalMember[];
+    placeholder?: string;
+}) => {
+    const [searchTerm, setSearchTerm] = useState('');
+    const [isOpen, setIsOpen] = useState(false);
+
+    const filteredMembers = useMemo(() => {
+        const list = Array.isArray(external_members) ? external_members : [];
+
+        if (!searchTerm) {
+            return list.slice(0, 50);
+        }
+
+        return list
+            .filter((m) =>
+                m.name?.toLowerCase().includes(searchTerm.toLowerCase()),
+            )
+            .slice(0, 50);
+    }, [searchTerm, external_members]);
+
+    const selectedMember = Array.isArray(external_members)
+        ? external_members.find((m) => m.id === value)
+        : null;
+
+    return (
+        <div className="relative w-full">
+            <Button
+                type="button"
+                variant="outline"
+                className="h-9 w-full justify-between bg-background text-xs font-normal"
+                onClick={() => setIsOpen(!isOpen)}
+            >
+                <span className="truncate">
+                    {selectedMember ? selectedMember.name : placeholder}
+                </span>
+                <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
+            </Button>
+
+            {isOpen && (
+                <div className="absolute z-50 mt-1 w-full animate-in rounded-md border bg-popover text-popover-foreground shadow-md fade-in-0 outline-none zoom-in-95">
+                    <div className="flex h-9 items-center border-b px-3">
+                        <Search className="mr-2 h-3 w-3 shrink-0 opacity-50" />
+                        <input
+                            className="flex w-full rounded-md bg-transparent py-2 text-xs outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                            placeholder="Cari nama..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            autoFocus
+                        />
+                        {searchTerm && (
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-4 w-4"
+                                onClick={() => setSearchTerm('')}
+                            >
+                                <X className="h-2 w-2" />
+                            </Button>
+                        )}
+                    </div>
+                    <div className="max-h-60 overflow-y-auto p-1 text-left">
+                        {filteredMembers.map((member) => (
+                            <div
+                                key={member.id}
+                                className={`relative flex w-full cursor-default items-center rounded-sm px-2 py-1.5 text-xs outline-none select-none hover:bg-accent hover:text-accent-foreground ${value === member.id ? 'bg-accent' : ''}`}
+                                onClick={() => {
+                                    onSelect(member.id);
+                                    setIsOpen(false);
+                                }}
+                            >
+                                {member.name}
+                            </div>
+                        ))}
+                        {filteredMembers.length === 0 && (
+                            <div className="py-6 text-center text-xs text-muted-foreground">
+                                Tidak ditemukan.
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
 
 function UserDashboard({ assignments }: { assignments: UserAssignment[] }) {
     const [decliningAssignment, setDecliningAssignment] =
@@ -555,10 +675,32 @@ export default function Dashboard({
     const userRole = auth?.user?.role ?? 'jemaat';
     const stats = dashboard?.stats ?? emptyStats;
     const upcomingServices = dashboard?.upcoming_services ?? [];
+    const adminAssignments = dashboard?.admin_assignments ?? [];
+    const externalMembers = dashboard?.external_members ?? [];
     const readinessItems = dashboard?.readiness_items ?? [];
     const liveCheckIns = dashboard?.live_check_ins ?? [];
     const userAssignments = dashboard?.user_assignments ?? [];
     const planningTasks = buildPlanningTasks(stats);
+    const [processingId, setProcessingId] = useState<number | null>(null);
+    const [replacingAssignment, setReplacingAssignment] = useState<AdminAssignment | null>(null);
+    const [selectedNewMember, setSelectedNewMember] = useState<string>('');
+
+    const handleReplaceVolunteer = () => {
+        if (!replacingAssignment || !selectedNewMember) return;
+
+        setProcessingId(replacingAssignment.id);
+        router.post(`/dashboard/volunteer-assignments/${replacingAssignment.id}/replace`, {
+            member_id: selectedNewMember
+        }, {
+            onSuccess: () => {
+                setReplacingAssignment(null);
+                setSelectedNewMember('');
+                setProcessingId(null);
+            },
+            onError: () => setProcessingId(null)
+        });
+    };
+
     const serviceStats = [
         {
             title: 'Event Aktif',
@@ -869,6 +1011,74 @@ export default function Dashboard({
 
                 <div className="grid gap-6 xl:grid-cols-2">
                     <Card className="border bg-card shadow-sm">
+                        <CardHeader className="border-b px-6 py-5 flex flex-row items-center justify-between">
+                            <CardTitle className="text-lg">
+                                Penjadwalan Volunteer
+                            </CardTitle>
+                            <Users className="h-5 w-5 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent className="p-0">
+                            <div className="divide-y divide-border/60">
+                                {adminAssignments.length === 0 && (
+                                    <div className="p-8 text-center">
+                                        <Users className="mx-auto h-10 w-10 text-muted-foreground/40" />
+                                        <p className="mt-3 text-sm font-medium text-foreground">
+                                            Belum ada volunteer dijadwalkan
+                                        </p>
+                                    </div>
+                                )}
+                                {adminAssignments.map((assignment) => {
+                                    const badge = getResponseBadge(assignment.response_status);
+                                    return (
+                                        <div key={assignment.id} className="p-4 hover:bg-muted/30 transition-colors">
+                                            <div className="flex items-start justify-between gap-4">
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <span className="font-bold text-sm text-foreground truncate">
+                                                            {assignment.member_name}
+                                                        </span>
+                                                        <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${badge.className}`}>
+                                                            {badge.label}
+                                                        </Badge>
+                                                    </div>
+                                                    <div className="text-xs text-muted-foreground font-medium">
+                                                        {assignment.role_category} &bull; {assignment.role_name}
+                                                    </div>
+                                                    <div className="mt-1 text-[11px] text-primary/80 font-semibold truncate">
+                                                        {assignment.event.title} ({formatEventDate(assignment.event.date)})
+                                                    </div>
+                                                    {assignment.response_status === 'declined' && (
+                                                        <div className="mt-2 p-2 rounded bg-rose-50 border border-rose-100 text-[11px] text-rose-700">
+                                                            <span className="font-bold uppercase text-[9px] block mb-0.5">Alasan Penolakan:</span>
+                                                            {assignment.response_reason || 'Tidak ada alasan.'}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="shrink-0">
+                                                    {(assignment.response_status === 'declined' || assignment.response_status === 'pending') && (
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="h-8 text-[11px] gap-1.5 border-amber-200 text-amber-700 hover:bg-amber-50"
+                                                            onClick={() => {
+                                                                setReplacingAssignment(assignment);
+                                                                setSelectedNewMember('');
+                                                            }}
+                                                        >
+                                                            <RotateCcw className="h-3 w-3" />
+                                                            Ganti
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="border bg-card shadow-sm">
                         <CardHeader className="border-b px-6 py-5">
                             <div className="flex items-center justify-between">
                                 <CardTitle className="text-lg">
@@ -998,6 +1208,46 @@ export default function Dashboard({
                     </Card>
                 </div>
             </div>
+
+            {/* Replace Volunteer Modal */}
+            <Dialog open={!!replacingAssignment} onOpenChange={(open) => !open && setReplacingAssignment(null)}>
+                <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                        <DialogTitle>Ganti Volunteer</DialogTitle>
+                        <DialogDescription>
+                            Pilih jemaat pengganti untuk peran <strong>{replacingAssignment?.role_name}</strong> di event <strong>{replacingAssignment?.event.title}</strong>.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="py-4 space-y-4">
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold uppercase text-muted-foreground">Pilih Jemaat Baru</label>
+                            <SearchableSelect
+                                value={selectedNewMember}
+                                onSelect={setSelectedNewMember}
+                                external_members={externalMembers}
+                            />
+                        </div>
+
+                        {replacingAssignment?.response_status === 'declined' && (
+                            <div className="p-3 rounded-lg bg-rose-50 border border-rose-100">
+                                <span className="text-[10px] font-bold uppercase text-rose-700 block mb-1">Alasan Penolakan Sebelumnya:</span>
+                                <p className="text-xs text-rose-600 italic">"{replacingAssignment.response_reason}"</p>
+                            </div>
+                        )}
+                    </div>
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setReplacingAssignment(null)}>Batal</Button>
+                        <Button
+                            disabled={!selectedNewMember || processingId === replacingAssignment?.id}
+                            onClick={handleReplaceVolunteer}
+                        >
+                            Konfirmasi Ganti
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </>
     );
 }

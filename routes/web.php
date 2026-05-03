@@ -88,6 +88,34 @@ Route::middleware(['auth', 'verified'])->group(function () {
         $todayCheckIns = Attendance::whereDate('scan_time', $today->toDateString())->count();
         $volunteerScheduled = EventVolunteer::whereHas('event', fn ($query) => $query->whereDate('date', '>=', $today->toDateString()))->count();
         $openRoles = $upcomingEvents->sum(fn ($event) => max((int) ($categoryRoleCounts[$event->category] ?? 0) - (int) $event->volunteers_count, 0));
+
+        $adminAssignments = collect();
+        if ($user->role === 'admin') {
+            $allAssignments = EventVolunteer::with(['event', 'member'])
+                ->whereHas('event', fn ($query) => $query->whereDate('date', '>=', $today->toDateString()))
+                ->orderBy(
+                    Event::select('date')
+                        ->whereColumn('events.id', 'event_volunteers.event_id')
+                        ->limit(1)
+                )
+                ->get();
+
+            $adminAssignments = $allAssignments->map(fn ($assignment) => [
+                'id' => $assignment->id,
+                'role_category' => $assignment->role_category,
+                'role_name' => $assignment->role_name,
+                'response_status' => $assignment->response_status ?? 'pending',
+                'response_reason' => $assignment->response_reason,
+                'member_id' => $assignment->member_id,
+                'member_name' => $assignment->member?->namalengkap ?? 'Member #'.$assignment->member_id,
+                'event' => [
+                    'id' => $assignment->event?->id,
+                    'title' => $assignment->event?->title ?? 'Event Dihapus',
+                    'date' => $assignment->event?->date,
+                ],
+            ]);
+        }
+
         $userAssignments = collect();
 
         if ($user?->member_id) {
@@ -196,7 +224,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
                     'time' => $attendance->scan_time?->format('H:i') ?? '-',
                     'status' => $attendance->status,
                 ]),
+                'admin_assignments' => $adminAssignments,
                 'user_assignments' => $userAssignments,
+                'external_members' => $user->role === 'admin' ? ExternalMember::select('idjemaat', 'namalengkap')->get()->map(fn($m) => ['id' => $m->idjemaat, 'name' => $m->namalengkap]) : [],
             ],
         ]);
     })->name('dashboard');
@@ -228,6 +258,23 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         return back()->with('success', 'Alasan penolakan jadwal berhasil dikirim.');
     })->name('dashboard.volunteer-assignments.decline');
+
+    Route::post('dashboard/volunteer-assignments/{eventVolunteer}/replace', function (Request $request, EventVolunteer $eventVolunteer) {
+        abort_unless($request->user()->role === 'admin', 403);
+
+        $validated = $request->validate([
+            'member_id' => 'required',
+        ]);
+
+        $eventVolunteer->update([
+            'member_id' => $validated['member_id'],
+            'response_status' => 'pending',
+            'response_reason' => null,
+            'responded_at' => null,
+        ]);
+
+        return back()->with('success', 'Volunteer berhasil diganti.');
+    })->name('dashboard.volunteer-assignments.replace');
     Route::get('anggota', function (Request $request) {
         try {
             $query = ExternalMember::with(['member_detail.status', 'member_detail.department']);
