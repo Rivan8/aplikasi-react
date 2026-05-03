@@ -8,7 +8,7 @@ export default function AppLogo() {
             </div>
             <div className="ml-1 grid flex-1 text-left text-sm">
                 <span className="mb-0.5 truncate leading-tight font-bold tracking-tight">
-                    Attendance Pro
+                    ESC Planning Center
                 </span>
                 <span className="truncate text-[10px] font-medium leading-tight text-sidebar-foreground/50">
                     Operational Center
