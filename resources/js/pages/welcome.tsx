@@ -245,7 +245,7 @@ export default function Welcome({
 
     return (
         <>
-            <Head title="Attendance Pro">
+            <Head title="ESC Planning Center">
                 <link rel="preconnect" href="https://fonts.bunny.net" />
                 <link
                     href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600,700"
@@ -262,14 +262,14 @@ export default function Welcome({
                         <Link
                             href="/"
                             className="flex items-center gap-3"
-                            aria-label="Attendance Pro Home"
+                            aria-label="ESC Planning Center Home"
                         >
                             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-teal-300 text-slate-950 shadow-lg shadow-teal-950/20">
                                 <AppLogoIcon className="h-6 w-6 fill-current" />
                             </div>
                             <div>
                                 <p className="font-bold tracking-tight">
-                                    Attendance Pro
+                                    ESC Planning Center
                                 </p>
                                 <p className="text-xs font-medium text-white/55">
                                     Church Service Operations
