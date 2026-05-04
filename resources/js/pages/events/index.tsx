@@ -270,7 +270,8 @@ const getRundownTotalSeconds = (segments: EventRundownSegment[] = []) => {
                 0,
             ) || 0;
 
-        return total + (Number(segment.duration_seconds) || itemTotal);
+        const segmentTotal = segment.items?.length > 0 ? itemTotal : (Number(segment.duration_seconds) || 0);
+        return total + segmentTotal;
     }, 0);
 };
 
@@ -312,7 +313,7 @@ export default function Events({
         'all' | 'upcoming' | 'past' | 'today'
     >('all');
 
-    const { data, setData, post, put, processing, reset, errors, clearErrors } =
+    const { data, setData, post, put, processing, reset, errors, clearErrors, setError } =
         useForm({
             title: '',
             date: '',
@@ -462,6 +463,9 @@ export default function Events({
             },
             onError: (err: any) => {
                 console.error('Add Event Error:', err);
+                Object.keys(err).forEach((key) => {
+                    setError(key as any, err[key]);
+                });
                 toast.error(
                     'Gagal menambahkan event. Silakan cek form kembali.',
                 );
@@ -493,6 +497,9 @@ export default function Events({
                 },
                 onError: (err: any) => {
                     console.error('Edit Event Error:', err);
+                    Object.keys(err).forEach((key) => {
+                        setError(key as any, err[key]);
+                    });
                     toast.error(
                         'Gagal memperbarui event. Silakan cek form kembali.',
                     );
@@ -726,9 +733,8 @@ export default function Events({
         let cursor = 0;
 
         return (rundownEvent?.rundown_segments || []).map((segment, index) => {
-            const duration =
-                Number(segment.duration_seconds) ||
-                getItemTotalSeconds(segment);
+            const itemTotal = getItemTotalSeconds(segment);
+            const duration = segment.items?.length > 0 ? itemTotal : (Number(segment.duration_seconds) || itemTotal);
             const startsAt = cursor;
             const endsAt = startsAt + duration;
             cursor = endsAt;
@@ -1431,7 +1437,7 @@ export default function Events({
                                                     key={segmentIndex}
                                                     className="space-y-3 rounded-lg border bg-background p-3"
                                                 >
-                                                    <div className="grid gap-3 md:grid-cols-[1fr_140px_36px] md:items-end">
+                                                    <div className="grid gap-3 md:grid-cols-[1fr_100px_36px] md:items-end">
                                                         <div className="space-y-1.5">
                                                             <Label className="text-[10px] font-bold text-muted-foreground uppercase">
                                                                 Segment
@@ -1454,33 +1460,13 @@ export default function Events({
                                                                 className="h-9"
                                                             />
                                                         </div>
-                                                        <div className="space-y-1.5">
+                                                        <div className="space-y-1.5 flex flex-col">
                                                             <Label className="text-[10px] font-bold text-muted-foreground uppercase">
-                                                                Menit
+                                                                Total
                                                             </Label>
-                                                            <Input
-                                                                type="number"
-                                                                min="0"
-                                                                step="0.5"
-                                                                value={secondsToMinutesInput(
-                                                                    segment.duration_seconds,
-                                                                )}
-                                                                onChange={(e) =>
-                                                                    updateRundownSegment(
-                                                                        segmentIndex,
-                                                                        {
-                                                                            duration_seconds:
-                                                                                minutesToSeconds(
-                                                                                    e
-                                                                                        .target
-                                                                                        .value,
-                                                                                ),
-                                                                        },
-                                                                    )
-                                                                }
-                                                                placeholder="20"
-                                                                className="h-9"
-                                                            />
+                                                            <div className="flex h-9 items-center px-3 rounded-md border bg-muted/50 text-sm font-medium">
+                                                                {formatDuration(getItemTotalSeconds(segment))}
+                                                            </div>
                                                         </div>
                                                         <Button
                                                             type="button"
