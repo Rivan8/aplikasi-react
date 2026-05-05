@@ -1,5 +1,5 @@
 import AppLogoIcon from '@/components/app-logo-icon';
-import { dashboard, login, register } from '@/routes';
+import { dashboard, login } from '@/routes';
 import { Head, Link, usePage } from '@inertiajs/react';
 import {
     CalendarCheck,
@@ -236,11 +236,7 @@ function ProductPreview() {
     );
 }
 
-export default function Welcome({
-    canRegister = true,
-}: {
-    canRegister?: boolean;
-}) {
+export default function Welcome() {
     const { auth } = usePage().props;
 
     return (
@@ -286,22 +282,12 @@ export default function Welcome({
                                     Dashboard
                                 </Link>
                             ) : (
-                                <>
                                     <Link
                                         href={login()}
-                                        className="inline-flex h-10 items-center rounded-md px-4 text-sm font-semibold text-white/80 transition hover:bg-white/10 hover:text-white"
+                                        className="inline-flex h-10 items-center rounded-md bg-white px-4 text-sm font-semibold text-slate-950 shadow-sm transition hover:bg-teal-50"
                                     >
                                         Log in
                                     </Link>
-                                    {canRegister && (
-                                        <Link
-                                            href={register()}
-                                            className="hidden h-10 items-center rounded-md bg-white px-4 text-sm font-semibold text-slate-950 shadow-sm transition hover:bg-teal-50 sm:inline-flex"
-                                        >
-                                            Register
-                                        </Link>
-                                    )}
-                                </>
                             )}
                         </nav>
                     </header>

@@ -22,10 +22,8 @@ export default defineConfig({
             formVariants: true,
         }),
     ],
-    server: { // Tambahkan ini
+    server: {
         host: true,
-        hmr: {
-            host: '192.168.1.14', // GANTI dengan IP komputer Anda
-        },
+        cors: true,
     },
 });
