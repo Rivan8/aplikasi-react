@@ -34,7 +34,10 @@ import {
     Video, 
     FileIcon,
     Youtube,
-    ExternalLink
+    ExternalLink,
+    PlusCircle,
+    Trash,
+    Eye,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -79,17 +82,58 @@ export default function SongsIndex({ songs, filters, breadcrumbs }: Props) {
     const [editingSong, setEditingSong] = useState<Song | null>(null);
     const [activeTab, setActiveTab] = useState<'info' | 'lyrics' | 'media'>('info');
 
-    const { data, setData, post, put, reset, processing, errors } = useForm({
+    const { data, setData, post, reset, processing, errors } = useForm({
         title: '',
         arrangement_name: '',
         keys: 'C',
         bpm: '',
+        song_flow: '',
+        time_signature: '4/4',
         lyrics: '',
         chords: '',
         video_url: '',
         pdf_file: null as File | null,
-        _method: 'POST', // for method spoofing if needed
+        _method: 'POST',
     });
+
+    // Structured lyric sections: [{heading: 'Verse 1', body: '...'}]
+    const [lyricSections, setLyricSections] = useState<{heading: string; body: string}[]>([]);
+
+    // Sync lyricSections -> data.lyrics (plain text format)
+    const syncLyrics = (sections: {heading: string; body: string}[]) => {
+        const text = sections
+            .map(s => `${s.heading}\n${s.body}`)
+            .join('\n\n');
+        setData('lyrics', text);
+    };
+
+    const addSection = () => {
+        const next = [...lyricSections, { heading: 'Section', body: '' }];
+        setLyricSections(next);
+        syncLyrics(next);
+    };
+
+    const updateSection = (idx: number, field: 'heading' | 'body', val: string) => {
+        const next = lyricSections.map((s, i) => i === idx ? { ...s, [field]: val } : s);
+        setLyricSections(next);
+        syncLyrics(next);
+    };
+
+    const removeSection = (idx: number) => {
+        const next = lyricSections.filter((_, i) => i !== idx);
+        setLyricSections(next);
+        syncLyrics(next);
+    };
+
+    // Parse plain-text lyrics back to sections
+    const parseLyricsToSections = (text: string): {heading: string; body: string}[] => {
+        if (!text?.trim()) return [];
+        const blocks = text.split(/\n{2,}/);
+        return blocks.map(block => {
+            const lines = block.split('\n');
+            return { heading: lines[0] || '', body: lines.slice(1).join('\n') };
+        }).filter(s => s.heading || s.body);
+    };
 
     useEffect(() => {
         const delayDebounceFn = setTimeout(() => {
@@ -109,17 +153,22 @@ export default function SongsIndex({ songs, filters, breadcrumbs }: Props) {
         setEditingSong(null);
         setActiveTab('info');
         reset();
+        setLyricSections([]);
         setIsModalOpen(true);
     };
 
     const openEditModal = (song: Song) => {
         setEditingSong(song);
         setActiveTab('info');
+        const parsed = parseLyricsToSections(song.lyrics || '');
+        setLyricSections(parsed);
         setData({
             title: song.title,
             arrangement_name: song.arrangement_name || '',
             keys: song.keys || 'C',
             bpm: song.bpm || '',
+            song_flow: (song as any).song_flow || '',
+            time_signature: (song as any).time_signature || '4/4',
             lyrics: song.lyrics || '',
             chords: song.chords || '',
             video_url: song.video_url || '',
@@ -374,26 +423,106 @@ export default function SongsIndex({ songs, filters, breadcrumbs }: Props) {
                                 )}
 
                                 {activeTab === 'lyrics' && (
-                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in duration-300">
-                                        <div className="space-y-2">
-                                            <Label htmlFor="lyrics" className="text-sm font-bold text-slate-700">Lirik Lagu</Label>
-                                            <Textarea 
-                                                id="lyrics" 
-                                                className="min-h-[500px] font-sans text-base leading-relaxed p-4"
-                                                value={data.lyrics} 
-                                                onChange={e => setData('lyrics', e.target.value)} 
-                                                placeholder="Tulis atau tempel lirik lagu di sini..."
-                                            />
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 animate-in fade-in duration-300 h-full">
+                                        {/* LEFT: Structured Input */}
+                                        <div className="flex flex-col border-r border-slate-100 pr-4 space-y-4 min-h-[520px]">
+                                            <div className="flex items-center justify-between">
+                                                <Label className="text-sm font-bold text-slate-700">Input Lirik</Label>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="gap-1.5 h-8 text-xs border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                                                    onClick={addSection}
+                                                >
+                                                    <PlusCircle className="w-3.5 h-3.5" />
+                                                    Tambah Bagian
+                                                </Button>
+                                            </div>
+
+                                            <div className="space-y-1.5">
+                                                <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Alur Lagu (Song Flow)</Label>
+                                                <Input
+                                                    value={data.song_flow}
+                                                    onChange={e => setData('song_flow', e.target.value)}
+                                                    placeholder="Contoh: Intro, V1, V2, C, Bridge, C×2"
+                                                    className="text-sm"
+                                                />
+                                            </div>
+
+                                            <div className="space-y-3 overflow-y-auto flex-1 max-h-[380px] pr-1">
+                                                {lyricSections.length === 0 && (
+                                                    <div className="flex flex-col items-center justify-center py-10 text-center text-slate-400 border-2 border-dashed rounded-xl">
+                                                        <Music className="w-8 h-8 mb-2 opacity-30" />
+                                                        <p className="text-sm">Belum ada bagian lirik.</p>
+                                                        <p className="text-xs mt-1">Klik "Tambah Bagian" untuk mulai.</p>
+                                                    </div>
+                                                )}
+                                                {lyricSections.map((section, idx) => (
+                                                    <div key={idx} className="rounded-xl border border-slate-200 bg-slate-50/60 overflow-hidden">
+                                                        <div className="flex items-center gap-2 px-3 py-2 bg-slate-100/80 border-b border-slate-200">
+                                                            <Input
+                                                                value={section.heading}
+                                                                onChange={e => updateSection(idx, 'heading', e.target.value)}
+                                                                className="h-7 text-sm font-bold border-0 bg-transparent p-0 focus-visible:ring-0 shadow-none text-slate-800 placeholder:text-slate-400"
+                                                                placeholder="Nama bagian (Verse 1, Chorus...)"
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => removeSection(idx)}
+                                                                className="shrink-0 text-slate-400 hover:text-rose-500 transition-colors"
+                                                            >
+                                                                <Trash className="w-3.5 h-3.5" />
+                                                            </button>
+                                                        </div>
+                                                        <Textarea
+                                                            value={section.body}
+                                                            onChange={e => updateSection(idx, 'body', e.target.value)}
+                                                            placeholder="Ketik lirik di sini..."
+                                                            className="min-h-[100px] border-0 bg-transparent rounded-none text-sm font-mono leading-relaxed resize-none focus-visible:ring-0 shadow-none p-3"
+                                                        />
+                                                    </div>
+                                                ))}
+                                            </div>
                                         </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="chords" className="text-sm font-bold text-slate-700">Kunci Nada (Chord Sheet)</Label>
-                                            <Textarea 
-                                                id="chords" 
-                                                className="min-h-[500px] font-mono text-base leading-relaxed p-4 bg-slate-50 dark:bg-slate-900"
-                                                value={data.chords} 
-                                                onChange={e => setData('chords', e.target.value)} 
-                                                placeholder="[G] Goodness of [C] God..."
-                                            />
+
+                                        {/* RIGHT: Live Preview */}
+                                        <div className="pl-4 flex flex-col space-y-3">
+                                            <div className="flex items-center gap-2">
+                                                <Eye className="w-4 h-4 text-slate-400" />
+                                                <Label className="text-sm font-bold text-slate-700">Preview</Label>
+                                            </div>
+
+                                            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden flex-1 min-h-[480px]">
+                                                <div className="px-5 py-4 bg-slate-50 border-b border-slate-200">
+                                                    <h3 className="font-bold text-slate-900 text-base leading-snug">
+                                                        {data.title || 'Judul Lagu'}{' '}
+                                                        {(data.bpm || data.time_signature) && (
+                                                            <span className="font-normal text-slate-600">
+                                                                [Lyrics{data.bpm ? `, ${data.bpm} bpm` : ''}{data.time_signature ? `, ${data.time_signature}` : ''}]
+                                                            </span>
+                                                        )}
+                                                    </h3>
+                                                    {data.arrangement_name && (
+                                                        <p className="text-xs text-slate-500 mt-0.5">[{data.arrangement_name}]</p>
+                                                    )}
+                                                    {data.song_flow && (
+                                                        <p className="text-sm font-semibold text-slate-700 mt-2">{data.song_flow}</p>
+                                                    )}
+                                                </div>
+
+                                                <div className="px-5 py-4 overflow-y-auto max-h-[400px] space-y-4 text-sm">
+                                                    {lyricSections.length === 0 && (
+                                                        <p className="text-slate-300 italic text-xs text-center pt-10">Preview lirik akan muncul di sini...</p>
+                                                    )}
+                                                    {lyricSections.map((section, idx) => (
+                                                        <div key={idx}>
+                                                            <p className="font-bold text-slate-900 mb-1">{section.heading}</p>
+                                                            <pre className="font-mono text-slate-600 text-[13px] leading-relaxed whitespace-pre-wrap">{section.body}</pre>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 )}

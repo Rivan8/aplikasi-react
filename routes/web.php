@@ -242,6 +242,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
                                 'bpm' => $item->song->bpm,
                                 'lyrics' => $item->song->lyrics,
                                 'video_url' => $item->song->video_url,
+                                'song_flow' => $item->song->song_flow,
+                                'time_signature' => $item->song->time_signature,
                             ] : null,
                         ])->all(),
                     ])->all(),

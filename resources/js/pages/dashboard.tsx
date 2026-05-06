@@ -72,6 +72,8 @@ interface Song {
     bpm: string;
     lyrics?: string;
     video_url?: string;
+    song_flow?: string;
+    time_signature?: string;
 }
 
 interface RundownItem {
@@ -1596,18 +1598,36 @@ export default function Dashboard({
                                     <Badge className="mb-3 bg-white/20 text-white border-white/30 hover:bg-white/30">
                                         Song Detail
                                     </Badge>
-                                    <h2 className="text-3xl font-bold tracking-tight">{selectedSong.title}</h2>
-                                    <p className="text-emerald-100 text-lg mt-1">{selectedSong.artist || 'Unknown Artist'}</p>
+                                    <h2 className="text-2xl font-bold tracking-tight leading-tight">
+                                        {selectedSong.title}
+                                        {(selectedSong.bpm || selectedSong.time_signature) && (
+                                            <span className="font-normal text-emerald-200 text-base ml-2">
+                                                [Lyrics{selectedSong.bpm ? `, ${selectedSong.bpm} bpm` : ''}{selectedSong.time_signature ? `, ${selectedSong.time_signature}` : ''}]
+                                            </span>
+                                        )}
+                                    </h2>
+                                    {selectedSong.artist && (
+                                        <p className="text-emerald-100 text-sm mt-1">[{selectedSong.artist}]</p>
+                                    )}
+                                    {selectedSong.song_flow && (
+                                        <p className="text-white font-semibold text-sm mt-2">{selectedSong.song_flow}</p>
+                                    )}
                                     
-                                    <div className="flex gap-4 mt-6">
+                                    <div className="flex gap-4 mt-5">
                                         <div className="bg-white/10 rounded-xl px-4 py-2 border border-white/20 backdrop-blur-sm">
                                             <p className="text-xs text-emerald-200 uppercase font-bold tracking-wider">Nada Dasar</p>
-                                            <p className="text-xl font-bold">{selectedSong.key}</p>
+                                            <p className="text-xl font-bold">{selectedSong.key || '-'}</p>
                                         </div>
                                         <div className="bg-white/10 rounded-xl px-4 py-2 border border-white/20 backdrop-blur-sm">
                                             <p className="text-xs text-emerald-200 uppercase font-bold tracking-wider">Tempo</p>
-                                            <p className="text-xl font-bold">{selectedSong.bpm} BPM</p>
+                                            <p className="text-xl font-bold">{selectedSong.bpm || '-'} BPM</p>
                                         </div>
+                                        {selectedSong.time_signature && (
+                                            <div className="bg-white/10 rounded-xl px-4 py-2 border border-white/20 backdrop-blur-sm">
+                                                <p className="text-xs text-emerald-200 uppercase font-bold tracking-wider">Birama</p>
+                                                <p className="text-xl font-bold">{selectedSong.time_signature}</p>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>

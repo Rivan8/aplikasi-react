@@ -4,8 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Song;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
+use Illuminate\Support\Facades\Storage;
 
 class SongController extends Controller
 {
@@ -14,11 +14,10 @@ class SongController extends Controller
         $query = Song::query();
 
         if ($request->has('search')) {
-            $query->where('title', 'like', '%' . $request->search . '%')
-                  ->orWhere('arrangement_name', 'like', '%' . $request->search . '%');
+            $query->where('title', 'like', '%' . $request->search . '%');
         }
 
-        $songs = $query->latest()->paginate(10)->withQueryString();
+        $songs = $query->orderBy('title')->paginate(15)->withQueryString();
 
         return Inertia::render('songs/index', [
             'songs' => $songs,
@@ -34,23 +33,27 @@ class SongController extends Controller
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'arrangement_name' => 'nullable|string|max:255',
-            'keys' => 'nullable|string|max:10',
-            'bpm' => 'nullable|string|max:50',
+            'keys' => 'nullable|string|max:50',
+            'bpm' => 'nullable|string|max:20',
+            'song_flow' => 'nullable|string|max:500',
+            'time_signature' => 'nullable|string|max:20',
             'lyrics' => 'nullable|string',
             'chords' => 'nullable|string',
-            'video_url' => 'nullable|url',
+            'video_url' => 'nullable|string|max:255',
             'pdf_file' => 'nullable|file|mimes:pdf|max:10240',
-            'song_flow' => 'nullable|string',
-            'time_signature' => 'nullable|string|max:20',
         ]);
 
         if ($request->hasFile('pdf_file')) {
-            $validated['pdf_path'] = $request->file('pdf_file')->store('songs/pdfs', 'public');
+            $validated['pdf_path'] = $request->file('pdf_file')->store('songs/pdf', 'public');
+            $validated['has_pdf'] = true;
         }
+
+        $validated['has_lyrics'] = !empty($validated['lyrics']);
+        $validated['has_chords'] = !empty($validated['chords']);
 
         Song::create($validated);
 
-        return redirect()->route('songs.index');
+        return back()->with('success', 'Lagu berhasil ditambahkan.');
     }
 
     public function update(Request $request, Song $song)
@@ -58,14 +61,14 @@ class SongController extends Controller
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'arrangement_name' => 'nullable|string|max:255',
-            'keys' => 'nullable|string|max:10',
-            'bpm' => 'nullable|string|max:50',
+            'keys' => 'nullable|string|max:50',
+            'bpm' => 'nullable|string|max:20',
+            'song_flow' => 'nullable|string|max:500',
+            'time_signature' => 'nullable|string|max:20',
             'lyrics' => 'nullable|string',
             'chords' => 'nullable|string',
-            'video_url' => 'nullable|url',
+            'video_url' => 'nullable|string|max:255',
             'pdf_file' => 'nullable|file|mimes:pdf|max:10240',
-            'song_flow' => 'nullable|string',
-            'time_signature' => 'nullable|string|max:20',
         ]);
 
         if ($request->hasFile('pdf_file')) {
@@ -73,12 +76,16 @@ class SongController extends Controller
             if ($song->pdf_path) {
                 Storage::disk('public')->delete($song->pdf_path);
             }
-            $validated['pdf_path'] = $request->file('pdf_file')->store('songs/pdfs', 'public');
+            $validated['pdf_path'] = $request->file('pdf_file')->store('songs/pdf', 'public');
+            $validated['has_pdf'] = true;
         }
+
+        $validated['has_lyrics'] = !empty($validated['lyrics']);
+        $validated['has_chords'] = !empty($validated['chords']);
 
         $song->update($validated);
 
-        return redirect()->route('songs.index');
+        return back()->with('success', 'Lagu berhasil diperbarui.');
     }
 
     public function destroy(Song $song)
@@ -87,6 +94,7 @@ class SongController extends Controller
             Storage::disk('public')->delete($song->pdf_path);
         }
         $song->delete();
-        return redirect()->route('songs.index');
+
+        return back()->with('success', 'Lagu berhasil dihapus.');
     }
 }
