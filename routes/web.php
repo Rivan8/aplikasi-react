@@ -25,7 +25,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', function (Request $request) {
         $today = now();
         $user = $request->user();
-        $upcomingEvents = Event::withCount(['volunteers', 'attendances'])
+        $upcomingEvents = Event::with([
+            'rundownSegments' => function ($query) {
+                $query->orderBy('sort_order');
+            },
+            'rundownSegments.items' => function ($query) {
+                $query->orderBy('sort_order');
+            },
+            'rundownSegments.items.song',
+            'volunteers',
+            'attendances',
+        ])
             ->whereDate('date', '>=', $today->toDateString())
             ->orderBy('date')
             ->orderBy('time')
@@ -214,6 +224,27 @@ Route::middleware(['auth', 'verified'])->group(function () {
                     'checkedIn' => $event->attendances_count,
                     'volunteers' => $event->volunteers_count,
                     'openRoles' => max((int) ($categoryRoleCounts[$event->category] ?? 0) - (int) $event->volunteers_count, 0),
+                    'rundown_segments' => $event->rundownSegments->map(fn ($segment) => [
+                        'id' => $segment->id,
+                        'title' => $segment->title,
+                        'duration_seconds' => $segment->duration_seconds,
+                        'sort_order' => $segment->sort_order,
+                        'items' => $segment->items->map(fn ($item) => [
+                            'id' => $item->id,
+                            'title' => $item->title,
+                            'duration_seconds' => $item->duration_seconds,
+                            'sort_order' => $item->sort_order,
+                            'song' => $item->song ? [
+                                'id' => $item->song->id,
+                                'title' => $item->song->title,
+                                'artist' => $item->song->arrangement_name,
+                                'key' => $item->song->keys,
+                                'bpm' => $item->song->bpm,
+                                'lyrics' => $item->song->lyrics,
+                                'video_url' => $item->song->video_url,
+                            ] : null,
+                        ])->all(),
+                    ])->all(),
                 ]),
                 'readiness_items' => $readinessItems,
                 'live_check_ins' => $recentAttendances->map(fn ($attendance) => [
@@ -356,7 +387,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('attendance-history/export/excel', [AttendanceController::class, 'exportExcel'])->name('attendance-history.export.excel');
 
     // Song Bank Routes
-    Route::get('songs', [SongController::class, 'index'])->name('songs.index');
+    Route::resource('songs', SongController::class)->except(['create', 'edit', 'show']);
 
     // QR Attendance Routes
     Route::get('my/scan', [AttendanceController::class, 'showUserScan'])->name('my.scan');

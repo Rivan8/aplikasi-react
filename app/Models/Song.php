@@ -16,6 +16,12 @@ class Song extends Model
         'has_chords',
         'has_pdf',
         'has_audio',
+        'lyrics',
+        'chords',
+        'video_url',
+        'pdf_path',
+        'song_flow',
+        'time_signature',
     ];
 
     protected $casts = [

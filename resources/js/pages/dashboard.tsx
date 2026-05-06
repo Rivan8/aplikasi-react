@@ -14,8 +14,17 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import {
+    Sheet,
+    SheetContent,
+    SheetHeader,
+    SheetTitle,
+    SheetDescription,
+} from '@/components/ui/sheet';
 import { dashboard } from '@/routes';
 import { Head, Link, router, usePage } from '@inertiajs/react';
+import { format } from 'date-fns';
+import { id } from 'date-fns/locale';
 import {
     AlertCircle,
     CalendarDays,
@@ -36,8 +45,14 @@ import {
     X,
     XCircle,
     ChevronDown,
+    Youtube,
+    ExternalLink,
+    Play,
+    FileText,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { Activity, Music, Timer } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface DashboardStats {
     active_events: number;
@@ -47,6 +62,32 @@ interface DashboardStats {
     volunteer_scheduled: number;
     open_roles: number;
     service_readiness: number;
+}
+
+interface Song {
+    id: number;
+    title: string;
+    artist: string;
+    key: string;
+    bpm: string;
+    lyrics?: string;
+    video_url?: string;
+}
+
+interface RundownItem {
+    id: number;
+    title: string;
+    duration_seconds: number;
+    sort_order: number;
+    song: Song | null;
+}
+
+interface RundownSegment {
+    id: number;
+    title: string;
+    duration_seconds: number;
+    sort_order: number;
+    items: RundownItem[];
 }
 
 interface UpcomingService {
@@ -60,6 +101,7 @@ interface UpcomingService {
     checkedIn: number;
     volunteers: number;
     openRoles: number;
+    rundown_segments: RundownSegment[];
 }
 
 interface ReadinessItem {
@@ -222,6 +264,27 @@ function getResponseBadge(status: string) {
         className:
             'rounded-md border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300',
     };
+}
+
+function formatDuration(seconds: number): string {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+
+    if (hours > 0) {
+        return `${hours}j ${minutes}m`;
+    }
+    if (minutes > 0) {
+        return `${minutes}m ${secs}d`;
+    }
+    return `${secs}d`;
+}
+
+function getTotalRundownDuration(segments: RundownSegment[]): number {
+    return segments.reduce((total, segment) => {
+        const segmentDuration = segment.items.reduce((itemTotal, item) => itemTotal + (item.duration_seconds || 0), 0);
+        return total + segmentDuration;
+    }, 0);
 }
 
 const SearchableSelect = ({
@@ -725,7 +788,40 @@ export default function Dashboard({
     const planningTasks = buildPlanningTasks(stats);
     const [processingId, setProcessingId] = useState<number | null>(null);
     const [replacingAssignment, setReplacingAssignment] = useState<AdminAssignment | null>(null);
+    const [activeTab, setActiveTab] = useState<'overview' | 'schedules' | 'rundown' | 'activity'>('overview');
     const [selectedNewMember, setSelectedNewMember] = useState<string>('');
+    const [selectedRundownEventId, setSelectedRundownEventId] = useState<number | null>(
+        upcomingServices.length > 0 ? upcomingServices[0].id : null
+    );
+    const [selectedSong, setSelectedSong] = useState<Song | null>(null);
+
+    const formatEventDate = (dateString: string) => {
+        if (!dateString) return '';
+        try {
+            return format(new Date(dateString), 'EEEE, d MMMM yyyy', { locale: id });
+        } catch (e) {
+            return dateString;
+        }
+    };
+
+    const formatTime = (timeString: string) => {
+        if (!timeString) return '';
+        return timeString.substring(0, 5);
+    };
+
+    const formatDuration = (seconds: number) => {
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = seconds % 60;
+
+        if (h > 0) return `${h}j ${m}m`;
+        if (m > 0) return `${m}m ${s}s`;
+        return `${s}s`;
+    };
+
+    const selectedRundownEvent = useMemo(() => 
+        upcomingServices.find(e => e.id === selectedRundownEventId),
+    [selectedRundownEventId, upcomingServices]);
 
     const handleReplaceVolunteer = () => {
         if (!replacingAssignment || !selectedNewMember) return;
@@ -819,353 +915,549 @@ export default function Dashboard({
                     </div>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                    {serviceStats.map((stat) => {
-                        const Icon = stat.icon;
 
-                        return (
-                            <Card
-                                key={stat.title}
-                                className="border bg-card shadow-sm"
-                            >
-                                <CardContent className="p-5">
-                                    <div className="flex items-start justify-between gap-4">
-                                        <div>
-                                            <p className="text-sm font-medium text-muted-foreground">
-                                                {stat.title}
-                                            </p>
-                                            <p className="mt-2 text-3xl font-bold tracking-tight text-foreground">
-                                                {stat.value}
-                                            </p>
-                                        </div>
-                                        <div
-                                            className={`flex h-10 w-10 items-center justify-center rounded-lg border ${stat.tone}`}
-                                        >
-                                            <Icon className="h-5 w-5" />
-                                        </div>
-                                    </div>
-                                    <p className="mt-3 text-xs font-medium text-muted-foreground">
-                                        {stat.detail}
-                                    </p>
-                                </CardContent>
-                            </Card>
-                        );
-                    })}
+                {/* Tab Bar Redesign */}
+                <div className="flex gap-1 p-1.5 bg-muted/40 rounded-2xl w-fit border border-border/40 backdrop-blur-md">
+                    {[
+                        { id: 'overview', label: 'Ringkasan', icon: Activity },
+                        { id: 'schedules', label: 'Jadwal & Tim', icon: CalendarDays },
+                        { id: 'rundown', label: 'Rundown', icon: Timer },
+                        { id: 'activity', label: 'Aktivitas', icon: History },
+                    ].map((tab) => (
+                        <button
+                            key={tab.id}
+                            type="button"
+                            onClick={() => setActiveTab(tab.id as any)}
+                            className={cn(
+                                "flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-bold transition-all duration-300",
+                                activeTab === tab.id 
+                                    ? "bg-background text-primary shadow-lg shadow-primary/5 border border-primary/10 scale-[1.02]" 
+                                    : "text-muted-foreground hover:bg-background/50 hover:text-foreground"
+                            )}
+                        >
+                            <tab.icon className={cn("h-4 w-4", activeTab === tab.id ? "text-primary" : "text-muted-foreground/60")} />
+                            {tab.label}
+                        </button>
+                    ))}
                 </div>
 
-                <div className="grid gap-6 xl:grid-cols-[1.45fr_0.9fr]">
-                    <Card className="border bg-card shadow-sm">
-                        <CardHeader className="border-b px-6 py-5">
-                            <div className="flex items-center justify-between gap-4">
-                                <div>
-                                    <CardTitle className="text-lg">
-                                        Jadwal Layanan Mendatang
-                                    </CardTitle>
-                                    <p className="mt-1 text-sm text-muted-foreground">
-                                        Event terdekat dengan target hadir dan
-                                        kesiapan volunteer.
-                                    </p>
-                                </div>
-                                <Button
-                                    asChild
-                                    variant="ghost"
-                                    size="sm"
-                                    className="gap-1"
-                                >
-                                    <Link href="/events">
-                                        Lihat semua
-                                        <ChevronRight className="h-4 w-4" />
-                                    </Link>
-                                </Button>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="p-0">
-                            <div className="divide-y divide-border/60">
-                                {upcomingServices.length === 0 && (
-                                    <div className="p-8 text-center">
-                                        <CalendarDays className="mx-auto h-10 w-10 text-muted-foreground/40" />
-                                        <p className="mt-3 text-sm font-medium text-foreground">
-                                            Belum ada event mendatang
-                                        </p>
-                                        <p className="mt-1 text-sm text-muted-foreground">
-                                            Buat event baru untuk mulai menyusun
-                                            jadwal layanan.
-                                        </p>
+                {activeTab === 'overview' && (
+                    <>
+                        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                            {serviceStats.map((stat) => {
+                                const Icon = stat.icon;
+
+                                return (
+                                    <Card
+                                        key={stat.title}
+                                        className="border bg-card shadow-sm"
+                                    >
+                                        <CardContent className="p-5">
+                                            <div className="flex items-start justify-between gap-4">
+                                                <div>
+                                                    <p className="text-sm font-medium text-muted-foreground">
+                                                        {stat.title}
+                                                    </p>
+                                                    <p className="mt-2 text-3xl font-bold tracking-tight text-foreground">
+                                                        {stat.value}
+                                                    </p>
+                                                </div>
+                                                <div
+                                                    className={`flex h-10 w-10 items-center justify-center rounded-lg border ${stat.tone}`}
+                                                >
+                                                    <Icon className="h-5 w-5" />
+                                                </div>
+                                            </div>
+                                            <p className="mt-3 text-xs font-medium text-muted-foreground">
+                                                {stat.detail}
+                                            </p>
+                                        </CardContent>
+                                    </Card>
+                                );
+                            })}
+                        </div>
+
+                        <div className="grid gap-6 xl:grid-cols-[1.45fr_0.9fr]">
+                            <Card className="border bg-card shadow-sm">
+                                <CardHeader className="border-b px-6 py-5">
+                                    <div className="flex items-center justify-between">
+                                        <CardTitle className="text-lg">
+                                            Kesiapan Departemen
+                                        </CardTitle>
+                                        <Sparkles className="h-5 w-5 text-muted-foreground" />
                                     </div>
-                                )}
-
-                                {upcomingServices.map((event) => {
-                                    const totalRoles =
-                                        event.volunteers + event.openRoles;
-                                    const volunteerPercent =
-                                        totalRoles > 0
-                                            ? Math.round(
-                                                  (event.volunteers /
-                                                      totalRoles) *
-                                                      100,
-                                              )
-                                            : 100;
-
-                                    return (
-                                        <div
-                                            key={event.title}
-                                            className="grid gap-4 p-5 lg:grid-cols-[1fr_220px] lg:items-center"
-                                        >
-                                            <div className="space-y-3">
-                                                <div className="flex flex-wrap items-center gap-2">
-                                                    <h3 className="font-semibold text-foreground">
-                                                        {event.title}
-                                                    </h3>
-                                                    <Badge
-                                                        variant="secondary"
-                                                        className="rounded-md"
-                                                    >
-                                                        {event.category}
-                                                    </Badge>
-                                                    {event.openRoles > 0 ? (
-                                                        <Badge
-                                                            variant="outline"
-                                                            className="rounded-md border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300"
-                                                        >
-                                                            {event.openRoles}{' '}
-                                                            role kosong
-                                                        </Badge>
-                                                    ) : (
-                                                        <Badge
-                                                            variant="outline"
-                                                            className="rounded-md border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300"
-                                                        >
-                                                            Siap
-                                                        </Badge>
-                                                    )}
-                                                </div>
-                                                <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
-                                                    <span className="flex items-center gap-1.5">
-                                                        <CalendarDays className="h-4 w-4" />
-                                                        {formatEventDate(
-                                                            event.date,
-                                                        )}
-                                                    </span>
-                                                    <span className="flex items-center gap-1.5">
-                                                        <Clock className="h-4 w-4" />
-                                                        {event.time}
-                                                    </span>
-                                                    <span className="flex items-center gap-1.5">
-                                                        <MapPin className="h-4 w-4" />
-                                                        {event.location}
-                                                    </span>
-                                                </div>
-                                            </div>
-
-                                            <div className="space-y-2">
-                                                <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
-                                                    <span>
-                                                        Volunteer readiness
-                                                    </span>
-                                                    <span>
-                                                        {volunteerPercent}%
-                                                    </span>
-                                                </div>
-                                                <ProgressBar
-                                                    value={volunteerPercent}
-                                                />
-                                                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                                                    <span>
-                                                        {event.volunteers}{' '}
-                                                        volunteer
-                                                    </span>
-                                                    <span>
-                                                        {event.expected} target
-                                                        hadir
-                                                    </span>
-                                                </div>
-                                            </div>
+                                </CardHeader>
+                                <CardContent className="space-y-5 p-6">
+                                    {readinessItems.length === 0 && (
+                                        <div className="py-8 text-center">
+                                            <Sparkles className="mx-auto h-10 w-10 text-muted-foreground/40" />
+                                            <p className="mt-3 text-sm font-medium text-foreground">
+                                                Belum ada template role
+                                            </p>
+                                            <p className="mt-1 text-sm text-muted-foreground">
+                                                Tambahkan kategori event dan role
+                                                departemen untuk melihat kesiapan.
+                                            </p>
                                         </div>
-                                    );
-                                })}
-                            </div>
-                        </CardContent>
-                    </Card>
+                                    )}
 
-                    <div className="grid gap-6">
+                                    {readinessItems.map((item) => {
+                                        const percent = Math.round(
+                                            (item.filled / item.total) * 100,
+                                        );
+
+                                        return (
+                                            <div key={item.label} className="space-y-2">
+                                                <div className="flex items-center justify-between text-sm">
+                                                    <span className="font-medium text-foreground">
+                                                        {item.label}
+                                                    </span>
+                                                    <span className="text-muted-foreground">
+                                                        {item.filled}/{item.total}{' '}
+                                                        terisi
+                                                    </span>
+                                                </div>
+                                                <ProgressBar value={percent} />
+                                            </div>
+                                        );
+                                    })}
+                                </CardContent>
+                            </Card>
+
+                            <div className="grid gap-6">
+                                <Card className="border bg-card shadow-sm">
+                                    <CardHeader className="border-b px-6 py-5">
+                                        <CardTitle className="text-lg">
+                                            Quick Actions
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="grid grid-cols-2 gap-3 p-5">
+                                        {quickActions.map((action) => {
+                                            const Icon = action.icon;
+
+                                            return (
+                                                <Button
+                                                    key={action.title}
+                                                    asChild
+                                                    variant="outline"
+                                                    className="h-20 flex-col gap-2"
+                                                >
+                                                    <Link href={action.href}>
+                                                        <Icon className="h-5 w-5" />
+                                                        <span>{action.title}</span>
+                                                    </Link>
+                                                </Button>
+                                            );
+                                        })}
+                                    </CardContent>
+                                </Card>
+
+                                <Card className="border bg-card shadow-sm">
+                                    <CardHeader className="border-b px-6 py-5">
+                                        <CardTitle className="text-lg">
+                                            Yang Perlu Dicek
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="space-y-4 p-5">
+                                        {planningTasks.map((task) => {
+                                            const Icon = task.icon;
+
+                                            return (
+                                                <div
+                                                    key={task.title}
+                                                    className="flex gap-3"
+                                                >
+                                                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted">
+                                                        <Icon
+                                                            className={`h-4 w-4 ${task.tone}`}
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-semibold text-foreground">
+                                                            {task.title}
+                                                        </p>
+                                                        <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                                                            {task.detail}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </CardContent>
+                                </Card>
+                            </div>
+                        </div>
+                    </>
+                )}
+
+                {activeTab === 'schedules' && (
+                    <div className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
                         <Card className="border bg-card shadow-sm">
                             <CardHeader className="border-b px-6 py-5">
-                                <CardTitle className="text-lg">
-                                    Quick Actions
-                                </CardTitle>
+                                <div className="flex items-center justify-between gap-4">
+                                    <div>
+                                        <CardTitle className="text-lg">
+                                            Jadwal Layanan Mendatang
+                                        </CardTitle>
+                                        <p className="mt-1 text-sm text-muted-foreground">
+                                            Event terdekat dengan target hadir dan
+                                            kesiapan volunteer.
+                                        </p>
+                                    </div>
+                                    <Button
+                                        asChild
+                                        variant="ghost"
+                                        size="sm"
+                                        className="gap-1"
+                                    >
+                                        <Link href="/events">
+                                            Lihat semua
+                                            <ChevronRight className="h-4 w-4" />
+                                        </Link>
+                                    </Button>
+                                </div>
                             </CardHeader>
-                            <CardContent className="grid grid-cols-2 gap-3 p-5">
-                                {quickActions.map((action) => {
-                                    const Icon = action.icon;
+                            <CardContent className="p-0">
+                                <div className="divide-y divide-border/60">
+                                    {upcomingServices.length === 0 && (
+                                        <div className="p-8 text-center">
+                                            <CalendarDays className="mx-auto h-10 w-10 text-muted-foreground/40" />
+                                            <p className="mt-3 text-sm font-medium text-foreground">
+                                                Belum ada event mendatang
+                                            </p>
+                                            <p className="mt-1 text-sm text-muted-foreground">
+                                                Buat event baru untuk mulai menyusun
+                                                jadwal layanan.
+                                            </p>
+                                        </div>
+                                    )}
 
-                                    return (
-                                        <Button
-                                            key={action.title}
-                                            asChild
-                                            variant="outline"
-                                            className="h-20 flex-col gap-2"
-                                        >
-                                            <Link href={action.href}>
-                                                <Icon className="h-5 w-5" />
-                                                <span>{action.title}</span>
-                                            </Link>
-                                        </Button>
-                                    );
-                                })}
+                                    {upcomingServices.map((event) => {
+                                        const totalRoles =
+                                            event.volunteers + event.openRoles;
+                                        const volunteerPercent =
+                                            totalRoles > 0
+                                                ? Math.round(
+                                                      (event.volunteers /
+                                                          totalRoles) *
+                                                          100,
+                                                  )
+                                                : 100;
+
+                                        return (
+                                            <div
+                                                key={event.id}
+                                                className="grid gap-4 p-5 lg:grid-cols-[1fr_220px] lg:items-center"
+                                            >
+                                                <div className="space-y-3">
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <h3 className="font-semibold text-foreground">
+                                                            {event.title}
+                                                        </h3>
+                                                        <Badge
+                                                            variant="secondary"
+                                                            className="rounded-md"
+                                                        >
+                                                            {event.category}
+                                                        </Badge>
+                                                        {event.openRoles > 0 ? (
+                                                            <Badge
+                                                                variant="outline"
+                                                                className="rounded-md border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300"
+                                                            >
+                                                                {event.openRoles}{' '}
+                                                                role kosong
+                                                            </Badge>
+                                                        ) : (
+                                                            <Badge
+                                                                variant="outline"
+                                                                className="rounded-md border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300"
+                                                            >
+                                                                Siap
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
+                                                        <span className="flex items-center gap-1.5">
+                                                            <CalendarDays className="h-4 w-4" />
+                                                            {formatEventDate(
+                                                                event.date,
+                                                            )}
+                                                        </span>
+                                                        <span className="flex items-center gap-1.5">
+                                                            <Clock className="h-4 w-4" />
+                                                            {event.time}
+                                                        </span>
+                                                        <span className="flex items-center gap-1.5">
+                                                            <MapPin className="h-4 w-4" />
+                                                            {event.location}
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
+                                                        <span>
+                                                            Volunteer readiness
+                                                        </span>
+                                                        <span>
+                                                            {volunteerPercent}%
+                                                        </span>
+                                                    </div>
+                                                    <ProgressBar
+                                                        value={volunteerPercent}
+                                                    />
+                                                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                                        <span>
+                                                            {event.volunteers}{' '}
+                                                            volunteer
+                                                        </span>
+                                                        <span>
+                                                            {event.expected} target
+                                                            hadir
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
                             </CardContent>
                         </Card>
 
                         <Card className="border bg-card shadow-sm">
-                            <CardHeader className="border-b px-6 py-5">
+                            <CardHeader className="border-b px-6 py-5 flex flex-row items-center justify-between">
                                 <CardTitle className="text-lg">
-                                    Yang Perlu Dicek
+                                    Tim Volunteer Terjadwal
                                 </CardTitle>
+                                <Users className="h-5 w-5 text-muted-foreground" />
                             </CardHeader>
-                            <CardContent className="space-y-4 p-5">
-                                {planningTasks.map((task) => {
-                                    const Icon = task.icon;
-
-                                    return (
-                                        <div
-                                            key={task.title}
-                                            className="flex gap-3"
-                                        >
-                                            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted">
-                                                <Icon
-                                                    className={`h-4 w-4 ${task.tone}`}
-                                                />
-                                            </div>
-                                            <div>
-                                                <p className="text-sm font-semibold text-foreground">
-                                                    {task.title}
-                                                </p>
-                                                <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                                                    {task.detail}
-                                                </p>
-                                            </div>
+                            <CardContent className="p-0">
+                                <div className="divide-y divide-border/60">
+                                    {adminAssignments.length === 0 && (
+                                        <div className="p-8 text-center">
+                                            <Users className="mx-auto h-10 w-10 text-muted-foreground/40" />
+                                            <p className="mt-3 text-sm font-medium text-foreground">
+                                                Belum ada volunteer dijadwalkan
+                                            </p>
                                         </div>
-                                    );
-                                })}
+                                    )}
+                                    {adminAssignments.map((assignment) => {
+                                        const badge = getResponseBadge(assignment.response_status);
+                                        return (
+                                            <div key={assignment.id} className="p-4 hover:bg-muted/30 transition-colors">
+                                                <div className="flex items-start justify-between gap-4">
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="flex items-center gap-2 mb-1">
+                                                            <span className="font-bold text-sm text-foreground truncate">
+                                                                {assignment.member_name}
+                                                            </span>
+                                                            <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${badge.className}`}>
+                                                                {badge.label}
+                                                            </Badge>
+                                                        </div>
+                                                        <div className="text-xs text-muted-foreground font-medium">
+                                                            {assignment.role_category} &bull; {assignment.role_name}
+                                                        </div>
+                                                        <div className="mt-1 text-[11px] text-primary/80 font-semibold truncate flex items-center gap-1.5">
+                                                            <CalendarDays className="h-3 w-3" />
+                                                            {assignment.event.title} ({formatEventDate(assignment.event.date)})
+                                                        </div>
+                                                        {assignment.response_status === 'declined' && (
+                                                            <div className="mt-2 p-2 rounded bg-rose-50 border border-rose-100 text-[11px] text-rose-700">
+                                                                <span className="font-bold uppercase text-[9px] block mb-0.5">Alasan Penolakan:</span>
+                                                                {assignment.response_reason || 'Tidak ada alasan.'}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <div className="shrink-0">
+                                                        {(assignment.response_status === 'declined' || assignment.response_status === 'pending') && (
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                className="h-8 text-[11px] gap-1.5 border-amber-200 text-amber-700 hover:bg-amber-50"
+                                                                onClick={() => {
+                                                                    setReplacingAssignment(assignment);
+                                                                    setSelectedNewMember('');
+                                                                }}
+                                                            >
+                                                                <RotateCcw className="h-3 w-3" />
+                                                                Ganti
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
                             </CardContent>
                         </Card>
                     </div>
-                </div>
+                )}
 
-                <div className="grid gap-6 xl:grid-cols-2">
-                    <Card className="border bg-card shadow-sm">
-                        <CardHeader className="border-b px-6 py-5 flex flex-row items-center justify-between">
-                            <CardTitle className="text-lg">
-                                Penjadwalan Volunteer
-                            </CardTitle>
-                            <Users className="h-5 w-5 text-muted-foreground" />
-                        </CardHeader>
-                        <CardContent className="p-0">
-                            <div className="divide-y divide-border/60">
-                                {adminAssignments.length === 0 && (
-                                    <div className="p-8 text-center">
-                                        <Users className="mx-auto h-10 w-10 text-muted-foreground/40" />
-                                        <p className="mt-3 text-sm font-medium text-foreground">
-                                            Belum ada volunteer dijadwalkan
-                                        </p>
+                {activeTab === 'rundown' && (
+                    <div className="grid gap-6 xl:grid-cols-[350px_1fr]">
+                        <Card className="border bg-card shadow-sm h-fit">
+                            <CardHeader className="border-b px-6 py-5">
+                                <CardTitle className="text-lg">Pilih Event</CardTitle>
+                                <p className="text-xs text-muted-foreground">Lihat rundown untuk event mendatang.</p>
+                            </CardHeader>
+                            <CardContent className="p-3 space-y-1">
+                                {upcomingServices.length === 0 ? (
+                                    <div className="p-4 text-center text-sm text-muted-foreground">
+                                        Tidak ada event mendatang.
                                     </div>
-                                )}
-                                {adminAssignments.map((assignment) => {
-                                    const badge = getResponseBadge(assignment.response_status);
-                                    return (
-                                        <div key={assignment.id} className="p-4 hover:bg-muted/30 transition-colors">
-                                            <div className="flex items-start justify-between gap-4">
-                                                <div className="min-w-0 flex-1">
-                                                    <div className="flex items-center gap-2 mb-1">
-                                                        <span className="font-bold text-sm text-foreground truncate">
-                                                            {assignment.member_name}
-                                                        </span>
-                                                        <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${badge.className}`}>
-                                                            {badge.label}
-                                                        </Badge>
-                                                    </div>
-                                                    <div className="text-xs text-muted-foreground font-medium">
-                                                        {assignment.role_category} &bull; {assignment.role_name}
-                                                    </div>
-                                                    <div className="mt-1 text-[11px] text-primary/80 font-semibold truncate">
-                                                        {assignment.event.title} ({formatEventDate(assignment.event.date)})
-                                                    </div>
-                                                    {assignment.response_status === 'declined' && (
-                                                        <div className="mt-2 p-2 rounded bg-rose-50 border border-rose-100 text-[11px] text-rose-700">
-                                                            <span className="font-bold uppercase text-[9px] block mb-0.5">Alasan Penolakan:</span>
-                                                            {assignment.response_reason || 'Tidak ada alasan.'}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                <div className="shrink-0">
-                                                    {(assignment.response_status === 'declined' || assignment.response_status === 'pending') && (
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            className="h-8 text-[11px] gap-1.5 border-amber-200 text-amber-700 hover:bg-amber-50"
-                                                            onClick={() => {
-                                                                setReplacingAssignment(assignment);
-                                                                setSelectedNewMember('');
-                                                            }}
-                                                        >
-                                                            <RotateCcw className="h-3 w-3" />
-                                                            Ganti
-                                                        </Button>
-                                                    )}
-                                                </div>
+                                ) : (
+                                    upcomingServices.map((event) => (
+                                        <button
+                                            key={event.id}
+                                            onClick={() => setSelectedRundownEventId(event.id)}
+                                            className={`w-full text-left p-3 rounded-lg transition-all border ${
+                                                selectedRundownEventId === event.id
+                                                    ? 'bg-primary/5 border-primary/20 ring-1 ring-primary/20'
+                                                    : 'border-transparent hover:bg-muted/50'
+                                            }`}
+                                        >
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className={`text-sm font-semibold truncate ${selectedRundownEventId === event.id ? 'text-primary' : 'text-foreground'}`}>
+                                                    {event.title}
+                                                </span>
+                                                <Badge variant="secondary" className="text-[10px] h-4 px-1 shrink-0">
+                                                    {event.category}
+                                                </Badge>
                                             </div>
+                                            <div className="flex items-center gap-3 mt-1.5 text-[11px] text-muted-foreground">
+                                                <span className="flex items-center gap-1">
+                                                    <CalendarDays className="h-3 w-3" />
+                                                    {formatEventDate(event.date)}
+                                                </span>
+                                                <span className="flex items-center gap-1">
+                                                    <Clock className="h-3 w-3" />
+                                                    {event.time}
+                                                </span>
+                                            </div>
+                                        </button>
+                                    ))
+                                )}
+                            </CardContent>
+                        </Card>
+
+                        {selectedRundownEvent ? (
+                            <Card className="border bg-card shadow-sm overflow-hidden">
+                                <CardHeader className="border-b px-6 py-5 bg-muted/10">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                        <div>
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <CardTitle className="text-xl font-bold">Rundown: {selectedRundownEvent.title}</CardTitle>
+                                                <Badge className="bg-primary/10 text-primary hover:bg-primary/20 border-none">
+                                                    {selectedRundownEvent.category}
+                                                </Badge>
+                                            </div>
+                                            <p className="text-sm text-muted-foreground flex items-center gap-3">
+                                                <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> Total Durasi: {formatDuration(getTotalRundownDuration(selectedRundownEvent.rundown_segments))}</span>
+                                                <span>&bull;</span>
+                                                <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" /> {selectedRundownEvent.location}</span>
+                                            </p>
                                         </div>
-                                    );
-                                })}
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    <Card className="border bg-card shadow-sm">
-                        <CardHeader className="border-b px-6 py-5">
-                            <div className="flex items-center justify-between">
-                                <CardTitle className="text-lg">
-                                    Kesiapan Departemen
-                                </CardTitle>
-                                <Sparkles className="h-5 w-5 text-muted-foreground" />
-                            </div>
-                        </CardHeader>
-                        <CardContent className="space-y-5 p-6">
-                            {readinessItems.length === 0 && (
-                                <div className="py-8 text-center">
-                                    <Sparkles className="mx-auto h-10 w-10 text-muted-foreground/40" />
-                                    <p className="mt-3 text-sm font-medium text-foreground">
-                                        Belum ada template role
-                                    </p>
-                                    <p className="mt-1 text-sm text-muted-foreground">
-                                        Tambahkan kategori event dan role
-                                        departemen untuk melihat kesiapan.
-                                    </p>
-                                </div>
-                            )}
-
-                            {readinessItems.map((item) => {
-                                const percent = Math.round(
-                                    (item.filled / item.total) * 100,
-                                );
-
-                                return (
-                                    <div key={item.label} className="space-y-2">
-                                        <div className="flex items-center justify-between text-sm">
-                                            <span className="font-medium text-foreground">
-                                                {item.label}
-                                            </span>
-                                            <span className="text-muted-foreground">
-                                                {item.filled}/{item.total}{' '}
-                                                terisi
-                                            </span>
-                                        </div>
-                                        <ProgressBar value={percent} />
+                                        <Button asChild size="sm" variant="outline" className="gap-2">
+                                            <Link href={`/events`}>
+                                                <Timer className="h-4 w-4" />
+                                                Edit Rundown
+                                            </Link>
+                                        </Button>
                                     </div>
-                                );
-                            })}
-                        </CardContent>
-                    </Card>
+                                </CardHeader>
+                                <CardContent className="p-0">
+                                    {selectedRundownEvent.rundown_segments.length === 0 ? (
+                                        <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
+                                            <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
+                                                <Timer className="h-8 w-8 text-muted-foreground/40" />
+                                            </div>
+                                            <h3 className="text-lg font-semibold">Belum ada rundown</h3>
+                                            <p className="text-sm text-muted-foreground max-w-xs mt-1">
+                                                Susun jadwal acara untuk event ini melalui menu Kelola Event.
+                                            </p>
+                                            <Button asChild className="mt-6" variant="outline">
+                                                <Link href="/events">Kelola Event Sekarang</Link>
+                                            </Button>
+                                        </div>
+                                    ) : (
+                                        <div className="divide-y border-t">
+                                            {selectedRundownEvent.rundown_segments.sort((a, b) => a.sort_order - b.sort_order).map((segment) => (
+                                                <div key={segment.id} className="bg-background">
+                                                    <div className="px-6 py-3 bg-muted/30 border-b flex items-center justify-between">
+                                                        <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                                                            <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+                                                            {segment.title}
+                                                        </h4>
+                                                        <span className="text-[10px] font-medium text-muted-foreground">
+                                                            {segment.items.length} item &bull; {formatDuration(segment.items.reduce((acc, i) => acc + i.duration_seconds, 0))}
+                                                        </span>
+                                                    </div>
+                                                    <div className="divide-y divide-border/40">
+                                                        {segment.items.sort((a, b) => a.sort_order - b.sort_order).map((item) => (
+                                                            <div key={item.id} className="px-6 py-4 flex items-start gap-4 hover:bg-muted/10 transition-colors">
+                                                                <div className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded bg-muted/50 text-[10px] font-bold text-muted-foreground">
+                                                                    {item.sort_order}
+                                                                </div>
+                                                                <div className="flex-1 min-w-0">
+                                                                    <div className="flex items-center justify-between gap-4">
+                                                                        <p className="text-sm font-semibold text-foreground truncate">
+                                                                            {item.title}
+                                                                        </p>
+                                                                        <span className="text-xs font-medium text-muted-foreground shrink-0 flex items-center gap-1">
+                                                                            <Clock className="h-3 w-3" />
+                                                                            {formatDuration(item.duration_seconds)}
+                                                                        </span>
+                                                                    </div>
+                                                                    {item.song && (
+                                                                        <button 
+                                                                            onClick={() => setSelectedSong(item.song)}
+                                                                            className="mt-2 text-left group/song inline-flex items-center gap-3 px-3 py-1.5 rounded-lg bg-muted/40 border border-border/50 hover:bg-primary/5 hover:border-primary/20 transition-all duration-200"
+                                                                        >
+                                                                            <Music className="h-3.5 w-3.5 text-primary/60 group-hover/song:text-primary transition-colors" />
+                                                                            <div className="flex items-center gap-2">
+                                                                                <span className="text-sm font-bold text-foreground group-hover/song:text-primary transition-colors">
+                                                                                    {item.song.title}
+                                                                                </span>
+                                                                                <span className="text-xs text-muted-foreground">
+                                                                                    {item.song.artist}
+                                                                                </span>
+                                                                            </div>
+                                                                            <div className="flex items-center gap-1.5 ml-1 border-l pl-3">
+                                                                                <Badge className="h-5 px-1.5 text-[10px] font-bold bg-blue-600 text-white hover:bg-blue-700 border-none">
+                                                                                    {item.song.key}
+                                                                                </Badge>
+                                                                                <span className="text-[10px] font-bold text-muted-foreground uppercase">
+                                                                                    {item.song.bpm} BPM
+                                                                                </span>
+                                                                            </div>
+                                                                            <ChevronRight className="h-3 w-3 text-muted-foreground/30 group-hover/song:text-primary/40 transition-all group-hover/song:translate-x-0.5 ml-1" />
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        ) : (
+                            <div className="flex items-center justify-center h-full min-h-[400px] border-2 border-dashed rounded-xl">
+                                <div className="text-center">
+                                    <Timer className="h-12 w-12 text-muted-foreground/20 mx-auto" />
+                                    <p className="mt-4 text-sm text-muted-foreground">Pilih event untuk melihat detail rundown</p>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
 
+                {activeTab === 'activity' && (
                     <Card className="border bg-card shadow-sm">
                         <CardHeader className="border-b px-6 py-5">
                             <div className="flex items-center justify-between">
@@ -1179,7 +1471,7 @@ export default function Dashboard({
                                     className="gap-1"
                                 >
                                     <Link href="/attendance-history">
-                                        Riwayat
+                                        Riwayat Lengkap
                                         <ChevronRight className="h-4 w-4" />
                                     </Link>
                                 </Button>
@@ -1203,7 +1495,7 @@ export default function Dashboard({
                                 {liveCheckIns.map((checkIn) => (
                                     <div
                                         key={`${checkIn.name}-${checkIn.time}`}
-                                        className="flex items-center justify-between gap-4 p-4"
+                                        className="flex items-center justify-between gap-4 p-4 hover:bg-muted/20"
                                     >
                                         <div className="flex items-center gap-3">
                                             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
@@ -1248,7 +1540,7 @@ export default function Dashboard({
                             </div>
                         </CardContent>
                     </Card>
-                </div>
+                )}
             </div>
 
             {/* Replace Volunteer Modal */}
@@ -1290,6 +1582,103 @@ export default function Dashboard({
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Song Detail Sidebar */}
+            <Sheet open={!!selectedSong} onOpenChange={(open) => !open && setSelectedSong(null)}>
+                <SheetContent className="sm:max-w-2xl overflow-y-auto p-0 border-l border-border/40 shadow-2xl">
+                    {selectedSong && (
+                        <div className="flex flex-col h-full">
+                            <div className="bg-emerald-600 p-8 text-white relative overflow-hidden">
+                                <div className="absolute top-0 right-0 p-8 opacity-10">
+                                    <Music className="h-32 w-32 rotate-12" />
+                                </div>
+                                <div className="relative z-10">
+                                    <Badge className="mb-3 bg-white/20 text-white border-white/30 hover:bg-white/30">
+                                        Song Detail
+                                    </Badge>
+                                    <h2 className="text-3xl font-bold tracking-tight">{selectedSong.title}</h2>
+                                    <p className="text-emerald-100 text-lg mt-1">{selectedSong.artist || 'Unknown Artist'}</p>
+                                    
+                                    <div className="flex gap-4 mt-6">
+                                        <div className="bg-white/10 rounded-xl px-4 py-2 border border-white/20 backdrop-blur-sm">
+                                            <p className="text-xs text-emerald-200 uppercase font-bold tracking-wider">Nada Dasar</p>
+                                            <p className="text-xl font-bold">{selectedSong.key}</p>
+                                        </div>
+                                        <div className="bg-white/10 rounded-xl px-4 py-2 border border-white/20 backdrop-blur-sm">
+                                            <p className="text-xs text-emerald-200 uppercase font-bold tracking-wider">Tempo</p>
+                                            <p className="text-xl font-bold">{selectedSong.bpm} BPM</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="p-8 space-y-8 flex-1">
+                                {/* Video Section */}
+                                {selectedSong.video_url && (
+                                    <div className="space-y-4">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <div className="p-2 bg-rose-50 rounded-lg text-rose-600">
+                                                    <Video className="h-5 w-5" />
+                                                </div>
+                                                <h3 className="font-bold text-slate-900">Video & Referensi</h3>
+                                            </div>
+                                            <Button variant="outline" size="sm" asChild className="gap-2 h-8">
+                                                <a href={selectedSong.video_url} target="_blank" rel="noopener noreferrer">
+                                                    <ExternalLink className="h-3.5 w-3.5" />
+                                                    Buka di Youtube
+                                                </a>
+                                            </Button>
+                                        </div>
+                                        
+                                        <div className="aspect-video rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center relative overflow-hidden group">
+                                            <div className="absolute inset-0 bg-slate-900/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                                                <a 
+                                                    href={selectedSong.video_url} 
+                                                    target="_blank" 
+                                                    rel="noopener noreferrer"
+                                                    className="w-16 h-16 bg-rose-600 rounded-full flex items-center justify-center text-white shadow-xl transform group-hover:scale-110 transition-transform"
+                                                >
+                                                    <Play className="h-8 w-8 fill-current ml-1" />
+                                                </a>
+                                            </div>
+                                            <div className="text-center">
+                                                <Youtube className="h-12 w-12 text-rose-500/40 mx-auto mb-2" />
+                                                <p className="text-sm font-medium text-slate-400 italic">Pratinjau Video Tersedia</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Lyrics Section */}
+                                <div className="space-y-4">
+                                    <div className="flex items-center gap-2">
+                                        <div className="p-2 bg-emerald-50 rounded-lg text-emerald-600">
+                                            <FileText className="h-5 w-5" />
+                                        </div>
+                                        <h3 className="font-bold text-slate-900">Lirik Lagu</h3>
+                                    </div>
+                                    
+                                    <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100 relative group">
+                                        <div className="prose prose-sm max-w-none">
+                                            {selectedSong.lyrics ? (
+                                                <pre className="font-sans text-base leading-relaxed text-slate-700 whitespace-pre-wrap">
+                                                    {selectedSong.lyrics}
+                                                </pre>
+                                            ) : (
+                                                <div className="py-12 text-center">
+                                                    <Music className="h-8 w-8 text-slate-300 mx-auto mb-2" />
+                                                    <p className="text-slate-400 italic">Lirik belum tersedia untuk lagu ini.</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </SheetContent>
+            </Sheet>
         </>
     );
 }

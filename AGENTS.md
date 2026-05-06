@@ -1,6 +1,6 @@
 ---
 name: aplikasi-react-agents
-description: "Use when: developing, debugging, or extending the Laravel + React monolith for attendance/event management. Guides agents on dev setup, Inertia.js architecture, database schema, critical gotchas, and code conventions."
+description: 'Use when: developing, debugging, or extending the Laravel + React monolith for attendance/event management. Guides agents on dev setup, Inertia.js architecture, database schema, critical gotchas, and code conventions.'
 ---
 
 # Aplikasi React – Agent Guide
@@ -23,17 +23,17 @@ A **monolithic Laravel + React** application for member attendance tracking and 
 
 ## 2. Essential Commands
 
-| Task | Command | Notes |
-|------|---------|-------|
-| **Setup** | `composer install && npm install` | First time only |
-| **Dev (full stack)** | `composer dev` | Concurrent: Laravel (8000), queue, Pail logs, Vite |
-| **Frontend only** | `npm run dev` | Vite dev server with hot reload |
-| **Production build** | `npm run build` | Generates `public/build/` + manifest |
-| **Test + lint** | `composer test` | Linting → type check → Pest tests |
-| **Linting** | `npm run lint` | Fix ESLint + React warnings |
-| **Type check** | `npm run types:check` | TypeScript validation |
-| **DB migrations** | `php artisan migrate --force` | Required after setup |
-| **Seed test data** | `php artisan db:seed --class=MemberManagementSeeder` | Populate test records |
+| Task                 | Command                                              | Notes                                              |
+| -------------------- | ---------------------------------------------------- | -------------------------------------------------- |
+| **Setup**            | `composer install && npm install`                    | First time only                                    |
+| **Dev (full stack)** | `composer dev`                                       | Concurrent: Laravel (8000), queue, Pail logs, Vite |
+| **Frontend only**    | `npm run dev`                                        | Vite dev server with hot reload                    |
+| **Production build** | `npm run build`                                      | Generates `public/build/` + manifest               |
+| **Test + lint**      | `composer test`                                      | Linting → type check → Pest tests                  |
+| **Linting**          | `npm run lint`                                       | Fix ESLint + React warnings                        |
+| **Type check**       | `npm run types:check`                                | TypeScript validation                              |
+| **DB migrations**    | `php artisan migrate --force`                        | Required after setup                               |
+| **Seed test data**   | `php artisan db:seed --class=MemberManagementSeeder` | Populate test records                              |
 
 **First run**: `composer install && npm install && php artisan key:generate && php artisan migrate --force && npm run build`
 
@@ -108,59 +108,66 @@ tests/                    # Pest test files
 ### Core Tables
 
 #### `events`
-| Column | Type | Purpose |
-|--------|------|---------|
-| `id` | BIGINT | Primary key |
-| `title` | VARCHAR | Event name |
-| `date`, `time` | DATE, TIME | When event occurs |
-| `location` | VARCHAR | Event location |
-| `category` | VARCHAR | Event type |
-| `expected` | INT | Expected attendance count |
-| `image_path` | VARCHAR, nullable | Event image URL |
-| `created_at`, `updated_at` | TIMESTAMP | |
+
+| Column                     | Type              | Purpose                   |
+| -------------------------- | ----------------- | ------------------------- |
+| `id`                       | BIGINT            | Primary key               |
+| `title`                    | VARCHAR           | Event name                |
+| `date`, `time`             | DATE, TIME        | When event occurs         |
+| `location`                 | VARCHAR           | Event location            |
+| `category`                 | VARCHAR           | Event type                |
+| `expected`                 | INT               | Expected attendance count |
+| `image_path`               | VARCHAR, nullable | Event image URL           |
+| `created_at`, `updated_at` | TIMESTAMP         |                           |
 
 | `created_at`, `updated_at` | TIMESTAMP | |
 
 #### `users` (Local Auth)
-| Column | Type | Purpose |
-|--------|------|---------|
-| `id` | BIGINT | Primary key |
-| `name`, `email` | VARCHAR | Auth credentials |
-| `password` | VARCHAR | Bcrypt hash |
-| `member_id` | VARCHAR, nullable | Link to `ExternalMember.idjemaat` |
-| `role` | VARCHAR | "admin" or "jemaat" (default: jemaat) |
-| `created_at`, `updated_at` | TIMESTAMP | |
+
+| Column                     | Type              | Purpose                               |
+| -------------------------- | ----------------- | ------------------------------------- |
+| `id`                       | BIGINT            | Primary key                           |
+| `name`, `email`            | VARCHAR           | Auth credentials                      |
+| `password`                 | VARCHAR           | Bcrypt hash                           |
+| `member_id`                | VARCHAR, nullable | Link to `ExternalMember.idjemaat`     |
+| `role`                     | VARCHAR           | "admin" or "jemaat" (default: jemaat) |
+| `created_at`, `updated_at` | TIMESTAMP         |                                       |
 
 #### `member_details`
-| Column | Type | Purpose |
-|--------|------|---------|
-| `id` | BIGINT | Primary key |
-| `member_id` | BIGINT, **unique** | ID from external `jemaat` table |
-| `status_id` | BIGINT nullable FK | Reference to `member_statuses.id` |
-| `department_id` | BIGINT nullable FK | Reference to `departments.id` |
-| `created_at`, `updated_at` | TIMESTAMP | |
+
+| Column                     | Type               | Purpose                           |
+| -------------------------- | ------------------ | --------------------------------- |
+| `id`                       | BIGINT             | Primary key                       |
+| `member_id`                | BIGINT, **unique** | ID from external `jemaat` table   |
+| `status_id`                | BIGINT nullable FK | Reference to `member_statuses.id` |
+| `department_id`            | BIGINT nullable FK | Reference to `departments.id`     |
+| `created_at`, `updated_at` | TIMESTAMP          |                                   |
 
 #### `member_statuses`
-| Column | Type | Purpose |
-|--------|------|---------|
-| `id` | BIGINT | Primary key |
-| `name` | VARCHAR | "Jemaat", "Volunteer", etc. |
-| `created_at`, `updated_at` | TIMESTAMP | |
+
+| Column                     | Type      | Purpose                     |
+| -------------------------- | --------- | --------------------------- |
+| `id`                       | BIGINT    | Primary key                 |
+| `name`                     | VARCHAR   | "Jemaat", "Volunteer", etc. |
+| `created_at`, `updated_at` | TIMESTAMP |                             |
 
 #### `departments`
-| Column | Type | Purpose |
-|--------|------|---------|
-| `id` | BIGINT | Primary key |
-| `name` | VARCHAR | "Visual", "Worship", "Kids", "Frontline", etc. |
-| `created_at`, `updated_at` | TIMESTAMP | |
+
+| Column                     | Type      | Purpose                                        |
+| -------------------------- | --------- | ---------------------------------------------- |
+| `id`                       | BIGINT    | Primary key                                    |
+| `name`                     | VARCHAR   | "Visual", "Worship", "Kids", "Frontline", etc. |
+| `created_at`, `updated_at` | TIMESTAMP |                                                |
 
 #### `ExternalMember` (Read-Only, External `myesc_db.jemaat`)
+
 - **Connection**: `myesc_db` (MySQL external)
 - **Timestamps**: Disabled (`$timestamps = false`) — external table has no timestamps
 - **Guarded**: All fields (`$guarded = ['*']`) — **Do not create/update; read-only only**
 - Extended via `MemberDetail` for local metadata
 
 ### Relationships
+
 ```
 Event ─→ Attendances ─→ (member_id from external jemaat)
 MemberDetail ─→ MemberStatus, Department
@@ -172,6 +179,7 @@ ExternalMember ←─ MemberDetail (1:1 bridge)
 ## 6. Frontend Conventions
 
 **Directory & File Organization**:
+
 - `pages/` — Route components (one per page; match `routes/web.php`)
 - `components/ui/` — Radix UI wrappers + Tailwind styling
 - `components/app-*.tsx` — Layout components (nav, sidebar, header)
@@ -182,34 +190,37 @@ ExternalMember ←─ MemberDetail (1:1 bridge)
 **Key Patterns**:
 
 1. **Form Mutations** — Use `useForm()` from Inertia:
-   ```tsx
-   const { data, setData, post, processing } = useForm({
-     status_id: '',
-     department_id: '',
-   });
-   
-   const handleSubmit = (e) => {
-     e.preventDefault();
-     post(route('anggota.update-details', memberId));
-   };
-   ```
+
+    ```tsx
+    const { data, setData, post, processing } = useForm({
+        status_id: '',
+        department_id: '',
+    });
+
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        post(route('anggota.update-details', memberId));
+    };
+    ```
 
 2. **Server Data as Props** — Receive from Inertia; no separate fetch calls:
-   ```tsx
-   export default function Anggota({ members, statuses, departments }) {
-     // All props passed from Laravel controller
-   }
-   ```
+
+    ```tsx
+    export default function Anggota({ members, statuses, departments }) {
+        // All props passed from Laravel controller
+    }
+    ```
 
 3. **UI Components** — Use Radix UI + Tailwind, no custom CSS:
-   - Dialog, Select, Checkbox, Dropdown, Tooltip, etc.
-   - Always include accessible labels and keyboard support
+    - Dialog, Select, Checkbox, Dropdown, Tooltip, etc.
+    - Always include accessible labels and keyboard support
 
 4. **Icons** — Lucide React for consistency
 5. **Notifications** — Sonner (toast library)
 6. **Type Safety** — Strict TypeScript; no implicit `any`
 
 **Code Quality**:
+
 - `npm run format` — Prettier for consistent formatting
 - `npm run lint` — Fix ESLint + React warnings
 - `npm run types:check` — TypeScript validation before commit
@@ -222,6 +233,7 @@ ExternalMember ←─ MemberDetail (1:1 bridge)
 **Language**: PHP 8.3+ (strict types recommended)
 
 **Structure**:
+
 - `app/Models/` — Eloquent models (PSR-4 autoload)
 - `app/Http/Controllers/` — Route handlers (thin; mostly `Inertia::render()` or queries)
 - `app/Http/Requests/` — Form validation classes
@@ -231,11 +243,13 @@ ExternalMember ←─ MemberDetail (1:1 bridge)
 - `database/seeders/` — Test data
 
 **Naming**:
+
 - Routes: dot notation (`events.store`, `anggota.update-details`)
 - Tables: plural snake_case (`events`, `attendances`, `member_statuses`)
 - Classes: `CamelCase`; methods: `camelCase`; columns: `snake_case`
 
 **Auth**: Laravel Fortify (2FA, email verification, password reset).
+
 - **Hybrid Login**: Falls back to external `myesc_db.jemaat` (MD5 check) if local login fails. Auto-syncs/creates local accounts and updates to Bcrypt on first successful MD5 login.
 - **Roles**: `admin` (full dashboard access) vs `jemaat` (limited to self-scan and settings).
 
@@ -244,25 +258,30 @@ ExternalMember ←─ MemberDetail (1:1 bridge)
 ## 8. Attendance System (Dual-Mode QR)
 
 ### Mode 1: Admin Scan (Staff-Operated)
+
 - **Route**: `/scan-qr`
 - **Logic**: Admin selects event → Scans physical card NIK → Lookup `ExternalMember` → Record Attendance.
 - **Tech**: `html5-qrcode` library for real-time camera scanning.
 
 ### Mode 2: Self Check-in (User-Operated)
+
 - **Route**: `/my/scan`
 - **Logic**: User logs in → Scans Event QR Code (generated in Event list) → Record Attendance via logged-in `member_id`.
 - **Tech**: `react-qr-code` for display, `html5-qrcode` for scanning.
 
 **PHP** (Pint preset: Laravel):
+
 - 4-space indentation
 - Use traits for DRY validation rules
 
 **JavaScript/TypeScript** (ESLint + Prettier):
+
 - React Compiler enabled → auto-optimizes renders
 - Strict type checking; no implicit `any`
 - Consistent formatting via Prettier
 
 **Before Commit**:
+
 ```bash
 npm run lint        # Fix ESLint warnings
 npm run types:check # TypeScript validation
@@ -274,6 +293,7 @@ composer test       # Full lint + Pest tests
 ## 9. Critical Gotchas
 
 ### 1. **ExternalMember is Read-Only**
+
 ```php
 // ❌ Don't try this
 ExternalMember::create(['name' => 'John']); // Fails; guarded = ['*']
@@ -287,38 +307,46 @@ MemberDetail::create([
 ```
 
 ### 2. **Dual Database Setup (MySQL)**
+
 - **Default**: MySQL (`.env: DB_CONNECTION=mysql`)
 - **External members**: MySQL (`myesc_db`)
 - Konfigurasi di `.env`:
-  ```
-  DB_CONNECTION=mysql
-  DB_HOST=127.0.0.1
-  DB_DATABASE=attendance_pro
-  DB_USERNAME=root
-  DB_PASSWORD=
-  
-  DB_EXT_CONNECTION=mysql
-  DB_EXT_HOST=...
-  DB_EXT_DATABASE=myey1771_myesc
-  DB_EXT_USERNAME=...
-  DB_EXT_PASSWORD=...
-  ```
+
+    ```
+    DB_CONNECTION=mysql
+    DB_HOST=127.0.0.1
+    DB_DATABASE=attendance_pro
+    DB_USERNAME=root
+    DB_PASSWORD=
+
+    DB_EXT_CONNECTION=mysql
+    DB_EXT_HOST=...
+    DB_EXT_DATABASE=myey1771_myesc
+    DB_EXT_USERNAME=...
+    DB_EXT_PASSWORD=...
+    ```
 
 ### 3. **Alur Data (Database → Frontend)**
+
 Aplikasi ini menggunakan MySQL untuk seluruh sistem basis datanya:
--   **Main (MySQL)**: Menyimpan tabel `events`, `departments`, `member_statuses`, dan `member_details` di database `attendance_pro`.
--   **External (MySQL)**: Menyimpan data jemaat di model `ExternalMember` (database `myey1771_myesc`).
+
+- **Main (MySQL)**: Menyimpan tabel `events`, `departments`, `member_statuses`, dan `member_details` di database `attendance_pro`.
+- **External (MySQL)**: Menyimpan data jemaat di model `ExternalMember` (database `myey1771_myesc`).
 
 ### 4. **ExternalMember Timestamps Disabled**
+
 External table has no `created_at`/`updated_at`. Model disables timestamps (`$timestamps = false`) to prevent errors.
 
 ### 4. **Queue Driver is Database**
+
 Jobs stored in `jobs` table. No external queue service configured. For production, consider Redis or SQS.
 
 ### 5. **Pagination with Relations**
+
 Routes load paginated members, then attach details per page (avoids N+1). Note: `count()` loads all first; be explicit.
 
 ### 6. **Fortify Email Verification**
+
 Fortify requires email verification on registration. Test email in dev (`.env: MAIL_DRIVER=log` logs to `storage/logs/`).
 
 ---
@@ -326,6 +354,7 @@ Fortify requires email verification on registration. Test email in dev (`.env: M
 ## 10. Testing
 
 **Framework**: Pest PHP (modern, expressive)
+
 ```php
 // tests/Feature/EventTest.php
 test('user can view events')->actingAs($user)->get(route('events'))->assertOk();
@@ -348,4 +377,4 @@ test('user can view events')->actingAs($user)->get(route('events'))->assertOk();
 
 ---
 
-*This file is the single source of truth for AI-assisted development within this repository.*
+_This file is the single source of truth for AI-assisted development within this repository._
