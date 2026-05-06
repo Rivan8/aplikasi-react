@@ -2,6 +2,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
+    Collapsible,
+    CollapsibleContent,
+    CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import {
     Dialog,
     DialogContent,
     DialogDescription,
@@ -32,7 +37,7 @@ import {
     XCircle,
     ChevronDown,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 interface DashboardStats {
     active_events: number;
@@ -400,198 +405,235 @@ function UserDashboard({ assignments }: { assignments: UserAssignment[] }) {
                             );
 
                             return (
-                                <Card
-                                    key={assignment.id}
-                                    className="overflow-hidden border bg-card shadow-sm"
-                                >
-                                    <CardHeader className="border-b px-6 py-5">
-                                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                                            <div>
-                                                <div className="flex flex-wrap items-center gap-2">
-                                                    <CardTitle className="text-xl">
-                                                        {assignment.event.title}
-                                                    </CardTitle>
-                                                    <Badge
-                                                        variant="outline"
-                                                        className={
-                                                            badge.className
-                                                        }
-                                                    >
-                                                        {badge.label}
-                                                    </Badge>
-                                                </div>
-                                                <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
-                                                    <span className="flex items-center gap-1.5">
-                                                        <CalendarDays className="h-4 w-4" />
-                                                        {formatEventDate(
-                                                            assignment.event
-                                                                .date ?? '',
-                                                        )}
-                                                    </span>
-                                                    <span className="flex items-center gap-1.5">
-                                                        <Clock className="h-4 w-4" />
-                                                        {assignment.event
-                                                            .time ?? '-'}
-                                                    </span>
-                                                    <span className="flex items-center gap-1.5">
-                                                        <MapPin className="h-4 w-4" />
-                                                        {assignment.event
-                                                            .location ?? '-'}
-                                                    </span>
-                                                </div>
-                                            </div>
-
-                                            {assignment.response_status !==
-                                                'accepted' &&
-                                                assignment.response_status !==
-                                                    'declined' && (
-                                                    <div className="flex flex-wrap gap-2">
+                                <Collapsible key={assignment.id}>
+                                    <Card className="overflow-hidden border bg-card shadow-sm">
+                                        <CardHeader className="border-b px-6 py-5">
+                                            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                                                <div className="flex flex-1 items-start gap-3">
+                                                    <CollapsibleTrigger asChild>
                                                         <Button
-                                                            className="gap-2"
-                                                            disabled={
-                                                                processingId ===
-                                                                assignment.id
-                                                            }
-                                                            onClick={() =>
-                                                                acceptAssignment(
-                                                                    assignment,
-                                                                )
-                                                            }
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="mt-1 h-8 w-8 shrink-0"
                                                         >
-                                                            <CheckCircle2 className="h-4 w-4" />
-                                                            Terima
+                                                            <ChevronDown className="h-4 w-4 transition-transform duration-200 [[data-state=open]_&]:rotate-180" />
                                                         </Button>
-                                                        <Button
-                                                            variant="outline"
-                                                            className="gap-2 border-rose-200 text-rose-700 hover:bg-rose-50 hover:text-rose-800 dark:border-rose-900 dark:text-rose-300 dark:hover:bg-rose-950/30"
-                                                            disabled={
-                                                                processingId ===
-                                                                assignment.id
-                                                            }
-                                                            onClick={() =>
-                                                                setDecliningAssignment(
-                                                                    assignment,
-                                                                )
-                                                            }
-                                                        >
-                                                            <XCircle className="h-4 w-4" />
-                                                            Tolak
-                                                        </Button>
-                                                    </div>
-                                                )}
-                                        </div>
-                                    </CardHeader>
+                                                    </CollapsibleTrigger>
 
-                                    <CardContent className="grid gap-6 p-6 xl:grid-cols-[320px_1fr]">
-                                        <div className="rounded-lg border bg-muted/20 p-4">
-                                            <p className="text-xs font-bold tracking-widest text-muted-foreground uppercase">
-                                                Penugasan Kamu
-                                            </p>
-                                            <p className="mt-3 text-lg font-semibold text-foreground">
-                                                {assignment.role_name}
-                                            </p>
-                                            <p className="text-sm text-muted-foreground">
-                                                {assignment.role_category}
-                                            </p>
-
-                                            {assignment.response_status ===
-                                                'declined' &&
-                                                assignment.response_reason && (
-                                                    <div className="mt-4 rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-200">
-                                                        <p className="font-semibold">
-                                                            Alasan penolakan
+                                                    <div>
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                            <CardTitle className="text-xl">
+                                                                {
+                                                                    assignment
+                                                                        .event
+                                                                        .title
+                                                                }
+                                                            </CardTitle>
+                                                            <Badge
+                                                                variant="outline"
+                                                                className={
+                                                                    badge.className
+                                                                }
+                                                            >
+                                                                {badge.label}
+                                                            </Badge>
+                                                        </div>
+                                                        <p className="mt-1 text-sm font-medium text-primary">
+                                                            {assignment.role_name}{' '}
+                                                            <span className="text-muted-foreground/60">
+                                                                di
+                                                            </span>{' '}
+                                                            {assignment.role_category}
                                                         </p>
-                                                        <p className="mt-1">
-                                                            {
-                                                                assignment.response_reason
-                                                            }
-                                                        </p>
+                                                        <div className="mt-2 flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
+                                                            <span className="flex items-center gap-1.5">
+                                                                <CalendarDays className="h-4 w-4" />
+                                                                {formatEventDate(
+                                                                    assignment
+                                                                        .event
+                                                                        .date ??
+                                                                        '',
+                                                                )}
+                                                            </span>
+                                                            <span className="flex items-center gap-1.5">
+                                                                <Clock className="h-4 w-4" />
+                                                                {assignment
+                                                                    .event
+                                                                    .time ??
+                                                                    '-'}
+                                                            </span>
+                                                            <span className="flex items-center gap-1.5">
+                                                                <MapPin className="h-4 w-4" />
+                                                                {assignment
+                                                                    .event
+                                                                    .location ??
+                                                                    '-'}
+                                                            </span>
+                                                        </div>
                                                     </div>
-                                                )}
-                                        </div>
-
-                                        <div>
-                                            <div className="mb-3 flex items-center justify-between gap-4">
-                                                <div>
-                                                    <h3 className="font-semibold text-foreground">
-                                                        Tim yang Dijadwalkan
-                                                    </h3>
-                                                    <p className="text-sm text-muted-foreground">
-                                                        Semua volunteer di event
-                                                        ini.
-                                                    </p>
                                                 </div>
-                                                <Badge
-                                                    variant="secondary"
-                                                    className="rounded-md"
-                                                >
-                                                    {assignment.team.length}{' '}
-                                                    orang
-                                                </Badge>
-                                            </div>
 
-                                            <div className="overflow-hidden rounded-lg border">
-                                                <div className="divide-y divide-border/60">
-                                                    {assignment.team.map(
-                                                        (member) => {
-                                                            const memberBadge =
-                                                                getResponseBadge(
-                                                                    member.response_status,
-                                                                );
-
-                                                            return (
-                                                                <div
-                                                                    key={
-                                                                        member.id
-                                                                    }
-                                                                    className="grid gap-3 p-4 sm:grid-cols-[1fr_180px_110px] sm:items-center"
-                                                                >
-                                                                    <div className="flex items-center gap-3">
-                                                                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
-                                                                            {member.name
-                                                                                .slice(
-                                                                                    0,
-                                                                                    2,
-                                                                                )
-                                                                                .toUpperCase()}
-                                                                        </div>
-                                                                        <div>
-                                                                            <p className="text-sm font-semibold text-foreground">
-                                                                                {
-                                                                                    member.name
-                                                                                }
-                                                                            </p>
-                                                                            <p className="text-xs text-muted-foreground">
-                                                                                {
-                                                                                    member.role_category
-                                                                                }
-                                                                            </p>
-                                                                        </div>
-                                                                    </div>
-                                                                    <p className="text-sm font-medium text-foreground">
-                                                                        {
-                                                                            member.role_name
-                                                                        }
-                                                                    </p>
-                                                                    <Badge
-                                                                        variant="outline"
-                                                                        className={
-                                                                            memberBadge.className
-                                                                        }
-                                                                    >
-                                                                        {
-                                                                            memberBadge.label
-                                                                        }
-                                                                    </Badge>
-                                                                </div>
-                                                            );
-                                                        },
+                                                {assignment.response_status !==
+                                                    'accepted' &&
+                                                    assignment.response_status !==
+                                                        'declined' && (
+                                                        <div className="flex flex-wrap gap-2 lg:mt-1">
+                                                            <Button
+                                                                className="h-9 gap-2 px-4"
+                                                                disabled={
+                                                                    processingId ===
+                                                                    assignment.id
+                                                                }
+                                                                onClick={() =>
+                                                                    acceptAssignment(
+                                                                        assignment,
+                                                                    )
+                                                                }
+                                                            >
+                                                                <CheckCircle2 className="h-4 w-4" />
+                                                                Terima
+                                                            </Button>
+                                                            <Button
+                                                                variant="outline"
+                                                                className="h-9 gap-2 border-rose-200 px-4 text-rose-700 hover:bg-rose-50 hover:text-rose-800 dark:border-rose-900 dark:text-rose-300 dark:hover:bg-rose-950/30"
+                                                                disabled={
+                                                                    processingId ===
+                                                                    assignment.id
+                                                                }
+                                                                onClick={() =>
+                                                                    setDecliningAssignment(
+                                                                        assignment,
+                                                                    )
+                                                                }
+                                                            >
+                                                                <XCircle className="h-4 w-4" />
+                                                                Tolak
+                                                            </Button>
+                                                        </div>
                                                     )}
-                                                </div>
                                             </div>
-                                        </div>
-                                    </CardContent>
-                                </Card>
+                                        </CardHeader>
+
+                                        <CollapsibleContent>
+                                            <CardContent className="grid gap-6 p-6 xl:grid-cols-[320px_1fr]">
+                                                <div className="rounded-lg border bg-muted/20 p-4">
+                                                    <p className="text-xs font-bold tracking-widest text-muted-foreground uppercase">
+                                                        Penugasan Kamu
+                                                    </p>
+                                                    <p className="mt-3 text-lg font-semibold text-foreground">
+                                                        {assignment.role_name}
+                                                    </p>
+                                                    <p className="text-sm text-muted-foreground">
+                                                        {
+                                                            assignment.role_category
+                                                        }
+                                                    </p>
+
+                                                    {assignment.response_status ===
+                                                        'declined' &&
+                                                        assignment.response_reason && (
+                                                            <div className="mt-4 rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-200">
+                                                                <p className="font-semibold">
+                                                                    Alasan
+                                                                    penolakan
+                                                                </p>
+                                                                <p className="mt-1">
+                                                                    {
+                                                                        assignment.response_reason
+                                                                    }
+                                                                </p>
+                                                            </div>
+                                                        )}
+                                                </div>
+
+                                                <div>
+                                                    <div className="mb-3 flex items-center justify-between gap-4">
+                                                        <div>
+                                                            <h3 className="font-semibold text-foreground">
+                                                                Tim yang
+                                                                Dijadwalkan
+                                                            </h3>
+                                                            <p className="text-sm text-muted-foreground">
+                                                                Semua volunteer
+                                                                di event ini.
+                                                            </p>
+                                                        </div>
+                                                        <Badge
+                                                            variant="secondary"
+                                                            className="rounded-md"
+                                                        >
+                                                            {
+                                                                assignment.team
+                                                                    .length
+                                                            }{' '}
+                                                            orang
+                                                        </Badge>
+                                                    </div>
+
+                                                    <div className="overflow-hidden rounded-lg border">
+                                                        <div className="divide-y divide-border/60">
+                                                            {assignment.team.map(
+                                                                (member) => {
+                                                                    const memberBadge =
+                                                                        getResponseBadge(
+                                                                            member.response_status,
+                                                                        );
+
+                                                                    return (
+                                                                        <div
+                                                                            key={
+                                                                                member.id
+                                                                            }
+                                                                            className="grid gap-3 p-4 sm:grid-cols-[1fr_180px_110px] sm:items-center"
+                                                                        >
+                                                                            <div className="flex items-center gap-3">
+                                                                                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                                                                                    {member.name
+                                                                                        .slice(
+                                                                                            0,
+                                                                                            2,
+                                                                                        )
+                                                                                        .toUpperCase()}
+                                                                                </div>
+                                                                                <div>
+                                                                                    <p className="text-sm font-semibold text-foreground">
+                                                                                        {
+                                                                                            member.name
+                                                                                        }
+                                                                                    </p>
+                                                                                    <p className="text-xs text-muted-foreground">
+                                                                                        {
+                                                                                            member.role_category
+                                                                                        }
+                                                                                    </p>
+                                                                                </div>
+                                                                            </div>
+                                                                            <p className="text-sm font-medium text-foreground">
+                                                                                {
+                                                                                    member.role_name
+                                                                                }
+                                                                            </p>
+                                                                            <Badge
+                                                                                variant="outline"
+                                                                                className={
+                                                                                    memberBadge.className
+                                                                                }
+                                                                            >
+                                                                                {
+                                                                                    memberBadge.label
+                                                                                }
+                                                                            </Badge>
+                                                                        </div>
+                                                                    );
+                                                                },
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </CardContent>
+                                        </CollapsibleContent>
+                                    </Card>
+                                </Collapsible>
                             );
                         })}
                     </div>
