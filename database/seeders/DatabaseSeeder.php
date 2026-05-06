@@ -13,13 +13,16 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        User::updateOrCreate(
+        $admin = User::updateOrCreate(
             ['email' => 'admin@attendance.com'],
             [
                 'name' => 'Admin Attendance',
-                'password' => bcrypt('password'),
+                'password' => \Illuminate\Support\Facades\Hash::make('password'),
+                'role' => 'admin',
             ]
         );
+
+        dump("Admin Created: " . $admin->email);
 
         $this->call([
             MemberManagementSeeder::class,

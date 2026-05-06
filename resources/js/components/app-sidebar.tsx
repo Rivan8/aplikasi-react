@@ -4,6 +4,7 @@ import {
     History,
     LayoutDashboard,
     LayoutGrid,
+    Music,
     QrCode,
     Radio,
     Settings,
@@ -60,6 +61,12 @@ const mainNavItems: NavItem[] = [
         href: '/categories',
         icon: LayoutGrid,
         roles: ['admin'],
+    },
+    {
+        title: 'Song Bank',
+        href: '/songs',
+        icon: Music,
+        roles: ['admin', 'jemaat'],
     },
     {
         title: 'Attendance History',

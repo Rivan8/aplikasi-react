@@ -5,6 +5,7 @@ use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\LiveEventController;
+use App\Http\Controllers\SongController;
 use App\Models\Attendance;
 use App\Models\Category;
 use App\Models\CategoryRole;
@@ -353,6 +354,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('attendance-history', [AttendanceController::class, 'history'])->name('attendance-history');
     Route::get('attendance-history/export/pdf', [AttendanceController::class, 'exportPdf'])->name('attendance-history.export.pdf');
     Route::get('attendance-history/export/excel', [AttendanceController::class, 'exportExcel'])->name('attendance-history.export.excel');
+
+    // Song Bank Routes
+    Route::get('songs', [SongController::class, 'index'])->name('songs.index');
 
     // QR Attendance Routes
     Route::get('my/scan', [AttendanceController::class, 'showUserScan'])->name('my.scan');

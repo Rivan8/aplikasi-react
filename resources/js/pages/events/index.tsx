@@ -1,6 +1,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Calendar } from '@/components/ui/calendar';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
     Collapsible,
     CollapsibleContent,
@@ -8,14 +9,21 @@ import {
 } from '@/components/ui/collapsible';
 import {
     Dialog,
+    DialogClose,
     DialogContent,
     DialogDescription,
     DialogFooter,
     DialogHeader,
     DialogTitle,
+    DialogTrigger,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
 import {
     Select,
     SelectContent,
@@ -23,91 +31,65 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { cn } from '@/lib/utils';
 import { Head, router, useForm } from '@inertiajs/react';
+import { format } from 'date-fns';
+import { id } from 'date-fns/locale';
 import {
-    Building,
-    Calendar as CalendarIcon,
+    CalendarIcon,
+    CalendarDays,
     ChevronDown,
     ChevronUp,
     Clock,
-    Edit2,
-    Eye,
-    Image as ImageIcon,
-    Info,
+    ImageIcon,
     ListChecks,
     MapPin,
     Minus,
-    Pause,
-    Play,
+    MoreHorizontal,
+    Pencil,
     Plus,
     QrCode,
-    RotateCcw,
     Search,
     Timer,
     Trash2,
     Users,
     X,
+    Play,
+    Pause,
+    RotateCcw,
+    CheckCircle2,
+    Sparkles,
+    Info,
 } from 'lucide-react';
+import { QRCodeSVG as QRCodeComponent } from 'qrcode.react';
 import { useEffect, useMemo, useState } from 'react';
-import QRCode from 'react-qr-code';
-import { toast } from 'sonner';
-
-// Fix for QRCode component in Vite/ESM environments
-const QRCodeComponent = (QRCode as any).default || QRCode;
-
-interface Volunteer {
-    id: number;
-    role_category: string;
-    role_name: string;
-    member_id: string;
-    member?: {
-        idjemaat: string;
-        namalengkap: string;
-    };
-}
-
-interface CategoryRole {
-    id: number;
-    category_id: number;
-    department_id: number;
-    role_name: string;
-    department?: {
-        id: number;
-        name: string;
-    };
-}
-
-interface Category {
-    id: number;
-    name: string;
-    description: string;
-    roles: CategoryRole[];
-}
-
-interface Event {
-    id: number;
-    title: string;
-    date: string;
-    time: string;
-    location: string;
-    address: string;
-    category: string;
-    expected: number;
-    image_path?: string;
-    attendance_start_time?: string;
-    volunteers?: Volunteer[];
-    rundown_segments?: EventRundownSegment[];
-}
 
 interface ExternalMember {
-    id: string;
+    id: number;
     name: string;
+}
+
+interface VolunteerMember {
+    idjemaat: number;
+    namalengkap: string;
+}
+
+interface Volunteer {
+    id?: number;
+    member_id: number;
+    role_name: string;
+    role_category: string;
+    role_id?: number; // Unique identifier for the position
+    member?: VolunteerMember;
 }
 
 interface EventRundownItem {
     id?: number;
     title: string;
     duration_seconds: number;
+    song_id?: number | null;
+    song?: Song | null;
 }
 
 interface EventRundownSegment {
@@ -117,423 +99,222 @@ interface EventRundownSegment {
     items: EventRundownItem[];
 }
 
-// Remove hardcoded categories and roles as they will come from props
-// const categories = ['Ibadah', 'Pelayanan', 'Seminar', 'Kelas', 'Rapat', 'Lainnya'];
-// const VOLUNTEER_ROLES = [...];
+interface Event {
+    id: number;
+    title: string;
+    date: string | null;
+    time: string | null;
+    attendance_start_time: string | null;
+    location: string | null;
+    address: string | null;
+    category: string;
+    expected: number;
+    image_path: string | null;
+    volunteers: Volunteer[];
+    rundown_segments: EventRundownSegment[];
+}
 
-// Move SearchableSelect outside to avoid re-renders and re-definitions
-const SearchableSelect = ({
+interface CategoryRole {
+    id: number;
+    role_name: string;
+    department: {
+        id: number;
+        name: string;
+    };
+}
+
+interface Category {
+    id: number;
+    name: string;
+    roles: CategoryRole[];
+}
+
+interface Song {
+    id: number;
+    title: string;
+    keys: string | null;
+}
+
+function SearchableSelect({
     value,
     onSelect,
-    external_members = [],
-    placeholder = 'Pilih Jemaat...',
+    external_members,
 }: {
-    value: string;
-    onSelect: (val: string) => void;
+    value: number | null;
+    onSelect: (val: number | null) => void;
     external_members: ExternalMember[];
-    placeholder?: string;
-}) => {
-    const [searchTerm, setSearchTerm] = useState('');
-    const [isOpen, setIsOpen] = useState(false);
+}) {
+    const [open, setOpen] = useState(false);
+    const [search, setSearch] = useState('');
 
     const filteredMembers = useMemo(() => {
-        const list = Array.isArray(external_members) ? external_members : [];
-
-        if (!searchTerm) {
-            return list.slice(0, 50);
-        }
-
-        return list
+        return external_members
             .filter((m) =>
-                m.name?.toLowerCase().includes(searchTerm.toLowerCase()),
+                (m.name || '').toLowerCase().includes(search.toLowerCase()),
             )
             .slice(0, 50);
-    }, [searchTerm, external_members]);
+    }, [search, external_members]);
 
-    const selectedMember = Array.isArray(external_members)
-        ? external_members.find((m) => m.id === value)
-        : null;
+    const selectedMember = external_members.find((m) => m.id === value);
 
     return (
-        <div className="relative w-full">
-            <Button
-                type="button"
-                variant="outline"
-                className="h-9 w-full justify-between bg-background text-xs font-normal"
-                onClick={() => setIsOpen(!isOpen)}
-            >
-                <span className="truncate">
-                    {selectedMember ? selectedMember.name : placeholder}
-                </span>
-                <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
-            </Button>
-
-            {isOpen && (
-                <div className="absolute z-50 mt-1 w-full animate-in rounded-md border bg-popover text-popover-foreground shadow-md fade-in-0 outline-none zoom-in-95">
-                    <div className="flex h-9 items-center border-b px-3">
-                        <Search className="mr-2 h-3 w-3 shrink-0 opacity-50" />
-                        <input
-                            className="flex w-full rounded-md bg-transparent py-2 text-xs outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
-                            placeholder="Cari nama..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            autoFocus
-                        />
-                        {searchTerm && (
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-4 w-4"
-                                onClick={() => setSearchTerm('')}
-                            >
-                                <X className="h-2 w-2" />
-                            </Button>
-                        )}
-                    </div>
-                    <div className="max-h-60 overflow-y-auto p-1">
-                        <div
-                            className="relative flex w-full cursor-default items-center rounded-sm px-2 py-1.5 text-xs outline-none select-none hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+        <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+                <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={open}
+                    className="h-9 w-full justify-between px-3 text-xs font-normal"
+                >
+                    {selectedMember ? (
+                        <span className="truncate">
+                            {selectedMember.name}
+                        </span>
+                    ) : (
+                        <span className="text-muted-foreground">
+                            Pilih member...
+                        </span>
+                    )}
+                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
+                <div className="flex items-center border-b px-3">
+                    <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                    <Input
+                        placeholder="Cari nama..."
+                        className="h-9 border-0 bg-transparent p-0 text-xs focus-visible:ring-0"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                    />
+                </div>
+                <div className="max-h-[200px] overflow-y-auto p-1">
+                    <Button
+                        variant="ghost"
+                        className="w-full justify-start px-2 py-1.5 text-xs text-muted-foreground"
+                        onClick={() => {
+                            onSelect(null);
+                            setOpen(false);
+                        }}
+                    >
+                        -- Kosongkan --
+                    </Button>
+                    {filteredMembers.map((member) => (
+                        <Button
+                            key={member.id}
+                            variant="ghost"
+                            className="w-full justify-start px-2 py-1.5 text-xs"
                             onClick={() => {
-                                onSelect('none');
-                                setIsOpen(false);
+                                onSelect(member.id);
+                                setOpen(false);
                             }}
                         >
-                            -- Kosong --
+                            {member.name}
+                        </Button>
+                    ))}
+                    {filteredMembers.length === 0 && (
+                        <div className="px-2 py-3 text-center text-xs text-muted-foreground">
+                            Member tidak ditemukan.
                         </div>
-                        {filteredMembers.map((member) => (
-                            <div
-                                key={member.id}
-                                className={`relative flex w-full cursor-default items-center rounded-sm px-2 py-1.5 text-xs outline-none select-none hover:bg-accent hover:text-accent-foreground ${value === member.id ? 'bg-accent' : ''}`}
-                                onClick={() => {
-                                    onSelect(member.id);
-                                    setIsOpen(false);
-                                }}
-                            >
-                                {member.name}
-                            </div>
-                        ))}
-                        {filteredMembers.length === 0 && (
-                            <div className="py-6 text-center text-xs text-muted-foreground">
-                                Tidak ditemukan.
-                            </div>
-                        )}
-                    </div>
+                    )}
                 </div>
-            )}
-        </div>
+            </PopoverContent>
+        </Popover>
     );
-};
-
-const createRundownSegment = (): EventRundownSegment => ({
-    title: '',
-    duration_seconds: 0,
-    items: [],
-});
-
-const createRundownItem = (): EventRundownItem => ({
-    title: '',
-    duration_seconds: 0,
-});
-
-const minutesToSeconds = (value: string) => {
-    const parsed = Number(value);
-
-    return Number.isFinite(parsed) ? Math.max(0, Math.round(parsed * 60)) : 0;
-};
-
-const secondsToMinutesInput = (seconds: number) => {
-    if (!seconds) {
-        return '';
-    }
-
-    return Number((seconds / 60).toFixed(2)).toString();
-};
-
-const formatDuration = (seconds: number) => {
-    const safeSeconds = Math.max(0, Math.floor(seconds));
-    const hours = Math.floor(safeSeconds / 3600);
-    const minutes = Math.floor((safeSeconds % 3600) / 60);
-    const remainingSeconds = safeSeconds % 60;
-
-    if (hours > 0) {
-        return `${hours}:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
-    }
-
-    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-};
-
-const getRundownTotalSeconds = (segments: EventRundownSegment[] = []) => {
-    return segments.reduce((total, segment) => {
-        const itemTotal =
-            segment.items?.reduce(
-                (sum, item) => sum + (Number(item.duration_seconds) || 0),
-                0,
-            ) || 0;
-
-        const segmentTotal = segment.items?.length > 0 ? itemTotal : (Number(segment.duration_seconds) || 0);
-        return total + segmentTotal;
-    }, 0);
-};
-
-const getItemTotalSeconds = (segment: EventRundownSegment) => {
-    return (
-        segment.items?.reduce(
-            (sum, item) => sum + (Number(item.duration_seconds) || 0),
-            0,
-        ) || 0
-    );
-};
+}
 
 export default function Events({
     events = [],
     external_members = [],
     categories = [],
+    songs = [],
 }: {
     events: Event[];
     external_members: ExternalMember[];
     categories: Category[];
+    songs: Song[];
 }) {
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [editingEvent, setEditingEvent] = useState<Event | null>(null);
     const [viewingEvent, setViewingEvent] = useState<Event | null>(null);
     const [qrEvent, setQrEvent] = useState<Event | null>(null);
-    const [rundownEvent, setRundownEvent] = useState<Event | null>(null);
-    const [timerRunning, setTimerRunning] = useState(false);
-    const [elapsedSeconds, setElapsedSeconds] = useState(0);
-    const [openCategories, setOpenCategories] = useState<string[]>([]);
     const [imagePreview, setImagePreview] = useState<string | null>(null);
+    const [openCategories, setOpenCategories] = useState<string[]>([]);
+    const [activeTab, setActiveTab] = useState<'basic' | 'rundown' | 'volunteers'>('basic');
 
-    // Search and Filter States
-    const [searchQuery, setSearchQuery] = useState('');
-    const [selectedCategory, setSelectedCategory] = useState<string>('all');
-    const [sortBy, setSortBy] = useState<'date-asc' | 'date-desc' | 'title'>(
-        'date-desc',
-    );
-    const [dateFilter, setDateFilter] = useState<
-        'all' | 'upcoming' | 'past' | 'today'
-    >('all');
-
-    const { data, setData, post, put, processing, reset, errors, clearErrors, setError } =
-        useForm({
-            title: '',
-            date: '',
-            time: '',
-            location: '',
-            address: '',
-            category: '', // Start empty
-            attendance_start_time: '',
-            expected: 0,
-            image: null as File | null,
-            volunteers: [] as {
-                role_category: string;
-                role_name: string;
-                member_id: string;
-            }[],
-            rundown_segments: [] as EventRundownSegment[],
-        });
-
-    // Get current category roles
-    const currentCategory = useMemo(() => {
-        return categories.find((c) => c.name === data.category);
-    }, [data.category, categories]);
+    const { data, setData, post, reset, processing, errors } = useForm({
+        title: '',
+        date: undefined as Date | undefined,
+        time: '',
+        attendance_start_time: '',
+        location: '',
+        address: '',
+        category: '',
+        expected: 0,
+        image: null as File | null,
+        volunteers: [] as Volunteer[],
+        rundown_segments: [] as EventRundownSegment[],
+    });
 
     const volunteerGroups = useMemo(() => {
-        if (!currentCategory) return [];
+        const selectedCategory = categories.find((c) => c.name === data.category);
+        if (!selectedCategory) return [];
 
-        const groups: Record<string, string[]> = {};
-        currentCategory.roles.forEach((role) => {
-            const deptName = role.department?.name || 'Lainnya';
-            if (!groups[deptName]) groups[deptName] = [];
-            groups[deptName].push(role.role_name);
+        const groups: Record<string, CategoryRole[]> = {};
+        selectedCategory.roles.forEach((role) => {
+            const dept = role.department.name;
+            if (!groups[dept]) groups[dept] = [];
+            groups[dept].push(role);
         });
 
         return Object.entries(groups).map(([category, roles]) => ({
             category,
             roles,
         }));
-    }, [currentCategory]);
+    }, [data.category, categories]);
 
-    // Populate volunteers when category changes (only for new events)
-    useEffect(() => {
-        if (!editingEvent && currentCategory) {
-            const newVolunteers = currentCategory.roles.map((role) => ({
-                role_category: role.department?.name || 'Lainnya',
-                role_name: role.role_name,
-                member_id: 'none',
-            }));
-            setData('volunteers', newVolunteers);
-
-            // Auto open the first category
-            if (currentCategory.roles.length > 0) {
-                const firstDept = currentCategory.roles[0].department?.name;
-                if (firstDept) setOpenCategories([firstDept]);
-            }
-        }
-    }, [data.category, editingEvent, currentCategory]);
-
-    // Effect to populate form when editing event changes
-    useEffect(() => {
-        if (editingEvent) {
-            // Update all form fields at once using a callback to ensure they're all set together
-            setData((currentData: any) => ({
-                ...currentData,
-                title: editingEvent.title || '',
-                date: editingEvent.date || '',
-                time: editingEvent.time || '',
-                location: editingEvent.location || '',
-                address: editingEvent.address || '',
-                category: editingEvent.category || 'Ibadah',
-                attendance_start_time: editingEvent.attendance_start_time || '',
-                expected: editingEvent.expected || 0,
-                image: null,
-                volunteers:
-                    editingEvent.volunteers?.map((v) => ({
-                        role_category: v.role_category,
-                        role_name: v.role_name,
-                        member_id: v.member_id,
-                    })) || [],
-                rundown_segments:
-                    editingEvent.rundown_segments?.map((segment) => ({
-                        title: segment.title,
-                        duration_seconds: segment.duration_seconds || 0,
-                        items:
-                            segment.items?.map((item) => ({
-                                title: item.title,
-                                duration_seconds: item.duration_seconds || 0,
-                            })) || [],
-                    })) || [],
-            }));
-            // eslint-disable-next-line react-hooks/set-state-in-effect
-            setImagePreview(editingEvent.image_path || null);
-        }
-    }, [editingEvent]);
-
-    useEffect(() => {
-        if (!timerRunning) {
-            return;
-        }
-
-        const interval = window.setInterval(() => {
-            setElapsedSeconds((current) => current + 1);
-        }, 1000);
-
-        return () => window.clearInterval(interval);
-    }, [timerRunning]);
-
-    useEffect(() => {
-        if (!rundownEvent) {
-            setTimerRunning(false);
-            setElapsedSeconds(0);
-        }
-    }, [rundownEvent]);
-
-    const buildFormData = (extra?: Record<string, string>) => {
-        const fd = new FormData();
-        fd.append('title', data.title);
-        fd.append('date', data.date);
-        fd.append('time', data.time);
-        fd.append('location', data.location);
-        fd.append('address', data.address);
-        fd.append('category', data.category);
-        fd.append('expected', String(data.expected));
-        fd.append('volunteers', JSON.stringify(data.volunteers));
-        fd.append('rundown_segments', JSON.stringify(data.rundown_segments));
-        if (data.image) {
-            fd.append('image', data.image);
-        }
-        if (extra) {
-            Object.entries(extra).forEach(([k, v]) => fd.append(k, v));
-        }
-        return fd;
-    };
-
-    const handleAdd = (e: React.FormEvent) => {
-        e.preventDefault();
-
-        router.post('/events', buildFormData(), {
-            onSuccess: () => {
-                setIsAddModalOpen(false);
-                reset();
-                setImagePreview(null);
-                const fileInput = document.getElementById(
-                    'image-upload',
-                ) as HTMLInputElement;
-                if (fileInput) fileInput.value = '';
-                toast.success('Event berhasil ditambahkan');
-            },
-            onError: (err: any) => {
-                console.error('Add Event Error:', err);
-                Object.keys(err).forEach((key) => {
-                    setError(key as any, err[key]);
-                });
-                toast.error(
-                    'Gagal menambahkan event. Silakan cek form kembali.',
-                );
-            },
-        });
-    };
-
-    const handleEdit = (e: React.FormEvent) => {
-        e.preventDefault();
-
-        if (!editingEvent) {
-            console.error('No editing event selected');
-            return;
-        }
-
-        router.post(
-            `/events/${editingEvent.id}`,
-            buildFormData({ _method: 'PUT' }),
-            {
-                onSuccess: () => {
-                    setEditingEvent(null);
-                    reset();
-                    setImagePreview(null);
-                    const fileInput = document.getElementById(
-                        'image-upload',
-                    ) as HTMLInputElement;
-                    if (fileInput) fileInput.value = '';
-                    toast.success('Event berhasil diperbarui');
-                },
-                onError: (err: any) => {
-                    console.error('Edit Event Error:', err);
-                    Object.keys(err).forEach((key) => {
-                        setError(key as any, err[key]);
-                    });
-                    toast.error(
-                        'Gagal memperbarui event. Silakan cek form kembali.',
-                    );
-                },
-            },
+    const toggleCategory = (category: string) => {
+        setOpenCategories((prev) =>
+            prev.includes(category)
+                ? prev.filter((c) => c !== category)
+                : [...prev, category],
         );
     };
 
-    const handleDelete = (id: number) => {
-        if (confirm('Apakah Anda yakin ingin menghapus event ini?')) {
-            post(route('events.destroy', id), {
-                onSuccess: () => toast.success('Event berhasil dihapus'),
-            });
-        }
+    const getVolunteerValue = (category: string, roleName: string, roleId: number) => {
+        const v = data.volunteers.find(
+            (v) => (v.role_id === roleId) || (v.role_category === category && v.role_name === roleName && !v.role_id),
+        );
+        return v ? v.member_id : null;
     };
 
-    const openEditModal = (event: Event) => {
-        // Set editing event first - useEffect will populate the form
-        setEditingEvent(event);
-        setImagePreview(null);
+    const setVolunteerValue = (
+        category: string,
+        roleName: string,
+        memberId: number | null,
+        roleId: number,
+    ) => {
+        const otherVolunteers = data.volunteers.filter(
+            (v) => !(v.role_id === roleId),
+        );
 
-        // Reset file input
-        const fileInput = document.getElementById(
-            'image-upload',
-        ) as HTMLInputElement;
-
-        if (fileInput) {
-            fileInput.value = '';
+        if (memberId === null) {
+            setData('volunteers', otherVolunteers);
+        } else {
+            setData('volunteers', [
+                ...otherVolunteers,
+                {
+                    member_id: memberId,
+                    role_category: category,
+                    role_name: roleName,
+                    role_id: roleId,
+                },
+            ]);
         }
     };
 
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-
         if (file) {
             setData('image', file);
             const reader = new FileReader();
@@ -544,1234 +325,901 @@ export default function Events({
         }
     };
 
-    const getVolunteerValue = (category: string, role: string) => {
-        return (
-            data.volunteers.find(
-                (v) => v.role_category === category && v.role_name === role,
-            )?.member_id || 'none'
-        );
-    };
-
-    const setVolunteerValue = (
-        category: string,
-        role: string,
-        memberId: string,
-    ) => {
-        const newVolunteers = [...data.volunteers];
-        const index = newVolunteers.findIndex(
-            (v) => v.role_category === category && v.role_name === role,
-        );
-
-        if (memberId === 'none') {
-            if (index !== -1) {
-                newVolunteers.splice(index, 1);
-            }
-        } else {
-            if (index !== -1) {
-                newVolunteers[index].member_id = memberId;
-            } else {
-                newVolunteers.push({
-                    role_category: category,
-                    role_name: role,
-                    member_id: memberId,
-                });
-            }
-        }
-
-        setData('volunteers', newVolunteers);
-    };
-
-    const toggleCategory = (category: string) => {
-        setOpenCategories((prev) =>
-            prev.includes(category)
-                ? prev.filter((c) => c !== category)
-                : [...prev, category],
-        );
-    };
-
     const addRundownSegment = () => {
         setData('rundown_segments', [
             ...data.rundown_segments,
-            createRundownSegment(),
+            { title: '', duration_seconds: 0, items: [] },
         ]);
     };
 
-    const updateRundownSegment = (
-        segmentIndex: number,
-        changes: Partial<EventRundownSegment>,
-    ) => {
+    const removeRundownSegment = (index: number) => {
         setData(
             'rundown_segments',
-            data.rundown_segments.map((segment, index) =>
-                index === segmentIndex ? { ...segment, ...changes } : segment,
-            ),
+            data.rundown_segments.filter((_, i) => i !== index),
         );
     };
 
-    const removeRundownSegment = (segmentIndex: number) => {
+    const updateRundownSegment = (
+        index: number,
+        updates: Partial<EventRundownSegment>,
+    ) => {
         setData(
             'rundown_segments',
-            data.rundown_segments.filter((_, index) => index !== segmentIndex),
+            data.rundown_segments.map((s, i) =>
+                i === index ? { ...s, ...updates } : s,
+            ),
         );
     };
 
     const addRundownItem = (segmentIndex: number) => {
-        setData(
-            'rundown_segments',
-            data.rundown_segments.map((segment, index) =>
-                index === segmentIndex
-                    ? {
-                          ...segment,
-                          items: [...segment.items, createRundownItem()],
-                      }
-                    : segment,
-            ),
+        const newSegments = [...data.rundown_segments];
+        newSegments[segmentIndex].items.push({ title: '', duration_seconds: 0 });
+        setData('rundown_segments', newSegments);
+    };
+
+    const removeRundownItem = (segmentIndex: number, itemIndex: number) => {
+        const newSegments = [...data.rundown_segments];
+        newSegments[segmentIndex].items = newSegments[segmentIndex].items.filter(
+            (_, i) => i !== itemIndex,
         );
+        setData('rundown_segments', newSegments);
     };
 
     const updateRundownItem = (
         segmentIndex: number,
         itemIndex: number,
-        changes: Partial<EventRundownItem>,
+        updates: Partial<EventRundownItem>,
     ) => {
-        setData(
-            'rundown_segments',
-            data.rundown_segments.map((segment, index) =>
-                index === segmentIndex
-                    ? {
-                          ...segment,
-                          items: segment.items.map((item, currentItemIndex) =>
-                              currentItemIndex === itemIndex
-                                  ? { ...item, ...changes }
-                                  : item,
-                          ),
-                      }
-                    : segment,
-            ),
+        const newSegments = [...data.rundown_segments];
+        newSegments[segmentIndex].items = newSegments[segmentIndex].items.map(
+            (item, i) => (i === itemIndex ? { ...item, ...updates } : item),
         );
+        setData('rundown_segments', newSegments);
     };
 
-    const removeRundownItem = (segmentIndex: number, itemIndex: number) => {
-        setData(
-            'rundown_segments',
-            data.rundown_segments.map((segment, index) =>
-                index === segmentIndex
-                    ? {
-                          ...segment,
-                          items: segment.items.filter(
-                              (_, currentItemIndex) =>
-                                  currentItemIndex !== itemIndex,
-                          ),
-                      }
-                    : segment,
-            ),
-        );
+    const minutesToSeconds = (val: string) => {
+        const num = parseFloat(val);
+        return isNaN(num) ? 0 : Math.round(num * 60);
     };
 
-    // Filter and sort events
-    const filteredAndSortedEvents = useMemo(() => {
-        let filtered = Array.isArray(events) ? [...events] : [];
+    const secondsToMinutesInput = (seconds: number) => {
+        return seconds === 0 ? '' : (seconds / 60).toString();
+    };
 
-        // Search filter
-        if (searchQuery.trim()) {
-            const query = searchQuery.toLowerCase();
-            filtered = filtered.filter(
-                (event) =>
-                    event.title.toLowerCase().includes(query) ||
-                    event.location.toLowerCase().includes(query) ||
-                    event.address.toLowerCase().includes(query),
-            );
-        }
+    const formatDuration = (seconds: number) => {
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = seconds % 60;
+        if (h > 0) return `${h}j ${m}m`;
+        if (m > 0) return `${m}m ${s > 0 ? s + 'd' : ''}`;
+        return `${s}d`;
+    };
 
-        // Category filter
-        if (selectedCategory !== 'all') {
-            filtered = filtered.filter(
-                (event) => event.category === selectedCategory,
-            );
-        }
+    const getItemTotalSeconds = (segment: EventRundownSegment) => {
+        return segment.items.reduce((acc, item) => acc + item.duration_seconds, 0);
+    };
 
-        // Date filter
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+    const getRundownTotalSeconds = (segments: EventRundownSegment[]) => {
+        return segments.reduce((acc, s) => acc + getItemTotalSeconds(s), 0);
+    };
 
-        if (dateFilter === 'upcoming') {
-            filtered = filtered.filter((event) => {
-                const eventDate = new Date(event.date);
-                eventDate.setHours(0, 0, 0, 0);
-                return eventDate >= today;
-            });
-        } else if (dateFilter === 'past') {
-            filtered = filtered.filter((event) => {
-                const eventDate = new Date(event.date);
-                eventDate.setHours(0, 0, 0, 0);
-                return eventDate < today;
-            });
-        } else if (dateFilter === 'today') {
-            filtered = filtered.filter((event) => {
-                const eventDate = new Date(event.date);
-                eventDate.setHours(0, 0, 0, 0);
-                return eventDate.getTime() === today.getTime();
-            });
-        }
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const url = editingEvent ? `/events/${editingEvent.id}` : '/events';
 
-        // Sort
-        filtered.sort((a, b) => {
-            if (sortBy === 'date-asc') {
-                return new Date(a.date).getTime() - new Date(b.date).getTime();
-            } else if (sortBy === 'date-desc') {
-                return new Date(b.date).getTime() - new Date(a.date).getTime();
-            } else {
-                // title
-                return a.title.localeCompare(b.title);
-            }
+        const formData = new FormData();
+        formData.append('title', data.title);
+        if (data.date) formData.append('date', format(data.date, 'yyyy-MM-dd'));
+        formData.append('time', data.time);
+        formData.append('attendance_start_time', data.attendance_start_time);
+        formData.append('location', data.location);
+        formData.append('address', data.address);
+        formData.append('category', data.category);
+        formData.append('expected', data.expected.toString());
+        if (data.image) formData.append('image', data.image);
+
+        // JSON-stringify arrays to prevent FormData duplication
+        formData.append('volunteers', JSON.stringify(data.volunteers));
+
+        const segmentsPayload = data.rundown_segments.map((s) => ({
+            ...s,
+            duration_seconds: getItemTotalSeconds(s),
+        }));
+        formData.append('rundown_segments', JSON.stringify(segmentsPayload));
+
+        // Spoof PUT method for updates
+        if (editingEvent) formData.append('_method', 'PUT');
+
+        router.post(url, formData, {
+            onSuccess: () => {
+                setIsAddModalOpen(false);
+                setEditingEvent(null);
+                setImagePreview(null);
+                reset();
+            },
         });
+    };
 
-        return filtered;
-    }, [events, searchQuery, selectedCategory, dateFilter, sortBy]);
+    useEffect(() => {
+        if (editingEvent) {
+            // Rehydrate volunteers with role IDs by matching roles in the category
+            const selectedCategory = categories.find(c => c.name === editingEvent.category);
+            const roles = selectedCategory ? selectedCategory.roles : [];
+            
+            // Track used role IDs to handle duplicate role names correctly
+            const usedRoleIds = new Set<number>();
+
+            const rehydratedVolunteers = editingEvent.volunteers.map((v) => {
+                const matchingRole = roles.find(r => 
+                    r.role_name === v.role_name && 
+                    r.department.name === v.role_category &&
+                    !usedRoleIds.has(r.id)
+                );
+                
+                if (matchingRole) {
+                    usedRoleIds.add(matchingRole.id);
+                }
+
+                return {
+                    member_id: v.member_id,
+                    role_category: v.role_category,
+                    role_name: v.role_name,
+                    role_id: matchingRole ? matchingRole.id : undefined,
+                };
+            });
+
+            setData({
+                title: editingEvent.title,
+                date: editingEvent.date ? new Date(editingEvent.date) : undefined,
+                time: editingEvent.time || '',
+                attendance_start_time: editingEvent.attendance_start_time || '',
+                location: editingEvent.location || '',
+                address: editingEvent.address || '',
+                category: editingEvent.category,
+                expected: editingEvent.expected,
+                image: null,
+                volunteers: rehydratedVolunteers,
+                rundown_segments:
+                    editingEvent.rundown_segments?.map((segment) => ({
+                        title: segment.title,
+                        duration_seconds: segment.duration_seconds || 0,
+                        items:
+                            segment.items?.map((item) => ({
+                                title: item.title,
+                                duration_seconds: item.duration_seconds || 0,
+                                song_id: item.song_id || null,
+                                song: item.song || null,
+                            })) || [],
+                    })) || [],
+            });
+            setImagePreview(editingEvent.image_path);
+            setIsAddModalOpen(true);
+        }
+    }, [editingEvent, categories]);
+
+    const [rundownEvent, setRundownEvent] = useState<Event | null>(null);
+    const [timerRunning, setTimerRunning] = useState(false);
+    const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+    useEffect(() => {
+        let interval: any;
+        if (timerRunning) {
+            interval = setInterval(() => {
+                setElapsedSeconds((prev) => prev + 1);
+            }, 1000);
+        }
+        return () => clearInterval(interval);
+    }, [timerRunning]);
+
+    const rundownTotalSeconds = useMemo(() => {
+        if (!rundownEvent) return 0;
+        return getRundownTotalSeconds(rundownEvent.rundown_segments);
+    }, [rundownEvent]);
+
+    const overdueSeconds = Math.max(0, elapsedSeconds - rundownTotalSeconds);
 
     const rundownTimerPlan = useMemo(() => {
-        let cursor = 0;
-
-        return (rundownEvent?.rundown_segments || []).map((segment, index) => {
-            const itemTotal = getItemTotalSeconds(segment);
-            const duration = segment.items?.length > 0 ? itemTotal : (Number(segment.duration_seconds) || itemTotal);
-            const startsAt = cursor;
-            const endsAt = startsAt + duration;
-            cursor = endsAt;
-
+        if (!rundownEvent) return [];
+        let currentTime = 0;
+        return rundownEvent.rundown_segments.map((s, i) => {
+            const startsAt = currentTime;
+            const endsAt = startsAt + s.duration_seconds;
+            currentTime = endsAt;
             return {
-                ...segment,
-                index,
-                duration,
+                ...s,
+                index: i,
                 startsAt,
                 endsAt,
+                duration: s.duration_seconds,
             };
         });
     }, [rundownEvent]);
 
-    const rundownTotalSeconds = rundownTimerPlan.reduce(
-        (total, segment) => total + segment.duration,
-        0,
-    );
-    const overdueSeconds = Math.max(0, elapsedSeconds - rundownTotalSeconds);
-
     return (
         <>
-            <Head title="Event Dashboard" />
-            <div className="flex flex-col gap-6 p-6">
-                {/* Header Section */}
-                <div className="flex items-start justify-between">
+            <Head title="Events" />
+
+            <div className="flex flex-col gap-8 p-6 lg:p-10">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        <h1 className="text-[1.75rem] font-bold tracking-tight text-foreground">
-                            Event Dashboard
-                        </h1>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                            Kelola event mendatang dan penugasan volunteer.
+                        <h2 className="text-3xl font-extrabold tracking-tight text-foreground/90">
+                            Management Event
+                        </h2>
+                        <p className="text-muted-foreground mt-1 text-sm">
+                            Kelola jadwal pelayanan dan absensi jemaat Anda.
                         </p>
                     </div>
-
                     <Button
-                        onClick={() => setIsAddModalOpen(true)}
-                        className="flex items-center gap-2"
+                        onClick={() => {
+                            setEditingEvent(null);
+                            reset();
+                            setImagePreview(null);
+                            setIsAddModalOpen(true);
+                        }}
+                        className="h-11 gap-2 px-6 shadow-lg shadow-primary/20 hover:shadow-primary/40 transition-all duration-300 active:scale-95"
                     >
-                        <Plus className="h-4 w-4" />
+                        <Plus className="h-5 w-5" />
                         Tambah Event Baru
                     </Button>
                 </div>
 
-                {/* Search and Filter Section */}
-                <div className="rounded-xl border bg-card p-6 shadow-sm">
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
-                                Cari Event
-                            </label>
-                            <div className="relative">
-                                <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                                <Input
-                                    type="text"
-                                    placeholder="Judul, lokasi, atau alamat..."
-                                    value={searchQuery}
-                                    onChange={(e) =>
-                                        setSearchQuery(e.target.value)
-                                    }
-                                    className="border-border bg-muted/30 pl-10"
-                                />
-                            </div>
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
-                                Kategori
-                            </label>
-                            <Select
-                                value={selectedCategory}
-                                onValueChange={setSelectedCategory}
-                            >
-                                <SelectTrigger className="border-border bg-muted/30">
-                                    <SelectValue placeholder="Semua Kategori" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">
-                                        Semua Kategori
-                                    </SelectItem>
-                                    {categories.map((cat) => (
-                                        <SelectItem
-                                            key={cat.id}
-                                            value={cat.name}
-                                        >
-                                            {cat.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
-                                Periode
-                            </label>
-                            <Select
-                                value={dateFilter}
-                                onValueChange={(value: any) =>
-                                    setDateFilter(value)
-                                }
-                            >
-                                <SelectTrigger className="border-border bg-muted/30">
-                                    <SelectValue placeholder="Semua Periode" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">
-                                        Semua Periode
-                                    </SelectItem>
-                                    <SelectItem value="upcoming">
-                                        Mendatang
-                                    </SelectItem>
-                                    <SelectItem value="today">
-                                        Hari Ini
-                                    </SelectItem>
-                                    <SelectItem value="past">
-                                        Sudah Lewat
-                                    </SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
-                                Urutkan
-                            </label>
-                            <Select
-                                value={sortBy}
-                                onValueChange={(value: any) => setSortBy(value)}
-                            >
-                                <SelectTrigger className="border-border bg-muted/30">
-                                    <SelectValue placeholder="Pilih Urutan" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="date-desc">
-                                        Tanggal Terdekat
-                                    </SelectItem>
-                                    <SelectItem value="date-asc">
-                                        Tanggal Terjauh
-                                    </SelectItem>
-                                    <SelectItem value="title">
-                                        Nama Event (A-Z)
-                                    </SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </div>
-                    {(searchQuery ||
-                        selectedCategory !== 'all' ||
-                        dateFilter !== 'all') && (
-                        <div className="mt-4 flex items-center gap-3 border-t pt-4">
-                            <span className="text-sm text-muted-foreground">
-                                Menampilkan {filteredAndSortedEvents.length}{' '}
-                                dari {events.length} event
-                            </span>
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                    setSearchQuery('');
-                                    setSelectedCategory('all');
-                                    setDateFilter('all');
-                                    setSortBy('date-desc');
-                                }}
-                                className="text-muted-foreground hover:text-foreground"
-                            >
-                                Reset Filter
-                            </Button>
-                        </div>
-                    )}
-                </div>
-
-                {/* Events Grid */}
-                <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-                    {filteredAndSortedEvents.length === 0 ? (
-                        <div className="col-span-full flex flex-col items-center justify-center rounded-xl border-2 border-dashed py-20 text-muted-foreground">
-                            <Search className="mb-4 h-12 w-12 opacity-20" />
-                            <p className="font-medium">
-                                {events.length === 0
-                                    ? 'Belum ada event yang dibuat.'
-                                    : 'Tidak ada event yang sesuai filter.'}
-                            </p>
-                            {events.length === 0 ? (
-                                <Button
-                                    variant="link"
-                                    onClick={() => setIsAddModalOpen(true)}
-                                >
-                                    Buat event pertama Anda
-                                </Button>
-                            ) : (
-                                <Button
-                                    variant="link"
-                                    onClick={() => {
-                                        setSearchQuery('');
-                                        setSelectedCategory('all');
-                                        setDateFilter('all');
-                                    }}
-                                >
-                                    Reset filter untuk melihat semua event
-                                </Button>
-                            )}
-                        </div>
-                    ) : (
-                        filteredAndSortedEvents.map((event) => (
-                            <Card
-                                key={event.id}
-                                className="group flex flex-col overflow-hidden rounded-xl border bg-card shadow-sm transition-all hover:shadow-md"
-                            >
-                                {/* Event Image */}
-                                <div className="relative aspect-video w-full overflow-hidden bg-muted">
-                                    {event.image_path ? (
-                                        <img
-                                            src={event.image_path}
-                                            alt={event.title}
-                                            className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                                        />
-                                    ) : (
-                                        <div className="flex h-full w-full items-center justify-center text-muted-foreground/40">
-                                            <ImageIcon className="h-12 w-12" />
-                                        </div>
-                                    )}
-                                    <div className="absolute top-3 left-3">
-                                        <Badge
-                                            variant="secondary"
-                                            className="bg-background/80 backdrop-blur-sm"
-                                        >
-                                            {event.category}
-                                        </Badge>
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+                    {events.map((event) => (
+                        <Card
+                            key={`event-card-${event.id}`}
+                            className="group relative flex flex-col overflow-hidden border-none bg-card/50 backdrop-blur-sm transition-all duration-500 hover:-translate-y-1 hover:bg-card hover:shadow-2xl hover:shadow-primary/10"
+                        >
+                            <div className="relative aspect-[16/10] w-full overflow-hidden">
+                                {event.image_path ? (
+                                    <img
+                                        src={event.image_path}
+                                        alt={event.title}
+                                        className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
+                                    />
+                                ) : (
+                                    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary/10 via-background to-primary/5 text-primary/20">
+                                        <ImageIcon className="h-16 w-16" />
                                     </div>
-                                    {/* Status Badge */}
-                                    <div className="absolute top-3 right-3">
-                                        {(() => {
-                                            const eventDate = new Date(
-                                                event.date,
-                                            );
-                                            const today = new Date();
-                                            today.setHours(0, 0, 0, 0);
-                                            eventDate.setHours(0, 0, 0, 0);
+                                )}
+                                <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
+                                
+                                <div className="absolute top-4 left-4">
+                                    <Badge className="bg-background/40 text-foreground border-white/20 shadow-xl backdrop-blur-xl px-3 py-1 text-[10px] font-bold uppercase tracking-wider">
+                                        {event.category}
+                                    </Badge>
+                                </div>
+                                
+                                <div className="absolute top-4 right-4 flex gap-2 translate-y-[-10px] opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
+                                    <Button
+                                        variant="secondary"
+                                        size="icon"
+                                        className="h-9 w-9 rounded-full bg-background/80 shadow-2xl backdrop-blur-md border border-white/20 hover:bg-primary hover:text-white"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setEditingEvent(event);
+                                        }}
+                                    >
+                                        <Pencil className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            </div>
 
-                                            if (
-                                                eventDate.getTime() ===
-                                                today.getTime()
-                                            ) {
-                                                return (
-                                                    <Badge className="border-0 bg-emerald-500 text-white">
-                                                        Hari Ini
-                                                    </Badge>
-                                                );
-                                            } else if (eventDate > today) {
-                                                return (
-                                                    <Badge
-                                                        variant="outline"
-                                                        className="border-primary/20 bg-background/80 text-primary backdrop-blur-sm"
-                                                    >
-                                                        Mendatang
-                                                    </Badge>
-                                                );
-                                            } else {
-                                                return (
-                                                    <Badge
-                                                        variant="outline"
-                                                        className="border-muted-foreground/20 bg-background/80 text-muted-foreground backdrop-blur-sm"
-                                                    >
-                                                        Selesai
-                                                    </Badge>
-                                                );
-                                            }
-                                        })()}
+                            <CardHeader className="space-y-3 p-6">
+                                <div className="flex items-start justify-between gap-4">
+                                    <CardTitle className="line-clamp-1 text-xl font-bold tracking-tight text-foreground/90">
+                                        {event.title}
+                                    </CardTitle>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-9 w-9 shrink-0 rounded-full hover:bg-primary/5"
+                                        onClick={() => setViewingEvent(event)}
+                                    >
+                                        <MoreHorizontal className="h-5 w-5" />
+                                    </Button>
+                                </div>
+                                
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground bg-muted/30 px-3 py-2 rounded-lg">
+                                        <CalendarDays className="h-4 w-4 text-primary/60" />
+                                        {event.date
+                                            ? format(
+                                                  new Date(event.date),
+                                                  'dd MMM yyyy',
+                                                  { locale: id },
+                                              )
+                                            : '-'}
+                                    </div>
+                                    <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground bg-muted/30 px-3 py-2 rounded-lg">
+                                        <Clock className="h-4 w-4 text-primary/60" />
+                                        {event.time}
                                     </div>
                                 </div>
-
-                                <CardContent className="flex flex-1 flex-col p-5">
-                                    <div className="flex items-start justify-between gap-2">
-                                        <h3 className="line-clamp-2 text-lg leading-tight font-bold text-foreground">
-                                            {event.title}
-                                        </h3>
-                                        <div className="flex shrink-0 gap-1">
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-8 w-8"
-                                                onClick={() =>
-                                                    openEditModal(event)
-                                                }
-                                            >
-                                                <Edit2 className="h-3.5 w-3.5" />
-                                            </Button>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-8 w-8 text-destructive"
-                                                onClick={() =>
-                                                    handleDelete(event.id)
-                                                }
-                                            >
-                                                <Trash2 className="h-3.5 w-3.5" />
-                                            </Button>
-                                        </div>
+                                
+                                {event.location && (
+                                    <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground bg-muted/30 px-3 py-2 rounded-lg">
+                                        <MapPin className="h-4 w-4 text-primary/60" />
+                                        <span className="truncate">{event.location}</span>
                                     </div>
+                                )}
+                            </CardHeader>
 
-                                    <div className="mt-4 flex-1 space-y-2.5">
-                                        <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                                            <CalendarIcon className="h-4 w-4 shrink-0 text-primary" />
-                                            <span>
-                                                {event.date
-                                                    ? new Date(
-                                                          event.date,
-                                                      ).toLocaleDateString(
-                                                          'id-ID',
-                                                          {
-                                                              weekday: 'short',
-                                                              year: 'numeric',
-                                                              month: 'short',
-                                                              day: 'numeric',
-                                                          },
-                                                      )
-                                                    : '-'}
-                                            </span>
+                            <CardContent className="mt-auto p-6 pt-0">
+                                <div className="flex items-center justify-between border-t border-border/50 pt-5">
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex -space-x-3 overflow-hidden">
+                                            {event.volunteers
+                                                .slice(0, 4)
+                                                .map((v, i) => (
+                                                    <div
+                                                        key={v.id ?? i}
+                                                        className="inline-flex h-9 w-9 items-center justify-center rounded-full border-2 border-background bg-gradient-to-br from-primary/20 to-primary/5 text-[11px] font-bold text-primary shadow-lg"
+                                                        title={v.member?.namalengkap ?? 'Volunteer'}
+                                                    >
+                                                        {v.member?.namalengkap
+                                                            ?.slice(0, 2)
+                                                            ?.toUpperCase() ?? '??'}
+                                                    </div>
+                                                ))}
+                                            {event.volunteers.length > 4 && (
+                                                <div className="inline-flex h-9 w-9 items-center justify-center rounded-full border-2 border-background bg-muted text-[11px] font-bold text-muted-foreground shadow-lg">
+                                                    +{event.volunteers.length - 4}
+                                                </div>
+                                            )}
                                         </div>
-                                        <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                                            <Clock className="h-4 w-4 shrink-0 text-primary" />
-                                            <span>{event.time}</span>
-                                        </div>
-                                        <div className="flex items-start gap-3 text-sm text-muted-foreground">
-                                            <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                                            <span className="line-clamp-1">
-                                                {event.location}
-                                            </span>
-                                        </div>
-                                        {(event.rundown_segments?.length || 0) >
-                                            0 && (
-                                            <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                                                <ListChecks className="h-4 w-4 shrink-0 text-primary" />
-                                                <span>
-                                                    {formatDuration(
-                                                        getRundownTotalSeconds(
-                                                            event.rundown_segments,
-                                                        ),
-                                                    )}{' '}
-                                                    rundown
-                                                </span>
+                                        {event.volunteers.length > 0 && (
+                                            <div className="flex flex-col">
+                                                <span className="text-[10px] font-bold text-primary/70 uppercase tracking-tighter">Volunteer</span>
+                                                <span className="text-xs font-semibold leading-none">{event.volunteers.length} Personel</span>
                                             </div>
                                         )}
                                     </div>
-
-                                    <div className="mt-6 flex gap-2">
+                                    <div className="flex gap-2">
                                         <Button
                                             variant="outline"
-                                            className="h-9 flex-1 gap-2 text-xs"
-                                            onClick={() =>
-                                                setViewingEvent(event)
-                                            }
-                                        >
-                                            <Eye className="h-3.5 w-3.5" />
-                                            Detail
-                                        </Button>
-                                        <Button
-                                            className="h-9 flex-1 gap-2 border-0 bg-primary/10 text-xs text-primary shadow-none hover:bg-primary/20"
+                                            size="icon"
+                                            className="h-10 w-10 rounded-xl border-border/50 hover:bg-primary/5 hover:text-primary transition-colors"
                                             onClick={() => setQrEvent(event)}
                                         >
-                                            <QrCode className="h-3.5 w-3.5" />
-                                            QR Code
+                                            <QrCode className="h-5 w-5" />
+                                        </Button>
+                                        <Button
+                                            variant="secondary"
+                                            className="h-10 gap-2 rounded-xl px-5 text-sm font-bold shadow-sm hover:shadow-md transition-all active:scale-95"
+                                            onClick={() => setViewingEvent(event)}
+                                        >
+                                            Detail
                                         </Button>
                                     </div>
-                                </CardContent>
-                            </Card>
-                        ))
-                    )}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    ))}
                 </div>
+
+                {events.length === 0 && (
+                    <div className="flex min-h-[450px] flex-col items-center justify-center rounded-[32px] border-2 border-dashed border-muted-foreground/20 bg-muted/5 p-12 text-center animate-in fade-in zoom-in duration-500">
+                        <div className="relative mb-6">
+                            <div className="absolute inset-0 blur-3xl bg-primary/20 rounded-full" />
+                            <div className="relative flex h-24 w-24 items-center justify-center rounded-3xl bg-gradient-to-br from-primary/20 to-background border border-primary/10 shadow-inner">
+                                <CalendarDays className="h-10 w-10 text-primary" />
+                            </div>
+                        </div>
+                        <h3 className="text-2xl font-bold tracking-tight text-foreground/90">
+                            Belum Ada Event Terjadwal
+                        </h3>
+                        <p className="mt-2 max-w-sm text-sm text-muted-foreground leading-relaxed">
+                            Mulai atur jadwal pelayanan gereja Anda hari ini. Semua data absensi dan volunteer akan muncul di sini.
+                        </p>
+                        <Button
+                            variant="default"
+                            className="mt-8 h-12 gap-2 rounded-2xl px-8 shadow-xl shadow-primary/20"
+                            onClick={() => setIsAddModalOpen(true)}
+                        >
+                            <Plus className="h-5 w-5" />
+                            Buat Event Sekarang
+                        </Button>
+                    </div>
+                )}
             </div>
 
             {/* Add/Edit Modal */}
             <Dialog
-                open={isAddModalOpen || !!editingEvent}
+                open={isAddModalOpen}
                 onOpenChange={(open) => {
                     if (!open) {
                         setIsAddModalOpen(false);
                         setEditingEvent(null);
                         setImagePreview(null);
-                        clearErrors();
                         reset();
-                        // Reset file input
-                        const fileInput = document.getElementById(
-                            'image-upload',
-                        ) as HTMLInputElement;
-
-                        if (fileInput) {
-                            fileInput.value = '';
-                        }
                     }
                 }}
             >
-                <DialogContent
-                    className="max-h-[90vh] !w-[min(99vw,1600px)] !max-w-[99vw] overflow-y-auto p-0 lg:!max-w-[1600px]"
-                    style={{ width: 'min(99vw, 1600px)', maxWidth: '99vw' }}
-                >
-                    <form onSubmit={editingEvent ? handleEdit : handleAdd}>
-                        <div className="p-6 pb-0">
-                            <DialogHeader>
-                                <DialogTitle className="text-2xl">
-                                    {editingEvent
-                                        ? 'Edit Event'
-                                        : 'Buat Event Baru'}
+                <DialogContent className="max-w-5xl overflow-hidden rounded-[32px] p-0 border-none shadow-2xl">
+                    <DialogHeader className="bg-gradient-to-br from-primary/10 via-background to-background p-8 pb-6 border-b border-primary/5">
+                        <div className="flex items-center justify-between">
+                            <div className="space-y-1">
+                                <DialogTitle className="text-3xl font-black tracking-tight text-foreground/90">
+                                    {editingEvent ? 'Edit Event' : 'Buat Event Baru'}
                                 </DialogTitle>
-                                <DialogDescription>
-                                    Isi informasi detail untuk event pelayanan
-                                    dan pilih volunteer yang melayani.
+                                <DialogDescription className="text-sm font-medium text-muted-foreground/80">
+                                    {editingEvent 
+                                        ? 'Perbarui detail event dan jadwal pelayanan Anda.' 
+                                        : 'Lengkapi detail untuk menjadwalkan pelayanan gereja Anda.'}
                                 </DialogDescription>
-                            </DialogHeader>
+                            </div>
                         </div>
+                        
+                        {/* Tab Switcher */}
+                        <div className="mt-8 flex gap-1 p-1.5 bg-muted/40 rounded-2xl w-fit border border-border/40 backdrop-blur-md">
+                            {[
+                                { id: 'basic', label: 'Informasi Dasar', icon: Info },
+                                { id: 'rundown', label: 'Rundown & Lagu', icon: ListChecks },
+                                { id: 'volunteers', label: 'Tim Volunteer', icon: Users },
+                            ].map((tab) => (
+                                <button
+                                    key={tab.id}
+                                    type="button"
+                                    onClick={() => setActiveTab(tab.id as any)}
+                                    className={cn(
+                                        "flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-bold transition-all duration-300",
+                                        activeTab === tab.id 
+                                            ? "bg-background text-primary shadow-lg shadow-primary/5 border border-primary/10 scale-[1.02]" 
+                                            : "text-muted-foreground hover:bg-background/50 hover:text-foreground"
+                                    )}
+                                >
+                                    <tab.icon className={cn("h-4 w-4", activeTab === tab.id ? "text-primary" : "text-muted-foreground/60")} />
+                                    {tab.label}
+                                </button>
+                            ))}
+                        </div>
+                    </DialogHeader>
 
-                        <div className="grid grid-cols-1 gap-0 px-6 py-6 lg:grid-cols-12">
-                            {/* Left Column: Basic Info */}
-                            <div className="space-y-6 lg:col-span-7 lg:border-r lg:pr-8">
-                                <div className="space-y-4">
-                                    <div className="flex items-center gap-2 text-sm font-semibold tracking-wider text-primary uppercase">
-                                        <Info className="h-4 w-4" />
-                                        Informasi Dasar
-                                    </div>
+                    <form
+                        onSubmit={handleSubmit}
+                        className="flex flex-col overflow-hidden"
+                    >
+                        <div className="overflow-y-auto max-h-[65vh] scrollbar-hide">
+                            {/* Tab 1: Basic Info */}
+                            {activeTab === 'basic' && (
+                                <div className="p-8 space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+                                        <div className="lg:col-span-7 space-y-8">
+                                            <section className="space-y-6">
+                                                <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-primary/70">
+                                                    <span className="h-px w-8 bg-primary/30" />
+                                                    Detail Utama
+                                                </div>
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                    <div className="space-y-2.5">
+                                                        <Label htmlFor="title" className="text-xs font-bold text-foreground/70 ml-1">Nama Event</Label>
+                                                        <Input
+                                                            id="title"
+                                                            value={data.title}
+                                                            onChange={(e) => setData('title', e.target.value)}
+                                                            placeholder="Sunday Service"
+                                                            className="h-12 bg-muted/20 border-border/40 focus:bg-background transition-all rounded-xl px-4"
+                                                        />
+                                                        {errors.title && <p className="text-[10px] font-bold text-destructive px-1">{errors.title}</p>}
+                                                    </div>
+                                                    <div className="space-y-2.5">
+                                                        <Label htmlFor="category" className="text-xs font-bold text-foreground/70 ml-1">Kategori</Label>
+                                                        <Select value={data.category} onValueChange={(val) => setData('category', val)}>
+                                                            <SelectTrigger className="h-12 bg-muted/20 border-border/40 focus:bg-background transition-all rounded-xl px-4">
+                                                                <SelectValue placeholder="Pilih Kategori" />
+                                                            </SelectTrigger>
+                                                            <SelectContent className="rounded-xl border-border/40 shadow-2xl">
+                                                                {categories.map((c) => (
+                                                                    <SelectItem key={c.id} value={c.name} className="py-2.5 rounded-lg">{c.name}</SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                        {errors.category && <p className="text-[10px] font-bold text-destructive px-1">{errors.category}</p>}
+                                                    </div>
+                                                </div>
+                                            </section>
 
-                                    <div className="space-y-2">
-                                        <Label htmlFor="title">
-                                            Judul Event
-                                        </Label>
-                                        <Input
-                                            id="title"
-                                            value={data.title}
-                                            onChange={(e) =>
-                                                setData('title', e.target.value)
-                                            }
-                                            placeholder="Contoh: Sunday Service"
-                                            className="h-10"
-                                        />
-                                        {errors.title && (
-                                            <p className="text-xs text-destructive">
-                                                {errors.title}
-                                            </p>
-                                        )}
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <Label htmlFor="date">
-                                                Tanggal
-                                            </Label>
-                                            <div className="group relative">
-                                                <Input
-                                                    id="date"
-                                                    type="date"
-                                                    value={data.date}
-                                                    onChange={(e) =>
-                                                        setData(
-                                                            'date',
-                                                            e.target.value,
-                                                        )
-                                                    }
-                                                    onClick={(e) =>
-                                                        (
-                                                            e.target as any
-                                                        ).showPicker?.()
-                                                    }
-                                                    className="block h-10 w-full cursor-pointer pl-10"
-                                                />
-                                                <CalendarIcon className="pointer-events-none absolute top-3 left-3 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
-                                            </div>
-                                            {errors.date && (
-                                                <p className="text-xs text-destructive">
-                                                    {errors.date}
-                                                </p>
-                                            )}
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="time">Waktu</Label>
-                                            <div className="group relative">
-                                                <Input
-                                                    id="time"
-                                                    type="time"
-                                                    value={data.time}
-                                                    onChange={(e) =>
-                                                        setData(
-                                                            'time',
-                                                            e.target.value,
-                                                        )
-                                                    }
-                                                    onClick={(e) =>
-                                                        (
-                                                            e.target as any
-                                                        ).showPicker?.()
-                                                    }
-                                                    className="block h-10 w-full cursor-pointer pl-10"
-                                                />
-                                                <Clock className="pointer-events-none absolute top-3 left-3 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
-                                            </div>
-                                            {errors.time && (
-                                                <p className="text-xs text-destructive">
-                                                    {errors.time}
-                                                </p>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <Label htmlFor="category">
-                                                Kategori
-                                            </Label>
-                                            <Select
-                                                value={data.category}
-                                                onValueChange={(value) =>
-                                                    setData('category', value)
-                                                }
-                                            >
-                                                <SelectTrigger
-                                                    id="category"
-                                                    className="h-10"
-                                                >
-                                                    <SelectValue placeholder="Pilih kategori" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {categories.map((cat) => (
-                                                        <SelectItem
-                                                            key={cat.id}
-                                                            value={cat.name}
-                                                        >
-                                                            {cat.name}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                            {errors.category && (
-                                                <p className="text-xs text-destructive">
-                                                    {errors.category}
-                                                </p>
-                                            )}
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <div className="flex items-center justify-between">
-                                                <Label htmlFor="attendance_start_time">Waktu Absensi (Batas Telat)</Label>
-                                                <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    className="h-6 px-2 text-[10px] text-primary"
-                                                    onClick={() => {
-                                                        if (data.time) {
-                                                            const [hours, minutes] = data.time.split(':').map(Number);
-                                                            const date = new Date();
-                                                            date.setHours(hours, minutes, 0);
-                                                            // Subtract 1 hour 30 minutes (90 minutes)
-                                                            date.setMinutes(date.getMinutes() - 90);
-                                                            const newTime = `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
-                                                            setData('attendance_start_time', newTime);
-                                                        }
-                                                    }}
-                                                >
-                                                    Set 1.5 Jam Awal
-                                                </Button>
-                                            </div>
-                                            <div className="group relative">
-                                                <Input
-                                                    id="attendance_start_time"
-                                                    type="time"
-                                                    value={data.attendance_start_time}
-                                                    onChange={(e) =>
-                                                        setData(
-                                                            'attendance_start_time',
-                                                            e.target.value,
-                                                        )
-                                                    }
-                                                    onClick={(e) =>
-                                                        (
-                                                            e.target as any
-                                                        ).showPicker?.()
-                                                    }
-                                                    className="block h-10 w-full cursor-pointer pl-10"
-                                                />
-                                                <Timer className="pointer-events-none absolute top-3 left-3 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
-                                            </div>
-                                            <p className="text-[10px] text-muted-foreground italic leading-none">
-                                                Kosong = Mengikuti waktu event.
-                                            </p>
-                                            {errors.attendance_start_time && (
-                                                <p className="text-xs text-destructive">
-                                                    {errors.attendance_start_time}
-                                                </p>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <Label htmlFor="expected">
-                                                Target Peserta
-                                            </Label>
-                                            <div className="relative">
-                                                <Input
-                                                    id="expected"
-                                                    type="number"
-                                                    value={data.expected}
-                                                    onChange={(e) =>
-                                                        setData(
-                                                            'expected',
-                                                            parseInt(
-                                                                e.target.value,
-                                                            ) || 0,
-                                                        )
-                                                    }
-                                                    className="h-10 pl-10"
-                                                />
-                                                <Users className="pointer-events-none absolute top-3 left-3 h-4 w-4 text-muted-foreground" />
-                                            </div>
-                                            {errors.expected && (
-                                                <p className="text-xs text-destructive">
-                                                    {errors.expected}
-                                                </p>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <Label htmlFor="location">
-                                            Lokasi (Nama Ruangan)
-                                        </Label>
-                                        <div className="relative">
-                                            <Input
-                                                id="location"
-                                                value={data.location}
-                                                onChange={(e) =>
-                                                    setData(
-                                                        'location',
-                                                        e.target.value,
-                                                    )
-                                                }
-                                                placeholder="Contoh: Main Hall"
-                                                className="h-10 pl-10"
-                                            />
-                                            <Building className="pointer-events-none absolute top-3 left-3 h-4 w-4 text-muted-foreground" />
-                                        </div>
-                                        {errors.location && (
-                                            <p className="text-xs text-destructive">
-                                                {errors.location}
-                                            </p>
-                                        )}
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <Label htmlFor="address">
-                                            Alamat Lengkap
-                                        </Label>
-                                        <div className="relative">
-                                            <Input
-                                                id="address"
-                                                value={data.address}
-                                                onChange={(e) =>
-                                                    setData(
-                                                        'address',
-                                                        e.target.value,
-                                                    )
-                                                }
-                                                placeholder="Jl. Gajah Mada No. 1..."
-                                                className="h-10 pl-10"
-                                            />
-                                            <MapPin className="pointer-events-none absolute top-3 left-3 h-4 w-4 text-muted-foreground" />
-                                        </div>
-                                        {errors.address && (
-                                            <p className="text-xs text-destructive">
-                                                {errors.address}
-                                            </p>
-                                        )}
-                                    </div>
-                                </div>
-
-                                <div className="space-y-4">
-                                    <div className="flex items-center justify-between gap-4">
-                                        <div className="flex items-center gap-2 text-sm font-semibold tracking-wider text-primary uppercase">
-                                            <ListChecks className="h-4 w-4" />
-                                            Rundown Event
-                                        </div>
-                                        <Badge
-                                            variant="outline"
-                                            className="rounded-md"
-                                        >
-                                            {formatDuration(
-                                                getRundownTotalSeconds(
-                                                    data.rundown_segments,
-                                                ),
-                                            )}
-                                        </Badge>
-                                    </div>
-
-                                    <div className="space-y-3 rounded-xl border bg-muted/10 p-4">
-                                        {data.rundown_segments.length === 0 && (
-                                            <div className="py-6 text-center text-sm text-muted-foreground">
-                                                Belum ada rundown untuk event
-                                                ini.
-                                            </div>
-                                        )}
-
-                                        {data.rundown_segments.map(
-                                            (segment, segmentIndex) => (
-                                                <div
-                                                    key={segmentIndex}
-                                                    className="space-y-3 rounded-lg border bg-background p-3"
-                                                >
-                                                    <div className="grid gap-3 md:grid-cols-[1fr_100px_36px] md:items-end">
-                                                        <div className="space-y-1.5">
-                                                            <Label className="text-[10px] font-bold text-muted-foreground uppercase">
-                                                                Segment
-                                                            </Label>
+                                            <section className="space-y-6">
+                                                <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-primary/70">
+                                                    <span className="h-px w-8 bg-primary/30" />
+                                                    Logistik & Waktu
+                                                </div>
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                    <div className="space-y-2.5">
+                                                        <Label className="text-xs font-bold text-foreground/70 ml-1">Tanggal</Label>
+                                                        <Popover>
+                                                            <PopoverTrigger asChild>
+                                                                <Button
+                                                                    variant="outline"
+                                                                    className={cn(
+                                                                        'h-12 w-full justify-start text-left font-medium rounded-xl bg-muted/20 border-border/40 px-4 transition-all hover:bg-background',
+                                                                        !data.date && 'text-muted-foreground',
+                                                                    )}
+                                                                >
+                                                                    <CalendarIcon className="mr-2 h-4 w-4 opacity-50" />
+                                                                    {data.date ? format(data.date, 'PPP', { locale: id }) : <span>Pilih tanggal</span>}
+                                                                </Button>
+                                                            </PopoverTrigger>
+                                                            <PopoverContent className="w-auto p-0 rounded-2xl border-border/40 shadow-2xl" align="start">
+                                                                <Calendar
+                                                                    mode="single"
+                                                                    selected={data.date}
+                                                                    onSelect={(date: Date | undefined) => setData('date', date)}
+                                                                    initialFocus
+                                                                />
+                                                            </PopoverContent>
+                                                        </Popover>
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        <div className="space-y-2.5">
+                                                            <Label htmlFor="time" className="text-xs font-bold text-foreground/70 ml-1">Mulai</Label>
                                                             <Input
-                                                                value={
-                                                                    segment.title
-                                                                }
-                                                                onChange={(e) =>
-                                                                    updateRundownSegment(
-                                                                        segmentIndex,
-                                                                        {
-                                                                            title: e
-                                                                                .target
-                                                                                .value,
-                                                                        },
-                                                                    )
-                                                                }
-                                                                placeholder="Praise and Worship"
-                                                                className="h-9"
+                                                                id="time"
+                                                                type="time"
+                                                                value={data.time}
+                                                                onChange={(e) => setData('time', e.target.value)}
+                                                                className="h-12 bg-muted/20 border-border/40 focus:bg-background transition-all rounded-xl"
                                                             />
                                                         </div>
-                                                        <div className="space-y-1.5 flex flex-col">
-                                                            <Label className="text-[10px] font-bold text-muted-foreground uppercase">
-                                                                Total
-                                                            </Label>
-                                                            <div className="flex h-9 items-center px-3 rounded-md border bg-muted/50 text-sm font-medium">
-                                                                {formatDuration(getItemTotalSeconds(segment))}
-                                                            </div>
-                                                        </div>
-                                                        <Button
-                                                            type="button"
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="h-9 w-9 text-destructive"
-                                                            onClick={() =>
-                                                                removeRundownSegment(
-                                                                    segmentIndex,
-                                                                )
-                                                            }
-                                                        >
-                                                            <Trash2 className="h-4 w-4" />
-                                                        </Button>
-                                                    </div>
-
-                                                    <div className="space-y-2 border-l pl-3">
-                                                        {segment.items.map(
-                                                            (
-                                                                item,
-                                                                itemIndex,
-                                                            ) => (
-                                                                <div
-                                                                    key={
-                                                                        itemIndex
-                                                                    }
-                                                                    className="grid gap-2 md:grid-cols-[1fr_120px_32px] md:items-center"
-                                                                >
-                                                                    <Input
-                                                                        value={
-                                                                            item.title
-                                                                        }
-                                                                        onChange={(
-                                                                            e,
-                                                                        ) =>
-                                                                            updateRundownItem(
-                                                                                segmentIndex,
-                                                                                itemIndex,
-                                                                                {
-                                                                                    title: e
-                                                                                        .target
-                                                                                        .value,
-                                                                                },
-                                                                            )
-                                                                        }
-                                                                        placeholder="Lagu 1"
-                                                                        className="h-8 text-xs"
-                                                                    />
-                                                                    <Input
-                                                                        type="number"
-                                                                        min="0"
-                                                                        step="0.5"
-                                                                        value={secondsToMinutesInput(
-                                                                            item.duration_seconds,
-                                                                        )}
-                                                                        onChange={(
-                                                                            e,
-                                                                        ) =>
-                                                                            updateRundownItem(
-                                                                                segmentIndex,
-                                                                                itemIndex,
-                                                                                {
-                                                                                    duration_seconds:
-                                                                                        minutesToSeconds(
-                                                                                            e
-                                                                                                .target
-                                                                                                .value,
-                                                                                        ),
-                                                                                },
-                                                                            )
-                                                                        }
-                                                                        placeholder="3"
-                                                                        className="h-8 text-xs"
-                                                                    />
-                                                                    <Button
-                                                                        type="button"
-                                                                        variant="ghost"
-                                                                        size="icon"
-                                                                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                                                                        onClick={() =>
-                                                                            removeRundownItem(
-                                                                                segmentIndex,
-                                                                                itemIndex,
-                                                                            )
-                                                                        }
-                                                                    >
-                                                                        <Minus className="h-3.5 w-3.5" />
-                                                                    </Button>
-                                                                </div>
-                                                            ),
-                                                        )}
-
-                                                        <div className="flex items-center justify-between gap-3">
-                                                            <Button
-                                                                type="button"
-                                                                variant="outline"
-                                                                size="sm"
-                                                                className="h-8 gap-2 text-xs"
-                                                                onClick={() =>
-                                                                    addRundownItem(
-                                                                        segmentIndex,
-                                                                    )
-                                                                }
-                                                            >
-                                                                <Plus className="h-3.5 w-3.5" />
-                                                                Tambah Item
-                                                            </Button>
-                                                            <span className="text-xs text-muted-foreground">
-                                                                Detail:{' '}
-                                                                {formatDuration(
-                                                                    getItemTotalSeconds(
-                                                                        segment,
-                                                                    ),
-                                                                )}
-                                                            </span>
+                                                        <div className="space-y-2.5">
+                                                            <Label htmlFor="attendance_start_time" className="text-xs font-bold text-foreground/70 ml-1">Absen</Label>
+                                                            <Input
+                                                                id="attendance_start_time"
+                                                                type="time"
+                                                                value={data.attendance_start_time}
+                                                                onChange={(e) => setData('attendance_start_time', e.target.value)}
+                                                                className="h-12 bg-muted/20 border-border/40 focus:bg-background transition-all rounded-xl"
+                                                            />
                                                         </div>
                                                     </div>
                                                 </div>
-                                            ),
-                                        )}
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                    <div className="space-y-2.5">
+                                                        <Label htmlFor="expected" className="text-xs font-bold text-foreground/70 ml-1">Target Peserta</Label>
+                                                        <div className="relative">
+                                                            <Users className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40" />
+                                                            <Input
+                                                                id="expected"
+                                                                type="number"
+                                                                value={data.expected}
+                                                                onChange={(e) => setData('expected', parseInt(e.target.value))}
+                                                                className="h-12 bg-muted/20 border-border/40 focus:bg-background transition-all rounded-xl pl-11"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                    <div className="space-y-2.5">
+                                                        <Label htmlFor="location" className="text-xs font-bold text-foreground/70 ml-1">Lokasi</Label>
+                                                        <div className="relative">
+                                                            <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40" />
+                                                            <Input
+                                                                id="location"
+                                                                value={data.location}
+                                                                onChange={(e) => setData('location', e.target.value)}
+                                                                placeholder="Gereja ESC"
+                                                                className="h-12 bg-muted/20 border-border/40 focus:bg-background transition-all rounded-xl pl-11"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-2.5">
+                                                    <Label htmlFor="address" className="text-xs font-bold text-foreground/70 ml-1">Alamat Lengkap</Label>
+                                                    <Textarea
+                                                        id="address"
+                                                        value={data.address}
+                                                        onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setData('address', e.target.value)}
+                                                        placeholder="Jl. Raya..."
+                                                        className="min-h-[100px] bg-muted/20 border-border/40 focus:bg-background transition-all rounded-xl p-4"
+                                                    />
+                                                </div>
+                                            </section>
+                                        </div>
+
+                                        <div className="lg:col-span-5 space-y-6">
+                                            <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-primary/70">
+                                                <span className="h-px w-8 bg-primary/30" />
+                                                Visual Event
+                                            </div>
+                                            <div className="group relative aspect-[4/5] w-full overflow-hidden rounded-[32px] border-2 border-dashed border-muted-foreground/20 bg-muted/5 transition-all hover:border-primary/30 hover:bg-primary/5">
+                                                {imagePreview ? (
+                                                    <>
+                                                        <img
+                                                            src={imagePreview}
+                                                            alt="Preview"
+                                                            className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                                                        />
+                                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-3">
+                                                            <Button
+                                                                type="button"
+                                                                variant="destructive"
+                                                                size="icon"
+                                                                className="h-12 w-12 rounded-full shadow-2xl scale-90 group-hover:scale-100 transition-transform duration-500"
+                                                                onClick={() => {
+                                                                    setImagePreview(null);
+                                                                    setData('image', null);
+                                                                }}
+                                                            >
+                                                                <Trash2 className="h-5 w-5" />
+                                                            </Button>
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <label
+                                                        htmlFor="image-upload"
+                                                        className="flex h-full w-full cursor-pointer flex-col items-center justify-center p-8 text-center"
+                                                    >
+                                                        <div className="relative mb-6">
+                                                            <div className="absolute inset-0 blur-2xl bg-primary/20 rounded-full" />
+                                                            <div className="relative flex h-20 w-20 items-center justify-center rounded-3xl bg-background border border-border/40 shadow-inner group-hover:scale-110 transition-transform duration-500">
+                                                                <ImageIcon className="h-8 w-8 text-primary/40" />
+                                                            </div>
+                                                            <div className="absolute -bottom-2 -right-2 h-8 w-8 rounded-full bg-primary flex items-center justify-center text-white shadow-xl">
+                                                                <Plus className="h-4 w-4" />
+                                                            </div>
+                                                        </div>
+                                                        <p className="text-sm font-bold text-foreground/80">Upload Poster Event</p>
+                                                        <input
+                                                            id="image-upload"
+                                                            type="file"
+                                                            className="hidden"
+                                                            accept="image/*"
+                                                            onChange={handleImageChange}
+                                                        />
+                                                    </label>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Tab 2: Rundown */}
+                            {activeTab === 'rundown' && (
+                                <div className="p-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                    <div className="flex items-center justify-between">
+                                        <div className="space-y-1">
+                                            <h3 className="text-lg font-bold text-foreground/90">Manajemen Rundown</h3>
+                                            <p className="text-xs text-muted-foreground font-medium">Susun jadwal acara dan lampirkan lagu.</p>
+                                        </div>
+                                        <Badge variant="outline" className="px-4 py-2 rounded-xl bg-primary/5 border-primary/10 text-primary font-bold text-[10px] uppercase tracking-widest">
+                                            Estimasi Durasi: {formatDuration(getRundownTotalSeconds(data.rundown_segments))}
+                                        </Badge>
+                                    </div>
+
+                                    <div className="space-y-6">
+                                        {data.rundown_segments.map((segment, segmentIndex) => (
+                                            <div key={segmentIndex} className="group relative rounded-[32px] border border-border/40 bg-card/50 p-6 shadow-sm transition-all hover:shadow-md hover:bg-card">
+                                                <div className="grid gap-6 md:grid-cols-[1fr_200px_48px] items-center">
+                                                    <div className="space-y-2">
+                                                        <Label className="text-[10px] font-black text-primary/70 uppercase tracking-widest ml-1">Nama Segment</Label>
+                                                        <Input
+                                                            value={segment.title}
+                                                            onChange={(e) => updateRundownSegment(segmentIndex, { title: e.target.value })}
+                                                            placeholder="Contoh: Worship Session"
+                                                            className="h-12 bg-background border-border/40 rounded-2xl px-5 text-sm font-bold focus:ring-primary/20"
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <Label className="text-[10px] font-black text-primary/70 uppercase tracking-widest ml-1">Total Durasi</Label>
+                                                        <div className="h-12 flex items-center px-5 rounded-2xl border border-border/40 bg-muted/30 text-sm font-bold text-foreground/70">
+                                                            <Timer className="h-4 w-4 mr-2 text-primary/40" />
+                                                            {formatDuration(getItemTotalSeconds(segment))}
+                                                        </div>
+                                                    </div>
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-12 w-12 rounded-2xl text-destructive hover:bg-destructive/10 transition-colors"
+                                                        onClick={() => removeRundownSegment(segmentIndex)}
+                                                    >
+                                                        <Trash2 className="h-5 w-5" />
+                                                    </Button>
+                                                </div>
+
+                                                <div className="mt-8 space-y-4 relative">
+                                                    <div className="absolute left-6 top-0 bottom-0 w-px bg-gradient-to-b from-primary/20 via-border/40 to-transparent" />
+                                                    
+                                                    {segment.items.map((item, itemIndex) => (
+                                                        <div key={itemIndex} className="relative pl-14 group/item">
+                                                            <div className="absolute left-[22px] top-4 h-3 w-3 rounded-full border-2 border-primary bg-background shadow-lg z-10 group-hover/item:scale-125 transition-transform" />
+                                                            
+                                                            <div className="grid grid-cols-1 md:grid-cols-[1fr_120px_48px] gap-4 items-center p-4 rounded-[20px] bg-background border border-border/30 shadow-sm transition-all hover:border-primary/20 hover:shadow-md">
+                                                                <div className="space-y-3">
+                                                                    <div className="flex gap-2">
+                                                                        <Dialog>
+                                                                            <DialogTrigger asChild>
+                                                                                <Button
+                                                                                    type="button"
+                                                                                    variant="outline"
+                                                                                    className={cn(
+                                                                                        "h-8 text-[9px] font-black uppercase tracking-widest rounded-lg border-dashed",
+                                                                                        item.song ? "bg-primary/5 text-primary border-primary/20" : "text-muted-foreground/60"
+                                                                                    )}
+                                                                                >
+                                                                                    {item.song ? (
+                                                                                        <><Sparkles className="h-3 w-3 mr-1.5" /> {item.song.title}</>
+                                                                                    ) : (
+                                                                                        <><Plus className="h-3 w-3 mr-1.5" /> Lampirkan Lagu</>
+                                                                                    )}
+                                                                                </Button>
+                                                                            </DialogTrigger>
+                                                                            <DialogContent className="max-w-md rounded-[28px] p-0 overflow-hidden border-none shadow-2xl">
+                                                                                <DialogHeader className="bg-muted/30 p-6 border-b">
+                                                                                    <DialogTitle className="font-black tracking-tight">Song Bank</DialogTitle>
+                                                                                    <DialogDescription>Pilih lagu untuk item rundown ini.</DialogDescription>
+                                                                                </DialogHeader>
+                                                                                <div className="p-6">
+                                                                                    <div className="relative mb-4">
+                                                                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50" />
+                                                                                        <Input placeholder="Cari lagu..." className="pl-10 h-10 rounded-xl" onChange={(e) => {
+                                                                                            const term = e.target.value.toLowerCase();
+                                                                                            document.querySelectorAll('.song-item-row').forEach((el: any) => {
+                                                                                                el.style.display = el.getAttribute('data-title').toLowerCase().includes(term) ? 'flex' : 'none';
+                                                                                            });
+                                                                                        }} />
+                                                                                    </div>
+                                                                                    <div className="max-h-[300px] overflow-y-auto space-y-1 pr-2 custom-scrollbar">
+                                                                                        {songs.map((song) => (
+                                                                                            <DialogClose key={song.id} asChild>
+                                                                                                <Button variant="ghost" className="song-item-row w-full justify-between h-11 px-4 rounded-xl text-xs font-semibold hover:bg-primary/5 hover:text-primary transition-all" data-title={song.title} onClick={() => updateRundownItem(segmentIndex, itemIndex, { song_id: song.id, song, title: song.title })}>
+                                                                                                    <span>{song.title}</span>
+                                                                                                    {song.keys && <Badge variant="outline" className="text-[9px] font-black">{song.keys}</Badge>}
+                                                                                                </Button>
+                                                                                            </DialogClose>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                </div>
+                                                                            </DialogContent>
+                                                                        </Dialog>
+                                                                    </div>
+                                                                    <Input
+                                                                        value={item.title}
+                                                                        onChange={(e) => updateRundownItem(segmentIndex, itemIndex, { title: e.target.value })}
+                                                                        placeholder="Judul Aktivitas"
+                                                                        className="h-10 bg-muted/10 border-none rounded-xl text-xs font-bold focus:ring-0 px-3"
+                                                                    />
+                                                                </div>
+                                                                <div className="relative">
+                                                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-muted-foreground/40 uppercase">Min</span>
+                                                                    <Input
+                                                                        type="number"
+                                                                        value={secondsToMinutesInput(item.duration_seconds)}
+                                                                        onChange={(e) => updateRundownItem(segmentIndex, itemIndex, { duration_seconds: minutesToSeconds(e.target.value) })}
+                                                                        className="h-10 bg-muted/20 border-border/20 rounded-xl px-4 text-xs font-black"
+                                                                    />
+                                                                </div>
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    className="h-10 w-10 rounded-xl text-muted-foreground/40 hover:text-destructive hover:bg-destructive/5"
+                                                                    onClick={() => removeRundownItem(segmentIndex, itemIndex)}
+                                                                >
+                                                                    <Minus className="h-4 w-4" />
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+
+                                                    <div className="pl-14 pt-2">
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            className="h-10 gap-2 text-[10px] font-black uppercase tracking-widest text-primary hover:bg-primary/5 rounded-xl border border-dashed border-primary/20"
+                                                            onClick={() => addRundownItem(segmentIndex)}
+                                                        >
+                                                            <Plus className="h-4 w-4" />
+                                                            Tambah Item
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
 
                                         <Button
                                             type="button"
                                             variant="outline"
-                                            className="w-full gap-2"
+                                            className="w-full h-16 rounded-[28px] border-dashed border-2 border-muted-foreground/20 bg-muted/5 hover:bg-primary/5 hover:border-primary/20 transition-all flex flex-col items-center justify-center gap-1 group"
                                             onClick={addRundownSegment}
                                         >
-                                            <Plus className="h-4 w-4" />
-                                            Tambah Segment Rundown
+                                            <div className="flex items-center gap-2 text-sm font-bold text-foreground/70 group-hover:text-primary">
+                                                <Plus className="h-5 w-5" />
+                                                Tambah Segment Rundown Baru
+                                            </div>
                                         </Button>
                                     </div>
                                 </div>
+                            )}
 
-                                <div className="space-y-4">
-                                    <div className="flex items-center gap-2 text-sm font-semibold tracking-wider text-primary uppercase">
-                                        <ImageIcon className="h-4 w-4" />
-                                        Poster / Gambar Event
+                            {/* Tab 3: Volunteers */}
+                            {activeTab === 'volunteers' && (
+                                <div className="p-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                    <div className="flex items-center justify-between">
+                                        <div className="space-y-1">
+                                            <h3 className="text-lg font-bold text-foreground/90">Penugasan Tim Pelayanan</h3>
+                                            <p className="text-xs text-muted-foreground font-medium">Tentukan volunteer yang akan bertugas.</p>
+                                        </div>
+                                        <Badge variant="outline" className="px-4 py-2 rounded-xl bg-primary/5 border-primary/10 text-primary font-bold text-[10px] uppercase tracking-widest">
+                                            {data.volunteers.filter(v => v.member_id).length} Posisi Terisi
+                                        </Badge>
                                     </div>
-                                    <div className="flex flex-col gap-4">
-                                        {imagePreview ? (
-                                            <div className="relative aspect-video w-full overflow-hidden rounded-lg border bg-muted">
-                                                <img
-                                                    src={imagePreview}
-                                                    alt="Preview"
-                                                    className="h-full w-full object-cover"
-                                                />
-                                                <Button
-                                                    type="button"
-                                                    variant="destructive"
-                                                    size="icon"
-                                                    className="absolute top-2 right-2 h-8 w-8 rounded-full shadow-lg"
-                                                    onClick={() => {
-                                                        setImagePreview(null);
-                                                        setData('image', null);
-                                                    }}
-                                                >
-                                                    <X className="h-4 w-4" />
-                                                </Button>
-                                            </div>
-                                        ) : (
-                                            <label
-                                                htmlFor="image-upload"
-                                                className="flex aspect-video w-full cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed transition-colors hover:bg-muted/50"
-                                            >
-                                                <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                                                    <Plus className="mb-3 h-8 w-8 text-muted-foreground" />
-                                                    <p className="mb-2 text-sm font-medium text-muted-foreground">
-                                                        Klik untuk upload gambar
-                                                    </p>
-                                                    <p className="text-xs text-muted-foreground/60">
-                                                        PNG, JPG atau GIF (Maks.
-                                                        2MB)
-                                                    </p>
-                                                </div>
-                                                <input
-                                                    id="image-upload"
-                                                    type="file"
-                                                    className="hidden"
-                                                    accept="image/*"
-                                                    onChange={handleImageChange}
-                                                />
-                                            </label>
-                                        )}
-                                        {errors.image && (
-                                            <p className="text-xs text-destructive">
-                                                {errors.image}
-                                            </p>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
 
-                            {/* Right Column: Volunteers */}
-                            <div className="mt-8 space-y-4 lg:col-span-5 lg:mt-0 lg:pl-8">
-                                <div className="flex items-center gap-2 text-sm font-semibold tracking-wider text-primary uppercase">
-                                    <Users className="h-4 w-4" />
-                                    Penugasan Volunteer
-                                </div>
-                                <div className="overflow-hidden rounded-xl border bg-muted/10">
-                                    <div className="max-h-[600px] space-y-3 overflow-y-auto p-4">
-                                        {volunteerGroups.length > 0 ? (
-                                            volunteerGroups.map((group) => (
-                                                <Collapsible
-                                                    key={group.category}
-                                                    open={openCategories.includes(
-                                                        group.category,
-                                                    )}
-                                                    onOpenChange={() =>
-                                                        toggleCategory(
-                                                            group.category,
-                                                        )
-                                                    }
-                                                    className="rounded-lg border bg-background"
-                                                >
-                                                    <CollapsibleTrigger asChild>
-                                                        <Button
-                                                            variant="ghost"
-                                                            className="flex h-auto w-full items-center justify-between p-3 hover:bg-muted/50"
-                                                        >
-                                                            <span className="text-xs font-bold tracking-tight text-foreground/70 uppercase">
-                                                                {group.category}
-                                                            </span>
-                                                            {openCategories.includes(
-                                                                group.category,
-                                                            ) ? (
-                                                                <ChevronUp className="h-4 w-4" />
-                                                            ) : (
-                                                                <ChevronDown className="h-4 w-4" />
-                                                            )}
-                                                        </Button>
-                                                    </CollapsibleTrigger>
-                                                    <CollapsibleContent className="space-y-4 px-3 pb-4">
-                                                        {group.roles.map(
-                                                            (role) => (
-                                                                <div
-                                                                    key={role}
-                                                                    className="space-y-1.5"
-                                                                >
-                                                                    <Label className="pl-1 text-[10px] font-bold text-muted-foreground/80 uppercase">
-                                                                        {role}
-                                                                    </Label>
-                                                                    <SearchableSelect
-                                                                        value={getVolunteerValue(
-                                                                            group.category,
-                                                                            role,
-                                                                        )}
-                                                                        onSelect={(
-                                                                            val,
-                                                                        ) =>
-                                                                            setVolunteerValue(
-                                                                                group.category,
-                                                                                role,
-                                                                                val,
-                                                                            )
-                                                                        }
-                                                                        external_members={
-                                                                            external_members
-                                                                        }
-                                                                    />
+                                    {volunteerGroups.length > 0 ? (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            {volunteerGroups.map((group) => (
+                                                <div key={group.category} className="rounded-[32px] border border-border/40 bg-card/50 overflow-hidden shadow-sm hover:shadow-md transition-all">
+                                                    <div className="bg-muted/30 px-6 py-4 border-b border-border/40 flex items-center justify-between">
+                                                        <h4 className="text-xs font-black tracking-[0.15em] text-foreground/70 uppercase flex items-center gap-2">
+                                                            <Users className="h-4 w-4 text-primary/50" />
+                                                            {group.category}
+                                                        </h4>
+                                                        <Badge className="bg-primary/10 text-primary hover:bg-primary/20 border-none font-bold text-[10px]">
+                                                            {group.roles.length} Posisi
+                                                        </Badge>
+                                                    </div>
+                                                    <div className="p-4 space-y-3">
+                                                        {group.roles.map((role) => (
+                                                            <div key={role.id} className="flex flex-col gap-2 p-3 rounded-2xl bg-background border border-border/30 group/role hover:border-primary/20 transition-all">
+                                                                <div className="flex items-center justify-between px-1">
+                                                                    <span className="text-[10px] font-bold text-muted-foreground/70 uppercase tracking-tighter">{role.role_name}</span>
+                                                                    {getVolunteerValue(group.category, role.role_name, role.id) && (
+                                                                        <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                                                                    )}
                                                                 </div>
-                                                            ),
-                                                        )}
-                                                    </CollapsibleContent>
-                                                </Collapsible>
-                                            ))
-                                        ) : (
-                                            <div className="py-10 text-center text-muted-foreground">
-                                                <p className="text-sm">
-                                                    Pilih kategori untuk melihat
-                                                    daftar volunteer.
-                                                </p>
+                                                                <SearchableSelect
+                                                                    value={getVolunteerValue(group.category, role.role_name, role.id)}
+                                                                    onSelect={(val) => setVolunteerValue(group.category, role.role_name, val, role.id)}
+                                                                    external_members={external_members}
+                                                                />
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-col items-center justify-center py-20 px-10 rounded-[40px] border-2 border-dashed border-muted-foreground/20 bg-muted/5 text-center">
+                                            <div className="h-20 w-20 rounded-[28px] bg-background border border-border/40 flex items-center justify-center shadow-inner mb-6">
+                                                <Users className="h-10 w-10 text-muted-foreground/20" />
                                             </div>
-                                        )}
-                                    </div>
+                                            <h4 className="text-xl font-bold text-foreground/90">Kategori Belum Dipilih</h4>
+                                            <Button 
+                                                variant="outline" 
+                                                className="mt-8 h-12 px-8 rounded-2xl border-primary/20 text-primary font-bold hover:bg-primary/5"
+                                                onClick={() => setActiveTab('basic')}
+                                            >
+                                                Kembali ke Informasi Dasar
+                                            </Button>
+                                        </div>
+                                    )}
                                 </div>
-                            </div>
+                            )}
                         </div>
 
-                        <div className="border-t bg-muted/20 p-6 pt-4">
-                            <DialogFooter className="flex-row justify-end gap-3">
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    className="h-10"
-                                    onClick={() => {
-                                        setIsAddModalOpen(false);
-                                        setEditingEvent(null);
-                                        setImagePreview(null);
-                                        reset();
-                                    }}
-                                >
-                                    Batal
-                                </Button>
+                        {/* Footer */}
+                        <div className="p-8 bg-gradient-to-t from-background via-background to-transparent border-t border-border/40 flex items-center justify-between backdrop-blur-md">
+                            <div className="flex items-center gap-3 text-muted-foreground">
+                                <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                                <span className="text-[10px] font-bold uppercase tracking-widest opacity-60">Sistem Siap</span>
+                            </div>
+                            <div className="flex gap-4">
+                                <DialogClose asChild>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        className="h-14 px-8 rounded-[20px] font-bold text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                                    >
+                                        Batal
+                                    </Button>
+                                </DialogClose>
                                 <Button
                                     type="submit"
                                     disabled={processing}
-                                    className="h-10 px-8"
+                                    className="h-14 px-10 rounded-[20px] font-bold shadow-2xl shadow-primary/20 hover:shadow-primary/40 transition-all duration-500 active:scale-95"
                                 >
-                                    {processing
-                                        ? 'Menyimpan...'
-                                        : editingEvent
-                                          ? 'Simpan Perubahan'
-                                          : 'Buat Event'}
+                                    {processing ? 'Menyimpan...' : (editingEvent ? 'Simpan Perubahan' : 'Buat Event')}
                                 </Button>
-                            </DialogFooter>
+                            </div>
                         </div>
                     </form>
                 </DialogContent>
@@ -1844,6 +1292,14 @@ export default function Events({
                                         </p>
                                         <p className="text-sm font-semibold">
                                             {viewingEvent.time}
+                                        </p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <p className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
+                                            Waktu Absen
+                                        </p>
+                                        <p className="text-sm font-semibold">
+                                            {viewingEvent.attendance_start_time || '-'}
                                         </p>
                                     </div>
                                     <div className="space-y-1">
@@ -1947,11 +1403,16 @@ export default function Events({
                                                                             }
                                                                             className="flex items-center justify-between gap-3 py-2 text-sm"
                                                                         >
-                                                                            <span className="text-muted-foreground">
-                                                                                {
-                                                                                    item.title
-                                                                                }
-                                                                            </span>
+                                                                            <div className="flex items-center gap-2">
+                                                                                <span className="text-muted-foreground">
+                                                                                    {item.title}
+                                                                                </span>
+                                                                                {item.song && (
+                                                                                    <Badge variant="secondary" className="h-4 px-1 text-[9px] font-bold">
+                                                                                        {item.song.keys}
+                                                                                    </Badge>
+                                                                                )}
+                                                                            </div>
                                                                             <span className="font-medium">
                                                                                 {formatDuration(
                                                                                     item.duration_seconds,
@@ -2204,11 +1665,16 @@ export default function Events({
                                                                         }
                                                                         className="flex items-center justify-between gap-3 py-2 text-sm"
                                                                     >
-                                                                        <span className="text-muted-foreground">
-                                                                            {
-                                                                                item.title
-                                                                            }
-                                                                        </span>
+                                                                        <div className="flex items-center gap-2">
+                                                                            <span className="text-muted-foreground">
+                                                                                {item.title}
+                                                                            </span>
+                                                                            {item.song && (
+                                                                                <Badge variant="secondary" className="h-4 px-1 text-[9px] font-bold">
+                                                                                    {item.song.keys}
+                                                                                </Badge>
+                                                                            )}
+                                                                        </div>
                                                                         <span className="font-medium">
                                                                             {formatDuration(
                                                                                 item.duration_seconds,

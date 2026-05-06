@@ -9,14 +9,16 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 
 use App\Models\Category;
+use App\Models\Song;
 
 class EventController extends Controller
 {
     public function index()
     {
         return Inertia::render('events/index', [
-            'events' => Event::with(['volunteers.member', 'rundownSegments.items'])->orderBy('date', 'desc')->get(),
+            'events' => Event::with(['volunteers.member', 'rundownSegments.items.song'])->orderBy('date', 'desc')->get(),
             'categories' => Category::with('roles.department')->get(),
+            'songs' => Song::orderBy('title')->get(),
             'external_members' => ExternalMember::select('idjemaat', 'namalengkap')->get()->map(function($m) {
                 return [
                     'id' => $m->idjemaat,
@@ -159,6 +161,7 @@ class EventController extends Controller
 
                 $createdSegment->items()->create([
                     'title' => $itemTitle,
+                    'song_id' => !empty($item['song_id']) ? $item['song_id'] : null,
                     'duration_seconds' => max(0, (int) ($item['duration_seconds'] ?? 0)),
                     'sort_order' => $itemIndex,
                 ]);

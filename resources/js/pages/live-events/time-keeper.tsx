@@ -182,7 +182,7 @@ export default function TimeKeeper({
                             </SelectTrigger>
                             <SelectContent className="bg-[#111] border-white/10 text-white">
                                 {events.map((event) => (
-                                    <SelectItem key={event.id} value={event.id.toString()} className="focus:bg-white/10 focus:text-white">
+                                    <SelectItem key={`tk-event-${event.id}`} value={event.id.toString()} className="focus:bg-white/10 focus:text-white">
                                         {event.title}
                                     </SelectItem>
                                 ))}

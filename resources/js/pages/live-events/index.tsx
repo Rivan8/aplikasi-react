@@ -289,7 +289,7 @@ export default function LiveEvents({
                             <SelectContent>
                                 {events.map((event) => (
                                     <SelectItem
-                                        key={event.id}
+                                        key={`event-${event.id}`}
                                         value={event.id.toString()}
                                     >
                                         {event.title}
@@ -516,9 +516,9 @@ export default function LiveEvents({
                                             </div>
                                             <div className="divide-y">
                                                 {currentSegment.items.map(
-                                                    (item) => (
+                                                    (item, idx) => (
                                                         <div
-                                                            key={item.id}
+                                                            key={`item-${item.id}-${idx}`}
                                                             className="flex items-center justify-between gap-4 px-5 py-3 text-sm"
                                                         >
                                                             <span className="text-muted-foreground">
@@ -612,7 +612,7 @@ export default function LiveEvents({
 
                                                 return (
                                                     <div
-                                                        key={segment.id}
+                                                        key={`segment-card-${segment.id}-${index}`}
                                                         className={`rounded-lg border p-3 ${
                                                             active
                                                                 ? 'border-primary bg-primary/5'
@@ -693,7 +693,7 @@ export default function LiveEvents({
 
                                             return (
                                                 <div
-                                                    key={segment.id}
+                                                    key={`segment-report-${segment.id}-${index}`}
                                                     className="grid gap-4 p-5 md:grid-cols-[1fr_140px_140px_140px]"
                                                 >
                                                     <div className="flex items-start gap-3">
