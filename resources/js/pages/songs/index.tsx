@@ -48,6 +48,8 @@ interface Song {
     arrangement_name: string | null;
     keys: string | null;
     bpm: string | null;
+    time_signature?: string | null;
+    song_flow?: string | null;
     has_lyrics: boolean;
     has_chords: boolean;
     has_pdf: boolean;
@@ -74,6 +76,10 @@ interface Props {
 
 const MUSICAL_KEYS = [
     'A', 'A#', 'B', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#'
+];
+
+const TIME_SIGNATURES = [
+    '4/4', '3/4', '2/4', '6/8', '12/8', '2/2'
 ];
 
 export default function SongsIndex({ songs, filters, breadcrumbs }: Props) {
@@ -167,8 +173,8 @@ export default function SongsIndex({ songs, filters, breadcrumbs }: Props) {
             arrangement_name: song.arrangement_name || '',
             keys: song.keys || 'C',
             bpm: song.bpm || '',
-            song_flow: (song as any).song_flow || '',
-            time_signature: (song as any).time_signature || '4/4',
+            song_flow: song.song_flow || '',
+            time_signature: song.time_signature || '4/4',
             lyrics: song.lyrics || '',
             chords: song.chords || '',
             video_url: song.video_url || '',
@@ -394,7 +400,7 @@ export default function SongsIndex({ songs, filters, breadcrumbs }: Props) {
                                             {errors.arrangement_name && <p className="text-xs text-destructive">{errors.arrangement_name}</p>}
                                         </div>
 
-                                        <div className="grid grid-cols-2 gap-4">
+                                        <div className="grid grid-cols-3 gap-4">
                                             <div className="space-y-2">
                                                 <Label>Key (Nada Dasar)</Label>
                                                 <Select value={data.keys} onValueChange={val => setData('keys', val)}>
@@ -414,9 +420,23 @@ export default function SongsIndex({ songs, filters, breadcrumbs }: Props) {
                                                 <Input 
                                                     value={data.bpm} 
                                                     onChange={e => setData('bpm', e.target.value)} 
-                                                    placeholder="Contoh: 70-80"
+                                                    placeholder="Contoh: 70"
                                                 />
                                                 {errors.bpm && <p className="text-xs text-destructive">{errors.bpm}</p>}
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label>Ketukan (Time Sig.)</Label>
+                                                <Select value={data.time_signature || '4/4'} onValueChange={val => setData('time_signature', val)}>
+                                                    <SelectTrigger className="h-10">
+                                                        <SelectValue placeholder="Pilih Ketukan" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {TIME_SIGNATURES.map(sig => (
+                                                            <SelectItem key={sig} value={sig}>{sig}</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                                {errors.time_signature && <p className="text-xs text-destructive">{errors.time_signature}</p>}
                                             </div>
                                         </div>
                                     </div>

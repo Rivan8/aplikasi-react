@@ -1421,7 +1421,7 @@ export default function Dashboard({
                                                                             <Music className="h-3.5 w-3.5 text-primary/60 group-hover/song:text-primary transition-colors" />
                                                                             <div className="flex items-center gap-2">
                                                                                 <span className="text-sm font-bold text-foreground group-hover/song:text-primary transition-colors">
-                                                                                    {item.song.title}
+                                                                                    {item.song.title} {item.song.song_flow && <span className="text-[10px] ml-2 text-emerald-600">({item.song.song_flow})</span>}
                                                                                 </span>
                                                                                 <span className="text-xs text-muted-foreground">
                                                                                     {item.song.artist}
