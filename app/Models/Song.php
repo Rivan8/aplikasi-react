@@ -3,32 +3,20 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Song extends Model
 {
     protected $fillable = [
         'title',
-        'arrangement_name',
-        'bpm',
-        'keys',
-        'last_scheduled_at',
-        'has_lyrics',
-        'has_chords',
-        'has_pdf',
-        'has_audio',
-        'lyrics',
-        'chords',
-        'video_url',
-        'pdf_path',
-        'song_flow',
-        'time_signature',
+        'artist',
     ];
 
-    protected $casts = [
-        'last_scheduled_at' => 'datetime',
-        'has_lyrics' => 'boolean',
-        'has_chords' => 'boolean',
-        'has_pdf' => 'boolean',
-        'has_audio' => 'boolean',
-    ];
+    /**
+     * Get the arrangements for the song.
+     */
+    public function arrangements(): HasMany
+    {
+        return $this->hasMany(SongArrangement::class);
+    }
 }

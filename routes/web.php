@@ -32,7 +32,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             'rundownSegments.items' => function ($query) {
                 $query->orderBy('sort_order');
             },
-            'rundownSegments.items.song',
+            'rundownSegments.items.song.arrangements',
+            'rundownSegments.items.arrangement',
             'volunteers',
             'attendances',
         ])
@@ -237,13 +238,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
                             'song' => $item->song ? [
                                 'id' => $item->song->id,
                                 'title' => $item->song->title,
-                                'artist' => $item->song->arrangement_name,
-                                'key' => $item->song->keys,
-                                'bpm' => $item->song->bpm,
-                                'lyrics' => $item->song->lyrics,
-                                'video_url' => $item->song->video_url,
-                                'song_flow' => $item->song->song_flow,
-                                'time_signature' => $item->song->time_signature,
+                                'artist' => $item->song->artist,
+                                'key' => ($item->arrangement ?: $item->song->arrangements->first())?->keys,
+                                'bpm' => ($item->arrangement ?: $item->song->arrangements->first())?->bpm,
+                                'lyrics' => ($item->arrangement ?: $item->song->arrangements->first())?->lyrics,
+                                'video_url' => ($item->arrangement ?: $item->song->arrangements->first())?->video_url,
+                                'song_flow' => ($item->arrangement ?: $item->song->arrangements->first())?->song_flow,
+                                'time_signature' => ($item->arrangement ?: $item->song->arrangements->first())?->time_signature,
                             ] : null,
                         ])->all(),
                     ])->all(),
@@ -390,6 +391,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Song Bank Routes
     Route::resource('songs', SongController::class)->except(['create', 'edit', 'show']);
+    Route::post('songs/{song}/arrangements', [SongController::class, 'storeArrangement'])->name('songs.arrangements.store');
+    Route::put('arrangements/{arrangement}', [SongController::class, 'updateArrangement'])->name('arrangements.update');
+    Route::delete('arrangements/{arrangement}', [SongController::class, 'destroyArrangement'])->name('arrangements.destroy');
 
     // QR Attendance Routes
     Route::get('my/scan', [AttendanceController::class, 'showUserScan'])->name('my.scan');

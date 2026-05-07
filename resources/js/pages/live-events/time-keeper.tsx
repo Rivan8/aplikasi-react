@@ -9,11 +9,17 @@ import {
 import { Head, router } from '@inertiajs/react';
 import { CheckCircle2, Clock, Maximize2, Minimize2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { cn } from '@/lib/utils';
 
 interface RundownItem {
     id: number;
     title: string;
     duration_seconds: number;
+    song?: {
+        id: number;
+        title: string;
+        song_flow?: string;
+    } | null;
 }
 
 interface RundownSegment {
@@ -128,6 +134,21 @@ export default function TimeKeeper({
     const progressPercent = Math.min(100, Math.max(0, (segmentElapsedSeconds / currentPlannedSeconds) * 100));
     const isOverrun = countdownSeconds < 0;
     const isWarning = countdownSeconds <= 30 && countdownSeconds >= 0 && isRunning;
+    
+    // Calculate active item within the segment based on elapsed time
+    const activeItem = useMemo(() => {
+        if (!currentSegment || !currentSegment.items || currentSegment.items.length === 0) return null;
+        
+        let accumulatedSeconds = 0;
+        for (const item of currentSegment.items) {
+            accumulatedSeconds += item.duration_seconds;
+            if (segmentElapsedSeconds < accumulatedSeconds) {
+                return item;
+            }
+        }
+        // Fallback to the last item if time exceeds total planned duration
+        return currentSegment.items[currentSegment.items.length - 1];
+    }, [currentSegment, segmentElapsedSeconds]);
 
     const selectEvent = (eventId: string) => {
         router.get('/live-events/time-keeper', { event_id: eventId }, { preserveScroll: true, preserveState: true });
@@ -227,8 +248,41 @@ export default function TimeKeeper({
                     </div>
 
                     <h2 className="text-4xl md:text-6xl font-black tracking-tight text-white/90 drop-shadow-2xl">
-                        {currentSegment?.title ?? 'Silakan Pilih Event'}
+                        {activeItem?.title || currentSegment?.title || 'Silakan Pilih Event'}
                     </h2>
+
+                    {/* Song Flow Display - Aesthetic Sequence */}
+                    {activeItem?.song?.song_flow && (
+                        <div className="mt-12 flex flex-wrap justify-center items-center gap-4 animate-in fade-in zoom-in duration-1000">
+                            {activeItem.song.song_flow.split(/[->|]/).map((part, index, array) => (
+                                <div key={index} className="flex items-center gap-4">
+                                    <div className={cn(
+                                        "px-8 py-4 rounded-2xl backdrop-blur-3xl border transition-all duration-500 flex flex-col items-center group",
+                                        index === 0 
+                                            ? "bg-emerald-500/20 border-emerald-500/30 shadow-[0_0_40px_rgba(16,185,129,0.15)]" 
+                                            : "bg-white/5 border-white/10"
+                                    )}>
+                                        <span className={cn(
+                                            "text-[9px] font-black tracking-[0.5em] uppercase mb-1",
+                                            index === 0 ? "text-emerald-400/60" : "text-white/20"
+                                        )}>
+                                            Part {index + 1}
+                                        </span>
+                                        <span className={cn(
+                                            "text-xl md:text-3xl font-black tracking-widest uppercase",
+                                            index === 0 ? "text-emerald-400" : "text-white/80"
+                                        )}>
+                                            {part.trim()}
+                                        </span>
+                                    </div>
+                                    
+                                    {index < array.length - 1 && (
+                                        <div className="h-px w-6 bg-gradient-to-r from-white/20 to-transparent" />
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 {/* Big Timer */}

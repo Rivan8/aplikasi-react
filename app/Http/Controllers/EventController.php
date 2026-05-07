@@ -16,9 +16,9 @@ class EventController extends Controller
     public function index()
     {
         return Inertia::render('events/index', [
-            'events' => Event::with(['volunteers.member', 'rundownSegments.items.song'])->orderBy('date', 'desc')->get(),
+            'events' => Event::with(['volunteers.member', 'rundownSegments.items.song', 'rundownSegments.items.arrangement'])->orderBy('date', 'desc')->get(),
             'categories' => Category::with('roles.department')->get(),
-            'songs' => Song::orderBy('title')->get(),
+            'songs' => Song::with('arrangements')->orderBy('title')->get(),
             'external_members' => ExternalMember::select('idjemaat', 'namalengkap')->get()->map(function($m) {
                 return [
                     'id' => $m->idjemaat,
@@ -162,6 +162,7 @@ class EventController extends Controller
                 $createdSegment->items()->create([
                     'title' => $itemTitle,
                     'song_id' => !empty($item['song_id']) ? $item['song_id'] : null,
+                    'song_arrangement_id' => !empty($item['song_arrangement_id']) ? $item['song_arrangement_id'] : null,
                     'duration_seconds' => max(0, (int) ($item['duration_seconds'] ?? 0)),
                     'sort_order' => $itemIndex,
                 ]);

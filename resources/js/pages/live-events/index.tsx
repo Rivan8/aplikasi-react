@@ -30,6 +30,11 @@ interface RundownItem {
     id: number;
     title: string;
     duration_seconds: number;
+    song?: {
+        id: number;
+        title: string;
+        song_flow?: string;
+    } | null;
 }
 
 interface RundownSegment {
@@ -521,9 +526,16 @@ export default function LiveEvents({
                                                             key={`item-${item.id}-${idx}`}
                                                             className="flex items-center justify-between gap-4 px-5 py-3 text-sm"
                                                         >
-                                                            <span className="text-muted-foreground">
-                                                                {item.title}
-                                                            </span>
+                                                            <div className="flex flex-col gap-1">
+                                                                <span className="text-foreground">
+                                                                    {item.title}
+                                                                </span>
+                                                                {item.song?.song_flow && (
+                                                                    <span className="text-[10px] text-emerald-600 font-bold uppercase tracking-tight">
+                                                                        Flow: {item.song.song_flow}
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                             <span className="font-mono font-semibold">
                                                                 {formatDuration(
                                                                     item.duration_seconds,
@@ -719,8 +731,13 @@ export default function LiveEvents({
                                                                     .map(
                                                                         (
                                                                             item,
-                                                                        ) =>
-                                                                            item.title,
+                                                                        ) => {
+                                                                            let label = item.title;
+                                                                            if (item.song?.song_flow) {
+                                                                                label += ` (${item.song.song_flow})`;
+                                                                            }
+                                                                            return label;
+                                                                        },
                                                                     )
                                                                     .join(
                                                                         ', ',

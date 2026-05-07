@@ -19,10 +19,9 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
-import { index as songsIndex } from '@/routes/songs';
 import { type BreadcrumbItem } from '@/types';
 import { cn } from '@/lib/utils';
-import { Head, Link, router, useForm } from '@inertiajs/react';
+import { Head, router, useForm } from '@inertiajs/react';
 import { 
     Music, 
     Search, 
@@ -38,26 +37,48 @@ import {
     PlusCircle,
     Trash,
     Eye,
+    ChevronRight,
+    Clock,
+    Hash,
+    MoreVertical,
+    PlusSquare,
+    Link as LinkIcon,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { toast } from 'sonner';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
-interface Song {
+interface SongArrangement {
     id: number;
-    title: string;
-    arrangement_name: string | null;
-    keys: string | null;
+    song_id: number;
+    name: string;
+    duration: string | null;
     bpm: string | null;
-    time_signature?: string | null;
-    song_flow?: string | null;
+    time_signature: string | null;
+    song_flow: string | null;
+    keys: string | null;
+    lyrics: string | null;
+    chords: string | null;
+    video_url: string | null;
+    pdf_path: string | null;
     has_lyrics: boolean;
     has_chords: boolean;
     has_pdf: boolean;
     has_audio: boolean;
-    lyrics?: string | null;
-    chords?: string | null;
-    video_url?: string | null;
-    pdf_path?: string | null;
+    created_at: string;
+}
+
+interface Song {
+    id: number;
+    title: string;
+    artist: string | null;
+    arrangements: SongArrangement[];
+    created_at: string;
 }
 
 interface Props {
@@ -74,551 +95,620 @@ interface Props {
     breadcrumbs: BreadcrumbItem[];
 }
 
-const MUSICAL_KEYS = [
-    'A', 'A#', 'B', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#'
-];
-
-const TIME_SIGNATURES = [
-    '4/4', '3/4', '2/4', '6/8', '12/8', '2/2'
-];
+const MUSICAL_KEYS = ['A', 'A#', 'B', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#'];
+const TIME_SIGNATURES = ['4/4', '3/4', '2/4', '6/8', '12/8', '2/2'];
 
 export default function SongsIndex({ songs, filters, breadcrumbs }: Props) {
     const [search, setSearch] = useState(filters.search || '');
-    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [selectedSongId, setSelectedSongId] = useState<number | null>(songs.data[0]?.id || null);
+    const [selectedArrangementId, setSelectedArrangementId] = useState<number | null>(null);
+    
+    // Modal states
+    const [isSongModalOpen, setIsSongModalOpen] = useState(false);
+    const [isArrangementModalOpen, setIsArrangementModalOpen] = useState(false);
     const [editingSong, setEditingSong] = useState<Song | null>(null);
-    const [activeTab, setActiveTab] = useState<'info' | 'lyrics' | 'media'>('info');
+    const [editingArrangement, setEditingArrangement] = useState<SongArrangement | null>(null);
+    
+    const selectedSong = useMemo(() => 
+        songs.data.find(s => s.id === selectedSongId) || null
+    , [selectedSongId, songs.data]);
 
-    const { data, setData, post, reset, processing, errors } = useForm({
+    const activeArrangement = useMemo(() => {
+        if (!selectedSong) return null;
+        if (selectedArrangementId) {
+            return selectedSong.arrangements.find(a => a.id === selectedArrangementId) || selectedSong.arrangements[0];
+        }
+        return selectedSong.arrangements[0];
+    }, [selectedSong, selectedArrangementId]);
+
+    // Forms
+    const songForm = useForm({
         title: '',
-        arrangement_name: '',
-        keys: 'C',
+        artist: '',
+        // Initial arrangement data (for new song)
+        arrangement_name: 'Default Arrangement',
+        duration: '',
         bpm: '',
-        song_flow: '',
         time_signature: '4/4',
-        lyrics: '',
-        chords: '',
-        video_url: '',
-        pdf_file: null as File | null,
-        _method: 'POST',
     });
 
-    // Structured lyric sections: [{heading: 'Verse 1', body: '...'}]
+    const arrangementForm = useForm({
+        name: '',
+        duration: '',
+        bpm: '',
+        time_signature: '4/4',
+        song_flow: '',
+        keys: 'C',
+        lyrics: '',
+        video_url: '',
+        pdf_file: null as File | null,
+        _method: 'POST' as 'POST' | 'PUT',
+    });
+
     const [lyricSections, setLyricSections] = useState<{heading: string; body: string}[]>([]);
-
-    // Sync lyricSections -> data.lyrics (plain text format)
-    const syncLyrics = (sections: {heading: string; body: string}[]) => {
-        const text = sections
-            .map(s => `${s.heading}\n${s.body}`)
-            .join('\n\n');
-        setData('lyrics', text);
-    };
-
-    const addSection = () => {
-        const next = [...lyricSections, { heading: 'Section', body: '' }];
-        setLyricSections(next);
-        syncLyrics(next);
-    };
-
-    const updateSection = (idx: number, field: 'heading' | 'body', val: string) => {
-        const next = lyricSections.map((s, i) => i === idx ? { ...s, [field]: val } : s);
-        setLyricSections(next);
-        syncLyrics(next);
-    };
-
-    const removeSection = (idx: number) => {
-        const next = lyricSections.filter((_, i) => i !== idx);
-        setLyricSections(next);
-        syncLyrics(next);
-    };
-
-    // Parse plain-text lyrics back to sections
-    const parseLyricsToSections = (text: string): {heading: string; body: string}[] => {
-        if (!text?.trim()) return [];
-        const blocks = text.split(/\n{2,}/);
-        return blocks.map(block => {
-            const lines = block.split('\n');
-            return { heading: lines[0] || '', body: lines.slice(1).join('\n') };
-        }).filter(s => s.heading || s.body);
-    };
 
     useEffect(() => {
         const delayDebounceFn = setTimeout(() => {
             if (search !== (filters.search || '')) {
-                router.get(
-                    '/songs',
-                    { search },
-                    { preserveState: true, replace: true }
-                );
+                router.get('/songs', { search }, { preserveState: true, replace: true });
             }
         }, 500);
-
         return () => clearTimeout(delayDebounceFn);
     }, [search]);
 
-    const openAddModal = () => {
+    // --- Actions ---
+
+    const openAddSong = () => {
         setEditingSong(null);
-        setActiveTab('info');
-        reset();
-        setLyricSections([]);
-        setIsModalOpen(true);
+        songForm.reset();
+        setIsSongModalOpen(true);
     };
 
-    const openEditModal = (song: Song) => {
+    const openEditSong = (song: Song) => {
         setEditingSong(song);
-        setActiveTab('info');
-        const parsed = parseLyricsToSections(song.lyrics || '');
-        setLyricSections(parsed);
-        setData({
+        songForm.setData({
             title: song.title,
-            arrangement_name: song.arrangement_name || '',
-            keys: song.keys || 'C',
-            bpm: song.bpm || '',
-            song_flow: song.song_flow || '',
-            time_signature: song.time_signature || '4/4',
-            lyrics: song.lyrics || '',
-            chords: song.chords || '',
-            video_url: song.video_url || '',
+            artist: song.artist || '',
+            arrangement_name: '', // Not used in edit
+            duration: '',
+            bpm: '',
+            time_signature: '',
+        });
+        setIsSongModalOpen(true);
+    };
+
+    const openAddArrangement = () => {
+        if (!selectedSong) return;
+        setEditingArrangement(null);
+        arrangementForm.reset();
+        arrangementForm.setData('_method', 'POST');
+        setLyricSections([]);
+        setIsArrangementModalOpen(true);
+    };
+
+    const openEditArrangement = (arr: SongArrangement) => {
+        setEditingArrangement(arr);
+        setLyricSections(parseLyricsToSections(arr.lyrics || ''));
+        arrangementForm.setData({
+            name: arr.name,
+            duration: arr.duration || '',
+            bpm: arr.bpm || '',
+            time_signature: arr.time_signature || '4/4',
+            song_flow: arr.song_flow || '',
+            keys: arr.keys || 'C',
+            lyrics: arr.lyrics || '',
+            video_url: arr.video_url || '',
             pdf_file: null,
             _method: 'PUT',
         });
-        setIsModalOpen(true);
+        setIsArrangementModalOpen(true);
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSongSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        
         if (editingSong) {
-            // Use POST with _method: PUT for file uploads during update
-            post(`/songs/${editingSong.id}`, {
-                forceFormData: true,
+            songForm.put(`/songs/${editingSong.id}`, {
                 onSuccess: () => {
-                    setIsModalOpen(false);
+                    setIsSongModalOpen(false);
                     toast.success('Lagu berhasil diperbarui');
-                },
-                onError: (err) => {
-                    console.error(err);
-                    toast.error('Gagal memperbarui lagu. Periksa kembali isian Anda.');
                 }
             });
         } else {
-            post('/songs', {
+            songForm.post('/songs', {
                 onSuccess: () => {
-                    setIsModalOpen(false);
-                    toast.success('Lagu berhasil ditambahkan');
-                    reset();
-                },
-                onError: (err) => {
-                    console.error(err);
-                    toast.error('Gagal menyimpan lagu. Periksa kembali isian Anda.');
+                    setIsSongModalOpen(false);
+                    toast.success('Lagu dan aransemen awal berhasil dibuat');
                 }
             });
         }
     };
 
-    const handleDelete = (id: number) => {
-        if (confirm('Apakah Anda yakin ingin menghapus lagu ini?')) {
-            router.delete(`/songs/${id}`, {
-                onSuccess: () => toast.success('Lagu berhasil dihapus'),
+    const handleArrangementSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const lyricsText = lyricSections.map(s => `${s.heading.trim()}\n${s.body.trim()}`).join('\n\n\n');
+        
+        if (editingArrangement) {
+            arrangementForm.transform(data => ({ ...data, lyrics: lyricsText }));
+            arrangementForm.post(`/arrangements/${editingArrangement.id}`, {
+                forceFormData: true,
+                onSuccess: () => {
+                    setIsArrangementModalOpen(false);
+                    toast.success('Aransemen berhasil diperbarui');
+                }
+            });
+        } else {
+            arrangementForm.transform(data => ({ ...data, lyrics: lyricsText }));
+            arrangementForm.post(`/songs/${selectedSongId}/arrangements`, {
+                forceFormData: true,
+                onSuccess: () => {
+                    setIsArrangementModalOpen(false);
+                    toast.success('Aransemen baru berhasil ditambahkan');
+                }
             });
         }
     };
 
+    const deleteSong = (id: number) => {
+        if (confirm('Hapus seluruh lagu dan semua aransemennya?')) {
+            router.delete(`/songs/${id}`, { onSuccess: () => toast.success('Lagu dihapus') });
+        }
+    };
+
+    const deleteArrangement = (id: number) => {
+        if (confirm('Hapus aransemen ini?')) {
+            router.delete(`/arrangements/${id}`, { onSuccess: () => toast.success('Aransemen dihapus') });
+        }
+    };
+
+    // --- Helpers ---
+    const parseLyricsToSections = (text: string) => {
+        if (!text?.trim()) return [];
+        let blocks = text.split(/\n\s*\n\s*\n/);
+        if (blocks.length <= 1) blocks = text.split(/\n\s*\n/);
+        return blocks.map(block => {
+            const lines = block.trim().split('\n');
+            return { heading: lines[0] || '', body: lines.slice(1).join('\n').trim() };
+        }).filter(s => s.heading || s.body);
+    };
+
+    const addLyricSection = () => setLyricSections([...lyricSections, { heading: 'Section', body: '' }]);
+    const updateLyricSection = (idx: number, field: 'heading' | 'body', val: string) => {
+        setLyricSections(lyricSections.map((s, i) => i === idx ? { ...s, [field]: val } : s));
+    };
+    const removeLyricSection = (idx: number) => setLyricSections(lyricSections.filter((_, i) => i !== idx));
+
     return (
-        <AppLayout breadcrumbs={breadcrumbs}>
+        <>
             <Head title="Song Bank" />
 
-            <div className="p-6 space-y-6">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div>
-                        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Song Bank</h1>
-                        <p className="text-slate-500 dark:text-slate-400">Kelola daftar lagu dan aransemen untuk pelayanan.</p>
-                    </div>
-                    <Button onClick={openAddModal} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
-                        <Plus className="w-4 h-4" />
-                        Tambah Lagu
-                    </Button>
-                </div>
-
-                <Card className="border-none shadow-sm overflow-hidden">
-                    <div className="p-4 bg-white dark:bg-slate-900 border-b flex items-center gap-4">
-                        <div className="relative flex-1 max-w-md">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <div className="flex h-[calc(100vh-64px)] overflow-hidden bg-slate-50 dark:bg-slate-950">
+                {/* LEFT SIDEBAR: Song List */}
+                <div className="w-80 flex flex-col border-r bg-white dark:bg-slate-900 shadow-sm z-10">
+                    <div className="p-4 border-b space-y-4">
+                        <div className="flex items-center justify-between">
+                            <h2 className="font-bold text-lg">Songs</h2>
+                            <Button size="icon" variant="ghost" onClick={openAddSong} className="h-8 w-8 text-emerald-600">
+                                <PlusSquare className="h-5 w-5" />
+                            </Button>
+                        </div>
+                        <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                             <Input 
-                                placeholder="Cari judul lagu atau aransemen..." 
-                                className="pl-10 h-10"
+                                placeholder="Search songs..." 
+                                className="pl-9 h-9 bg-slate-50 border-none text-sm"
                                 value={search}
                                 onChange={e => setSearch(e.target.value)}
                             />
                         </div>
                     </div>
 
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left">
-                            <thead className="bg-slate-50 dark:bg-slate-800 text-slate-500 text-xs font-bold uppercase tracking-wider">
-                                <tr>
-                                    <th className="px-6 py-4">Lagu</th>
-                                    <th className="px-6 py-4 text-center">Key</th>
-                                    <th className="px-6 py-4 text-center">BPM</th>
-                                    <th className="px-6 py-4">Kelengkapan</th>
-                                    <th className="px-6 py-4 text-right">Aksi</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                                {songs.data.map((song) => (
-                                    <tr key={song.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-600">
-                                                    <Music className="w-5 h-5" />
-                                                </div>
-                                                <div>
-                                                    <p className="font-semibold text-slate-900 dark:text-white">{song.title}</p>
-                                                    <p className="text-xs text-slate-500">{song.arrangement_name || '-'}</p>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 text-center">
-                                            <Badge variant="secondary" className="bg-blue-600 text-white border-none px-2">{song.keys || '-'}</Badge>
-                                        </td>
-                                        <td className="px-6 py-4 text-center">
-                                            <span className="text-sm font-medium text-slate-600">{song.bpm || '-'}</span>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center gap-2">
-                                                <span title="Lirik" className={`p-1.5 rounded-md ${song.has_lyrics ? 'text-emerald-600 bg-emerald-50' : 'text-slate-300 bg-slate-50'}`}>
-                                                    <FileText className="w-4 h-4" />
-                                                </span>
-                                                <span title="Chord" className={`p-1.5 rounded-md ${song.has_chords ? 'text-blue-600 bg-blue-50' : 'text-slate-300 bg-slate-50'}`}>
-                                                    <LayoutList className="w-4 h-4" />
-                                                </span>
-                                                <span title="PDF" className={`p-1.5 rounded-md ${song.has_pdf ? 'text-rose-600 bg-rose-50' : 'text-slate-300 bg-slate-50'}`}>
-                                                    <FileIcon className="w-4 h-4" />
-                                                </span>
-                                                <span title="Video" className={`p-1.5 rounded-md ${song.video_url ? 'text-amber-600 bg-amber-50' : 'text-slate-300 bg-slate-50'}`}>
-                                                    <Video className="w-4 h-4" />
-                                                </span>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <div className="flex items-center justify-end gap-2">
-                                                <Button 
-                                                    variant="ghost" 
-                                                    size="icon" 
-                                                    className="h-8 w-8 text-slate-400 hover:text-emerald-600"
-                                                    onClick={() => openEditModal(song)}
-                                                >
-                                                    <Pencil className="w-4 h-4" />
-                                                </Button>
-                                                <Button 
-                                                    variant="ghost" 
-                                                    size="icon" 
-                                                    className="h-8 w-8 text-slate-400 hover:text-rose-600"
-                                                    onClick={() => handleDelete(song.id)}
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </Button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                                {songs.data.length === 0 && (
-                                    <tr>
-                                        <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
-                                            Tidak ada lagu ditemukan.
-                                        </td>
-                                    </tr>
+                    <div className="flex-1 overflow-y-auto">
+                        {songs.data.map((song) => (
+                            <button
+                                key={song.id}
+                                onClick={() => setSelectedSongId(song.id)}
+                                className={cn(
+                                    "w-full text-left p-4 border-b transition-all hover:bg-slate-50 dark:hover:bg-slate-800/50 group",
+                                    selectedSongId === song.id ? "bg-emerald-50/50 dark:bg-emerald-900/10 border-l-4 border-l-emerald-500" : "border-l-4 border-l-transparent"
                                 )}
-                            </tbody>
-                        </table>
+                            >
+                                <div className="flex justify-between items-start">
+                                    <div className="flex-1 min-w-0">
+                                        <p className={cn("font-bold truncate text-sm", selectedSongId === song.id ? "text-emerald-700 dark:text-emerald-400" : "text-slate-900 dark:text-white")}>
+                                            {song.title}
+                                        </p>
+                                        <p className="text-xs text-slate-500 truncate mt-0.5">{song.artist || 'Unknown Author'}</p>
+                                    </div>
+                                    <ChevronRight className={cn("h-4 w-4 text-slate-300 transition-transform", selectedSongId === song.id && "translate-x-1 text-emerald-500")} />
+                                </div>
+                            </button>
+                        ))}
                     </div>
-                </Card>
+                </div>
 
-                {/* Add/Edit Modal */}
-                <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-                    <DialogContent className={cn(
-                        "p-0 overflow-hidden border-none shadow-2xl transition-all duration-500 ease-in-out",
-                        activeTab === 'lyrics' ? "max-w-6xl" : "max-w-2xl"
-                    )}>
-                        <DialogHeader className="bg-emerald-600 p-6 text-white">
-                            <div className="flex items-center justify-between">
+                {/* MAIN CONTENT: Selected Song Details */}
+                <div className="flex-1 flex flex-col overflow-hidden">
+                    {selectedSong ? (
+                        <>
+                            {/* Song Header */}
+                            <div className="bg-white dark:bg-slate-900 p-6 border-b flex items-center justify-between shadow-sm">
                                 <div>
-                                    <DialogTitle className="text-2xl font-bold">
-                                        {editingSong ? 'Edit Lagu' : 'Tambah Lagu'}
-                                    </DialogTitle>
-                                    <p className="text-emerald-100 text-sm mt-1">Lengkapi informasi dan materi pendukung lagu.</p>
+                                    <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white leading-none">
+                                        {selectedSong.title}
+                                    </h1>
+                                    <p className="text-slate-500 font-medium mt-2">{selectedSong.artist || 'No Author Specified'}</p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button variant="outline" className="gap-2 font-bold text-xs uppercase tracking-wider">
+                                                Actions <MoreVertical className="h-3.5 w-3.5" />
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end" className="w-48">
+                                            <DropdownMenuItem onClick={() => openEditSong(selectedSong)} className="gap-2">
+                                                <Pencil className="h-4 w-4" /> Edit Song Info
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => deleteSong(selectedSong.id)} className="gap-2 text-rose-600">
+                                                <Trash2 className="h-4 w-4" /> Delete Song
+                                            </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
                                 </div>
                             </div>
-                        </DialogHeader>
 
-                        {/* Custom Tabs */}
-                        <div className="flex border-b border-slate-100 bg-slate-50/50">
-                            <button 
-                                onClick={() => setActiveTab('info')}
-                                className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors ${activeTab === 'info' ? 'text-emerald-600 border-b-2 border-emerald-600 bg-white' : 'text-slate-400 hover:text-slate-600'}`}
-                            >
-                                Informasi Dasar
-                            </button>
-                            <button 
-                                onClick={() => setActiveTab('lyrics')}
-                                className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors ${activeTab === 'lyrics' ? 'text-emerald-600 border-b-2 border-emerald-600 bg-white' : 'text-slate-400 hover:text-slate-600'}`}
-                            >
-                                Lirik & Chord
-                            </button>
-                            <button 
-                                onClick={() => setActiveTab('media')}
-                                className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors ${activeTab === 'media' ? 'text-emerald-600 border-b-2 border-emerald-600 bg-white' : 'text-slate-400 hover:text-slate-600'}`}
-                            >
-                                Media & File
-                            </button>
-                        </div>
-                        
-                        <form onSubmit={handleSubmit} className="p-6">
-                            <div className="space-y-6 max-h-[75vh] overflow-y-auto px-1 scrollbar-hide">
-                                
-                                {activeTab === 'info' && (
-                                    <div className="space-y-4 animate-in fade-in duration-300">
-                                        <div className="space-y-2">
-                                            <Label htmlFor="title">Judul Lagu</Label>
-                                            <Input 
-                                                id="title" 
-                                                value={data.title} 
-                                                onChange={e => setData('title', e.target.value)} 
-                                                placeholder="Masukkan judul lagu"
-                                                required
-                                            />
-                                            {errors.title && <p className="text-xs text-destructive">{errors.title}</p>}
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label htmlFor="arrangement">Nama Aransemen / Artis</Label>
-                                            <Input 
-                                                id="arrangement" 
-                                                value={data.arrangement_name} 
-                                                onChange={e => setData('arrangement_name', e.target.value)} 
-                                                placeholder="Contoh: Brandon Lake, Elevation Worship"
-                                            />
-                                            {errors.arrangement_name && <p className="text-xs text-destructive">{errors.arrangement_name}</p>}
-                                        </div>
-
-                                        <div className="grid grid-cols-3 gap-4">
-                                            <div className="space-y-2">
-                                                <Label>Key (Nada Dasar)</Label>
-                                                <Select value={data.keys} onValueChange={val => setData('keys', val)}>
-                                                    <SelectTrigger className="h-10">
-                                                        <SelectValue placeholder="Pilih Nada Dasar" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {MUSICAL_KEYS.map(key => (
-                                                            <SelectItem key={key} value={key}>{key}</SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                                {errors.keys && <p className="text-xs text-destructive">{errors.keys}</p>}
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label>BPM (Tempo)</Label>
-                                                <Input 
-                                                    value={data.bpm} 
-                                                    onChange={e => setData('bpm', e.target.value)} 
-                                                    placeholder="Contoh: 70"
-                                                />
-                                                {errors.bpm && <p className="text-xs text-destructive">{errors.bpm}</p>}
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label>Ketukan (Time Sig.)</Label>
-                                                <Select value={data.time_signature || '4/4'} onValueChange={val => setData('time_signature', val)}>
-                                                    <SelectTrigger className="h-10">
-                                                        <SelectValue placeholder="Pilih Ketukan" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {TIME_SIGNATURES.map(sig => (
-                                                            <SelectItem key={sig} value={sig}>{sig}</SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                                {errors.time_signature && <p className="text-xs text-destructive">{errors.time_signature}</p>}
-                                            </div>
-                                        </div>
+                            <div className="flex-1 flex overflow-hidden">
+                                {/* Sub-Sidebar: Arrangements */}
+                                <div className="w-64 border-r bg-slate-50/50 dark:bg-slate-900/50 flex flex-col">
+                                    <div className="p-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 border-b">
+                                        Arrangements
                                     </div>
-                                )}
-
-                                {activeTab === 'lyrics' && (
-                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 animate-in fade-in duration-300 h-full">
-                                        {/* LEFT: Structured Input */}
-                                        <div className="flex flex-col border-r border-slate-100 pr-4 space-y-4 min-h-[520px]">
-                                            <div className="flex items-center justify-between">
-                                                <Label className="text-sm font-bold text-slate-700">Input Lirik</Label>
-                                                <Button
-                                                    type="button"
-                                                    size="sm"
-                                                    variant="outline"
-                                                    className="gap-1.5 h-8 text-xs border-emerald-300 text-emerald-700 hover:bg-emerald-50"
-                                                    onClick={addSection}
-                                                >
-                                                    <PlusCircle className="w-3.5 h-3.5" />
-                                                    Tambah Bagian
-                                                </Button>
-                                            </div>
-
-                                            <div className="space-y-1.5">
-                                                <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Alur Lagu (Song Flow)</Label>
-                                                <Input
-                                                    value={data.song_flow}
-                                                    onChange={e => setData('song_flow', e.target.value)}
-                                                    placeholder="Contoh: Intro, V1, V2, C, Bridge, C×2"
-                                                    className="text-sm"
-                                                />
-                                            </div>
-
-                                            <div className="space-y-3 overflow-y-auto flex-1 max-h-[380px] pr-1">
-                                                {lyricSections.length === 0 && (
-                                                    <div className="flex flex-col items-center justify-center py-10 text-center text-slate-400 border-2 border-dashed rounded-xl">
-                                                        <Music className="w-8 h-8 mb-2 opacity-30" />
-                                                        <p className="text-sm">Belum ada bagian lirik.</p>
-                                                        <p className="text-xs mt-1">Klik "Tambah Bagian" untuk mulai.</p>
-                                                    </div>
+                                    <div className="flex-1 overflow-y-auto py-2">
+                                        {selectedSong.arrangements.map((arr) => (
+                                            <button
+                                                key={arr.id}
+                                                onClick={() => setSelectedArrangementId(arr.id)}
+                                                className={cn(
+                                                    "w-full text-left px-6 py-3 text-sm transition-colors relative",
+                                                    (selectedArrangementId === arr.id || (!selectedArrangementId && selectedSong.arrangements[0]?.id === arr.id))
+                                                        ? "bg-white dark:bg-slate-800 text-emerald-600 font-bold shadow-sm"
+                                                        : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
                                                 )}
-                                                {lyricSections.map((section, idx) => (
-                                                    <div key={idx} className="rounded-xl border border-slate-200 bg-slate-50/60 overflow-hidden">
-                                                        <div className="flex items-center gap-2 px-3 py-2 bg-slate-100/80 border-b border-slate-200">
-                                                            <Input
-                                                                value={section.heading}
-                                                                onChange={e => updateSection(idx, 'heading', e.target.value)}
-                                                                className="h-7 text-sm font-bold border-0 bg-transparent p-0 focus-visible:ring-0 shadow-none text-slate-800 placeholder:text-slate-400"
-                                                                placeholder="Nama bagian (Verse 1, Chorus...)"
-                                                            />
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => removeSection(idx)}
-                                                                className="shrink-0 text-slate-400 hover:text-rose-500 transition-colors"
-                                                            >
-                                                                <Trash className="w-3.5 h-3.5" />
-                                                            </button>
-                                                        </div>
-                                                        <Textarea
-                                                            value={section.body}
-                                                            onChange={e => updateSection(idx, 'body', e.target.value)}
-                                                            placeholder="Ketik lirik di sini..."
-                                                            className="min-h-[100px] border-0 bg-transparent rounded-none text-sm font-mono leading-relaxed resize-none focus-visible:ring-0 shadow-none p-3"
-                                                        />
+                                            >
+                                                {(selectedArrangementId === arr.id || (!selectedArrangementId && selectedSong.arrangements[0]?.id === arr.id)) && (
+                                                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-emerald-500" />
+                                                )}
+                                                {arr.name}
+                                            </button>
+                                        ))}
+                                        <button 
+                                            onClick={openAddArrangement}
+                                            className="w-full text-left px-6 py-3 text-xs font-bold text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors flex items-center gap-2"
+                                        >
+                                            <Plus className="h-3.5 w-3.5" /> Add Arrangement
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Content: Active Arrangement Details */}
+                                <div className="flex-1 overflow-y-auto p-8 bg-white dark:bg-slate-950">
+                                    {activeArrangement ? (
+                                        <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500">
+                                            {/* Top Metadata */}
+                                            <div className="flex flex-wrap items-center gap-8 border-b pb-8">
+                                                <div className="flex items-center gap-4">
+                                                    <h2 className="text-3xl font-bold">{activeArrangement.name}</h2>
+                                                    <Button size="icon" variant="ghost" onClick={() => openEditArrangement(activeArrangement)} className="h-8 w-8 text-slate-400 hover:text-emerald-600">
+                                                        <Pencil className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button size="icon" variant="ghost" onClick={() => deleteArrangement(activeArrangement.id)} className="h-8 w-8 text-slate-400 hover:text-rose-600">
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                                
+                                                <div className="flex gap-8 text-sm">
+                                                    <div className="space-y-1">
+                                                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Length</p>
+                                                        <p className="font-mono font-bold text-lg">{activeArrangement.duration || '-'}</p>
                                                     </div>
-                                                ))}
+                                                    <div className="space-y-1">
+                                                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">BPM</p>
+                                                        <p className="font-mono font-bold text-lg">{activeArrangement.bpm || '-'}</p>
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Meter</p>
+                                                        <p className="font-mono font-bold text-lg">{activeArrangement.time_signature || '-'}</p>
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Key</p>
+                                                        <Badge className="bg-blue-600 text-white hover:bg-blue-700 px-3 py-0.5 text-base font-bold">
+                                                            {activeArrangement.keys || '-'}
+                                                        </Badge>
+                                                    </div>
+                                                </div>
                                             </div>
-                                        </div>
 
-                                        {/* RIGHT: Live Preview */}
-                                        <div className="pl-4 flex flex-col space-y-3">
-                                            <div className="flex items-center gap-2">
-                                                <Eye className="w-4 h-4 text-slate-400" />
-                                                <Label className="text-sm font-bold text-slate-700">Preview</Label>
+                                            {/* Sequence */}
+                                            <div className="space-y-3">
+                                                <div className="flex items-center gap-2 text-slate-400">
+                                                    <LayoutList className="h-4 w-4" />
+                                                    <p className="text-xs font-black uppercase tracking-widest">Sequence</p>
+                                                </div>
+                                                <div className="p-4 bg-slate-50 dark:bg-slate-900 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-medium italic">
+                                                    {activeArrangement.song_flow || 'No sequence defined for this arrangement.'}
+                                                </div>
                                             </div>
 
-                                            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden flex-1 min-h-[480px]">
-                                                <div className="px-5 py-4 bg-slate-50 border-b border-slate-200">
-                                                    <h3 className="font-bold text-slate-900 text-base leading-snug">
-                                                        {data.title || 'Judul Lagu'}{' '}
-                                                        {(data.bpm || data.time_signature) && (
-                                                            <span className="font-normal text-slate-600">
-                                                                [Lyrics{data.bpm ? `, ${data.bpm} bpm` : ''}{data.time_signature ? `, ${data.time_signature}` : ''}]
-                                                            </span>
+                                            {/* Resource Cards */}
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                {/* Lyrics & Media */}
+                                                <Card className="shadow-sm border-slate-100 dark:border-slate-800 overflow-hidden">
+                                                    <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 py-3 px-5 border-b">
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="flex items-center gap-2 text-slate-600">
+                                                                <FileText className="h-4 w-4" />
+                                                                <span className="text-xs font-black uppercase tracking-widest">Arrangement Detail</span>
+                                                            </div>
+                                                        </div>
+                                                    </CardHeader>
+                                                    <CardContent className="p-6 space-y-6">
+                                                        <div className="space-y-4">
+                                                            <div className="flex items-start gap-4 group">
+                                                                <div className="h-8 w-8 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center text-emerald-600 shrink-0">
+                                                                    <FileText className="h-4 w-4" />
+                                                                </div>
+                                                                <div className="flex-1">
+                                                                    <p className="text-sm font-bold">Lyrics</p>
+                                                                    <div className="mt-2 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg text-[13px] font-mono leading-relaxed whitespace-pre-wrap text-slate-600 max-h-64 overflow-y-auto border border-slate-100 dark:border-slate-800">
+                                                                        {activeArrangement.lyrics || 'No lyrics available.'}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            {activeArrangement.video_url && (
+                                                                <div className="flex items-center gap-4 group">
+                                                                    <div className="h-8 w-8 rounded-lg bg-rose-50 dark:bg-rose-900/20 flex items-center justify-center text-rose-600 shrink-0">
+                                                                        <Youtube className="h-4 w-4" />
+                                                                    </div>
+                                                                    <div className="flex-1">
+                                                                        <p className="text-sm font-bold">YouTube Reference</p>
+                                                                        <a 
+                                                                            href={activeArrangement.video_url} 
+                                                                            target="_blank" 
+                                                                            className="text-xs text-blue-600 hover:underline flex items-center gap-1 mt-1"
+                                                                        >
+                                                                            {activeArrangement.video_url} <ExternalLink className="h-3 w-3" />
+                                                                        </a>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </CardContent>
+                                                </Card>
+
+                                                {/* Files */}
+                                                <Card className="shadow-sm border-slate-100 dark:border-slate-800 overflow-hidden h-fit">
+                                                    <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 py-3 px-5 border-b">
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="flex items-center gap-2 text-slate-600">
+                                                                <FileIcon className="h-4 w-4" />
+                                                                <span className="text-xs font-black uppercase tracking-widest">Files</span>
+                                                            </div>
+                                                        </div>
+                                                    </CardHeader>
+                                                    <CardContent className="p-6">
+                                                        {activeArrangement.pdf_path ? (
+                                                            <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800">
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className="h-10 w-10 bg-rose-100 text-rose-600 rounded flex items-center justify-center">
+                                                                        <FileIcon className="h-6 w-6" />
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className="text-sm font-bold">Chord Chart (PDF)</p>
+                                                                        <p className="text-[10px] text-slate-400 uppercase font-black">Ready to Download</p>
+                                                                    </div>
+                                                                </div>
+                                                                <Button size="sm" asChild variant="outline" className="h-8 text-xs font-bold">
+                                                                    <a href={`/storage/${activeArrangement.pdf_path}`} target="_blank">View File</a>
+                                                                </Button>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="py-12 text-center border-2 border-dashed rounded-xl border-slate-100 dark:border-slate-800">
+                                                                <FileIcon className="h-8 w-8 text-slate-200 mx-auto mb-2" />
+                                                                <p className="text-xs text-slate-400 italic">No files attached to this arrangement.</p>
+                                                            </div>
                                                         )}
-                                                    </h3>
-                                                    {data.arrangement_name && (
-                                                        <p className="text-xs text-slate-500 mt-0.5">[{data.arrangement_name}]</p>
-                                                    )}
-                                                    {data.song_flow && (
-                                                        <p className="text-sm font-semibold text-slate-700 mt-2">{data.song_flow}</p>
-                                                    )}
-                                                </div>
+                                                    </CardContent>
+                                                </Card>
+                                            </div>
 
-                                                <div className="px-5 py-4 overflow-y-auto max-h-[400px] space-y-4 text-sm">
-                                                    {lyricSections.length === 0 && (
-                                                        <p className="text-slate-300 italic text-xs text-center pt-10">Preview lirik akan muncul di sini...</p>
-                                                    )}
-                                                    {lyricSections.map((section, idx) => (
-                                                        <div key={idx}>
-                                                            <p className="font-bold text-slate-900 mb-1">{section.heading}</p>
-                                                            <pre className="font-mono text-slate-600 text-[13px] leading-relaxed whitespace-pre-wrap">{section.body}</pre>
-                                                        </div>
-                                                    ))}
-                                                </div>
+                                            <div className="pt-12 text-[10px] text-slate-300 font-bold uppercase tracking-widest flex items-center gap-2">
+                                                <Clock className="h-3 w-3" /> Created at {new Date(activeArrangement.created_at).toLocaleDateString()}
                                             </div>
                                         </div>
-                                    </div>
-                                )}
-
-                                {activeTab === 'media' && (
-                                    <div className="space-y-6 animate-in fade-in duration-300">
-                                        <div className="space-y-2">
-                                            <Label htmlFor="video_url">URL Video (Youtube/Lainnya)</Label>
-                                            <div className="relative">
-                                                <Youtube className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-rose-500" />
-                                                <Input 
-                                                    id="video_url" 
-                                                    className="pl-10"
-                                                    value={data.video_url} 
-                                                    onChange={e => setData('video_url', e.target.value)} 
-                                                    placeholder="https://www.youtube.com/watch?v=..."
-                                                />
-                                            </div>
-                                            {data.video_url && (
-                                                <div className="mt-4 aspect-video rounded-lg overflow-hidden bg-slate-100 border border-slate-200 flex items-center justify-center relative group">
-                                                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        <a href={data.video_url} target="_blank" rel="noopener noreferrer" className="p-3 bg-white rounded-full text-rose-600 hover:scale-110 transition-transform">
-                                                            <ExternalLink className="w-6 h-6" />
-                                                        </a>
-                                                    </div>
-                                                    <p className="text-xs text-slate-500 font-medium">Pratinjau Video Tersedia</p>
-                                                </div>
-                                            )}
+                                    ) : (
+                                        <div className="h-full flex flex-col items-center justify-center text-slate-400">
+                                            <Music className="h-16 w-16 mb-4 opacity-10" />
+                                            <p className="text-lg font-medium italic">Select an arrangement to view details</p>
                                         </div>
+                                    )}
+                                </div>
+                            </div>
+                        </>
+                    ) : (
+                        <div className="h-full flex flex-col items-center justify-center text-slate-400 space-y-4">
+                            <div className="w-24 h-24 rounded-full bg-slate-100 dark:bg-slate-900 flex items-center justify-center">
+                                <Music className="h-10 w-10 opacity-20" />
+                            </div>
+                            <div className="text-center">
+                                <h3 className="text-xl font-bold text-slate-600 dark:text-slate-400">No Song Selected</h3>
+                                <p className="text-sm mt-1">Select a song from the sidebar to view details</p>
+                            </div>
+                            <Button onClick={openAddSong} className="bg-emerald-600 hover:bg-emerald-700 font-bold gap-2 mt-4">
+                                <PlusSquare className="h-4 w-4" /> Create First Song
+                            </Button>
+                        </div>
+                    )}
+                </div>
+            </div>
 
-                                        <div className="space-y-2">
-                                            <Label htmlFor="pdf_file">Upload File PDF (Chord/Not Balok)</Label>
-                                            <div className="flex items-center gap-4">
-                                                <div className="flex-1">
-                                                    <Input 
-                                                        id="pdf_file" 
-                                                        type="file" 
-                                                        accept=".pdf"
-                                                        onChange={e => setData('pdf_file', e.target.files?.[0] || null)}
-                                                        className="cursor-pointer"
-                                                    />
-                                                </div>
-                                                {editingSong?.pdf_path && (
-                                                    <Badge variant="secondary" className="h-10 px-3 bg-rose-50 text-rose-600 border-rose-100">
-                                                        PDF Ada
-                                                    </Badge>
-                                                )}
-                                            </div>
-                                            <p className="text-[10px] text-slate-400 italic">*Maksimal 10MB. Format PDF saja.</p>
-                                        </div>
-                                    </div>
-                                )}
+            {/* --- MODALS --- */}
 
+            {/* ADD/EDIT SONG MODAL */}
+            <Dialog open={isSongModalOpen} onOpenChange={setIsSongModalOpen}>
+                <DialogContent className="max-w-xl p-0 overflow-hidden border-none shadow-2xl">
+                    <DialogHeader className="bg-emerald-600 p-6 text-white">
+                        <DialogTitle className="text-2xl font-black italic tracking-tighter">
+                            {editingSong ? 'EDIT SONG' : 'ADD NEW SONG'}
+                        </DialogTitle>
+                        <p className="text-emerald-100 text-xs font-medium uppercase tracking-widest mt-1 opacity-80">General Information</p>
+                    </DialogHeader>
+                    
+                    <form onSubmit={handleSongSubmit} className="p-8 space-y-6">
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="s_title" className="text-[10px] font-black uppercase tracking-widest text-slate-500">Song Title</Label>
+                                <Input id="s_title" value={songForm.data.title} onChange={e => songForm.setData('title', e.target.value)} required className="h-12 text-lg font-bold" placeholder="e.g. 10,000 Reasons" />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="s_artist" className="text-[10px] font-black uppercase tracking-widest text-slate-500">Artist / Author</Label>
+                                <Input id="s_artist" value={songForm.data.artist} onChange={e => songForm.setData('artist', e.target.value)} className="h-12" placeholder="e.g. Matt Redman" />
                             </div>
 
-                            <DialogFooter className="mt-8 border-t pt-6 gap-3">
-                                <Button 
-                                    type="button" 
-                                    variant="ghost" 
-                                    onClick={() => setIsModalOpen(false)}
-                                    className="text-slate-600"
-                                >
-                                    Batal
-                                </Button>
-                                <Button 
-                                    type="submit" 
-                                    disabled={processing}
-                                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 shadow-lg shadow-emerald-200"
-                                >
-                                    {processing ? 'Menyimpan...' : 'Simpan Lagu'}
-                                </Button>
-                            </DialogFooter>
-                        </form>
-                    </DialogContent>
-                </Dialog>
-            </div>
-        </AppLayout>
+                            {!editingSong && (
+                                <div className="mt-8 pt-8 border-t space-y-4">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <div className="h-6 w-1 bg-emerald-500 rounded-full" />
+                                        <h3 className="text-sm font-black uppercase tracking-widest text-emerald-600">Initial Arrangement</h3>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Arrangement Name</Label>
+                                        <Input value={songForm.data.arrangement_name} onChange={e => songForm.setData('arrangement_name', e.target.value)} placeholder="e.g. Original, Studio, Elsa" />
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-4">
+                                        <div className="space-y-2">
+                                            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Length</Label>
+                                            <Input value={songForm.data.duration} onChange={e => songForm.setData('duration', e.target.value)} placeholder="4:21" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">BPM</Label>
+                                            <Input value={songForm.data.bpm} onChange={e => songForm.setData('bpm', e.target.value)} placeholder="80" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Meter</Label>
+                                            <Select value={songForm.data.time_signature} onValueChange={v => songForm.setData('time_signature', v)}>
+                                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                                <SelectContent>{TIME_SIGNATURES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        <DialogFooter className="pt-4">
+                            <Button type="button" variant="ghost" onClick={() => setIsSongModalOpen(false)}>Cancel</Button>
+                            <Button type="submit" disabled={songForm.processing} className="bg-emerald-600 hover:bg-emerald-700 px-8 font-bold">
+                                {songForm.processing ? 'Saving...' : (editingSong ? 'Update Song' : 'Create Song')}
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            {/* ADD/EDIT ARRANGEMENT MODAL */}
+            <Dialog open={isArrangementModalOpen} onOpenChange={setIsArrangementModalOpen}>
+                <DialogContent className="max-w-6xl p-0 overflow-hidden border-none shadow-2xl h-[90vh] flex flex-col">
+                    <DialogHeader className="bg-emerald-600 p-6 text-white shrink-0">
+                        <DialogTitle className="text-2xl font-black italic tracking-tighter">
+                            {editingArrangement ? 'EDIT ARRANGEMENT' : 'ADD NEW ARRANGEMENT'}
+                        </DialogTitle>
+                        <p className="text-emerald-100 text-[10px] font-black uppercase tracking-widest mt-1 opacity-80">
+                            {selectedSong?.title} • Technical Details
+                        </p>
+                    </DialogHeader>
+
+                    <form onSubmit={handleArrangementSubmit} className="flex-1 overflow-hidden flex flex-col">
+                        <div className="flex-1 overflow-y-auto p-8 space-y-8">
+                            {/* Technical Specs Row */}
+                            <div className="grid grid-cols-4 gap-6">
+                                <div className="space-y-2">
+                                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Name</Label>
+                                    <Input value={arrangementForm.data.name} onChange={e => arrangementForm.setData('name', e.target.value)} required placeholder="e.g. Elsa Version" />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Length</Label>
+                                    <Input value={arrangementForm.data.duration} onChange={e => arrangementForm.setData('duration', e.target.value)} placeholder="4:21" />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">BPM</Label>
+                                    <Input value={arrangementForm.data.bpm} onChange={e => arrangementForm.setData('bpm', e.target.value)} placeholder="80" />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Meter</Label>
+                                    <Select value={arrangementForm.data.time_signature} onValueChange={v => arrangementForm.setData('time_signature', v)}>
+                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                        <SelectContent>{TIME_SIGNATURES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-8">
+                                <div className="space-y-6">
+                                    <div className="space-y-2">
+                                        <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Song Flow (Sequence)</Label>
+                                        <Textarea 
+                                            value={arrangementForm.data.song_flow} 
+                                            onChange={e => arrangementForm.setData('song_flow', e.target.value)} 
+                                            placeholder="Intro, V1, V2, C, Bridge, C, Outro"
+                                            className="h-20 resize-none font-medium text-sm"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">YouTube Reference URL</Label>
+                                        <Input value={arrangementForm.data.video_url} onChange={e => arrangementForm.setData('video_url', e.target.value)} placeholder="https://youtube.com/..." />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Chord Chart (PDF)</Label>
+                                        <Input type="file" accept=".pdf" onChange={e => arrangementForm.setData('pdf_file', e.target.files?.[0] || null)} />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4 flex flex-col h-full">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Lyrics Sections</Label>
+                                        <Button type="button" size="sm" variant="outline" onClick={addLyricSection} className="h-7 text-[10px] font-black uppercase tracking-widest gap-1">
+                                            <Plus className="h-3 w-3" /> Add Section
+                                        </Button>
+                                    </div>
+                                    <div className="flex-1 border rounded-xl bg-slate-50/50 dark:bg-slate-900/50 p-4 overflow-y-auto space-y-4 max-h-[400px]">
+                                        {lyricSections.map((sec, idx) => (
+                                            <div key={idx} className="bg-white dark:bg-slate-800 rounded-lg border shadow-sm overflow-hidden">
+                                                <div className="flex items-center gap-2 p-2 bg-slate-50 dark:bg-slate-900/50 border-b">
+                                                    <Input value={sec.heading} onChange={e => updateLyricSection(idx, 'heading', e.target.value)} className="h-7 text-xs font-bold border-none bg-transparent p-0 focus-visible:ring-0" placeholder="Heading..." />
+                                                    <Button type="button" size="icon" variant="ghost" onClick={() => removeLyricSection(idx)} className="h-6 w-6 text-rose-400 hover:text-rose-600">
+                                                        <Trash className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                </div>
+                                                <Textarea value={sec.body} onChange={e => updateLyricSection(idx, 'body', e.target.value)} className="min-h-[80px] border-none bg-transparent p-3 text-xs font-mono focus-visible:ring-0" placeholder="Lyrics..." />
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <DialogFooter className="p-6 bg-slate-50 dark:bg-slate-900 border-t shrink-0">
+                            <Button type="button" variant="ghost" onClick={() => setIsArrangementModalOpen(false)}>Cancel</Button>
+                            <Button type="submit" disabled={arrangementForm.processing} className="bg-emerald-600 hover:bg-emerald-700 px-8 font-bold">
+                                {arrangementForm.processing ? 'Saving...' : 'Save Arrangement'}
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+        </>
     );
 }
+
+SongsIndex.layout = (page: any) => <AppLayout breadcrumbs={page.props?.breadcrumbs || []}>{page}</AppLayout>;

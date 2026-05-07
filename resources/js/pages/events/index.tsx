@@ -89,7 +89,9 @@ interface EventRundownItem {
     title: string;
     duration_seconds: number;
     song_id?: number | null;
+    song_arrangement_id?: number | null;
     song?: Song | null;
+    arrangement?: SongArrangement | null;
 }
 
 interface EventRundownSegment {
@@ -129,10 +131,20 @@ interface Category {
     roles: CategoryRole[];
 }
 
+interface SongArrangement {
+    id: number;
+    name: string;
+    duration: string | null;
+    bpm: string | null;
+    time_signature: string | null;
+    song_flow: string | null;
+}
+
 interface Song {
     id: number;
     title: string;
     keys: string | null;
+    arrangements: SongArrangement[];
 }
 
 function SearchableSelect({
@@ -488,7 +500,9 @@ export default function Events({
                                 title: item.title,
                                 duration_seconds: item.duration_seconds || 0,
                                 song_id: item.song_id || null,
+                                song_arrangement_id: item.song_arrangement_id || null,
                                 song: item.song || null,
+                                arrangement: item.arrangement || null,
                             })) || [],
                     })) || [],
             });
@@ -1061,7 +1075,21 @@ export default function Events({
                                                                                     <div className="max-h-[300px] overflow-y-auto space-y-1 pr-2 custom-scrollbar">
                                                                                         {songs.map((song) => (
                                                                                             <DialogClose key={song.id} asChild>
-                                                                                                <Button variant="ghost" className="song-item-row w-full justify-between h-11 px-4 rounded-xl text-xs font-semibold hover:bg-primary/5 hover:text-primary transition-all" data-title={song.title} onClick={() => updateRundownItem(segmentIndex, itemIndex, { song_id: song.id, song, title: song.title })}>
+                                                                                                <Button 
+                                                                                                    variant="ghost" 
+                                                                                                    className="song-item-row w-full justify-between h-11 px-4 rounded-xl text-xs font-semibold hover:bg-primary/5 hover:text-primary transition-all" 
+                                                                                                    data-title={song.title} 
+                                                                                                    onClick={() => {
+                                                                                                        const defaultArr = song.arrangements?.[0] || null;
+                                                                                                        updateRundownItem(segmentIndex, itemIndex, { 
+                                                                                                            song_id: song.id, 
+                                                                                                            song, 
+                                                                                                            title: song.title,
+                                                                                                            song_arrangement_id: defaultArr?.id || null,
+                                                                                                            arrangement: defaultArr
+                                                                                                        });
+                                                                                                    }}
+                                                                                                >
                                                                                                     <span>{song.title}</span>
                                                                                                     {song.keys && <Badge variant="outline" className="text-[9px] font-black">{song.keys}</Badge>}
                                                                                                 </Button>
@@ -1078,6 +1106,41 @@ export default function Events({
                                                                         placeholder="Judul Aktivitas"
                                                                         className="h-10 bg-muted/10 border-none rounded-xl text-xs font-bold focus:ring-0 px-3"
                                                                     />
+                                                                    {item.song && item.song.arrangements && item.song.arrangements.length > 0 && (
+                                                                        <div className="flex flex-col gap-2">
+                                                                            <Select 
+                                                                                value={item.song_arrangement_id?.toString() || ""} 
+                                                                                onValueChange={(val) => {
+                                                                                    const arrId = parseInt(val);
+                                                                                    const arr = item.song?.arrangements.find(a => a.id === arrId);
+                                                                                    updateRundownItem(segmentIndex, itemIndex, { 
+                                                                                        song_arrangement_id: arrId,
+                                                                                        arrangement: arr || null
+                                                                                    });
+                                                                                }}
+                                                                            >
+                                                                                <SelectTrigger className="h-8 w-full md:w-64 text-[10px] font-bold bg-muted/20 border-none rounded-lg">
+                                                                                    <SelectValue placeholder="Pilih Aransemen" />
+                                                                                </SelectTrigger>
+                                                                                <SelectContent>
+                                                                                    {item.song.arrangements.map(arr => (
+                                                                                        <SelectItem key={arr.id} value={arr.id.toString()} className="text-[10px] font-bold">
+                                                                                            {arr.name} {arr.bpm ? `(${arr.bpm} BPM)` : ''}
+                                                                                        </SelectItem>
+                                                                                    ))}
+                                                                                </SelectContent>
+                                                                            </Select>
+
+                                                                            {(item.arrangement?.song_flow || item.song?.arrangements?.[0]?.song_flow) && (
+                                                                                <div className="flex items-center gap-1.5 px-3 py-1 bg-emerald-50 rounded-lg w-fit border border-emerald-100/50">
+                                                                                    <ListChecks className="h-2.5 w-2.5 text-emerald-600" />
+                                                                                    <span className="text-[9px] font-black text-emerald-600 uppercase tracking-tight">
+                                                                                        Flow: {item.arrangement?.song_flow || item.song?.arrangements?.[0]?.song_flow}
+                                                                                    </span>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    )}
                                                                 </div>
                                                                 <div className="relative">
                                                                     <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-muted-foreground/40 uppercase">Min</span>
@@ -1403,14 +1466,20 @@ export default function Events({
                                                                             }
                                                                             className="flex items-center justify-between gap-3 py-2 text-sm"
                                                                         >
-                                                                            <div className="flex items-center gap-2">
-                                                                                <span className="text-muted-foreground">
-                                                                                    {item.title}
-                                                                                </span>
+                                                                            <div className="flex flex-col gap-0.5">
+                                                                                <p className="text-xs font-semibold text-foreground">{item.title}</p>
                                                                                 {item.song && (
-                                                                                    <Badge variant="secondary" className="h-4 px-1 text-[9px] font-bold">
-                                                                                        {item.song.keys}
-                                                                                    </Badge>
+                                                                                    <div className="space-y-1 mt-1">
+                                                                                        <p className="text-[10px] text-primary font-medium flex items-center gap-1">
+                                                                                            <Music className="h-2.5 w-2.5" />
+                                                                                            {item.song.title}
+                                                                                        </p>
+                                                                                        {item.song.song_flow && (
+                                                                                            <p className="text-[9px] text-emerald-600 font-bold uppercase tracking-tight ml-3.5">
+                                                                                                Flow: {item.song.song_flow}
+                                                                                            </p>
+                                                                                        )}
+                                                                                    </div>
                                                                                 )}
                                                                             </div>
                                                                             <span className="font-medium">

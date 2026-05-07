@@ -12,7 +12,7 @@ class LiveEventController extends Controller
 {
     public function index(Request $request)
     {
-        $events = Event::with(['rundownSegments.items', 'liveSession.runs'])
+        $events = Event::with(['rundownSegments.items.song.arrangements', 'rundownSegments.items.arrangement', 'liveSession.runs'])
             ->whereHas('rundownSegments')
             ->orderBy('date', 'desc')
             ->orderBy('time', 'desc')
@@ -32,7 +32,7 @@ class LiveEventController extends Controller
 
     public function timeKeeper(Request $request)
     {
-        $events = Event::with(['rundownSegments.items', 'liveSession.runs'])
+        $events = Event::with(['rundownSegments.items.song.arrangements', 'rundownSegments.items.arrangement', 'liveSession.runs'])
             ->whereHas('rundownSegments')
             ->orderBy('date', 'desc')
             ->orderBy('time', 'desc')
@@ -183,6 +183,12 @@ class LiveEventController extends Controller
                     'id' => $item->id,
                     'title' => $item->title,
                     'duration_seconds' => $item->duration_seconds,
+                    'song' => $item->song ? [
+                        'id' => $item->song->id,
+                        'title' => $item->song->title,
+                        'song_flow' => ($item->arrangement ?: $item->song->arrangements->first())?->song_flow,
+                        'bpm' => ($item->arrangement ?: $item->song->arrangements->first())?->bpm,
+                    ] : null,
                 ])->values(),
             ])->values(),
             'live_session' => $session ? [
