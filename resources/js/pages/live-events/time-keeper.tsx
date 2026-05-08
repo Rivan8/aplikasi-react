@@ -45,8 +45,10 @@ interface LiveSession {
     id: number;
     status: 'idle' | 'running' | 'completed' | string;
     current_segment_index: number;
+    current_item_index: number;
     started_at?: string | null;
     segment_started_at?: string | null;
+    item_started_at?: string | null;
     finished_at?: string | null;
     runs: SegmentRun[];
 }
@@ -120,36 +122,27 @@ export default function TimeKeeper({
     const session = selected_event?.live_session;
     const isRunning = session?.status === 'running';
 
-    const segmentElapsedSeconds = useMemo(() => {
-        if (!isRunning || !session?.segment_started_at) return 0;
-        const segmentStartedAt = new Date(session.segment_started_at).getTime();
-        return Math.max(0, Math.floor((now + serverOffset - segmentStartedAt) / 1000));
-    }, [now, serverOffset, isRunning, session?.segment_started_at]);
+    // Elapsed calculation
+    const itemElapsedSeconds = useMemo(() => {
+        if (!isRunning || !session?.item_started_at) return 0;
+        const itemStartedAt = new Date(session.item_started_at).getTime();
+        return Math.max(0, Math.floor((now + serverOffset - itemStartedAt) / 1000));
+    }, [now, serverOffset, isRunning, session?.item_started_at]);
 
     const currentSegment = selected_event?.rundown_segments[session?.current_segment_index ?? 0] ?? null;
-    const currentPlannedSeconds = currentSegment?.duration_seconds || 0;
-    const countdownSeconds = isRunning ? currentPlannedSeconds - segmentElapsedSeconds : currentPlannedSeconds;
-
-    // Progress calculation for visual elements
-    const progressPercent = Math.min(100, Math.max(0, (segmentElapsedSeconds / currentPlannedSeconds) * 100));
+    const activeItem = currentSegment?.items[session?.current_item_index ?? 0] ?? null;
+    
+    const currentPlannedSeconds = activeItem?.duration_seconds || 0;
+    
+    // Countdown calculation (Counting Down)
+    const countdownSeconds = currentPlannedSeconds - itemElapsedSeconds;
+    
     const isOverrun = countdownSeconds < 0;
     const isWarning = countdownSeconds <= 30 && countdownSeconds >= 0 && isRunning;
-    
-    // Calculate active item within the segment based on elapsed time
-    const activeItem = useMemo(() => {
-        if (!currentSegment || !currentSegment.items || currentSegment.items.length === 0) return null;
-        
-        let accumulatedSeconds = 0;
-        for (const item of currentSegment.items) {
-            accumulatedSeconds += item.duration_seconds;
-            if (segmentElapsedSeconds < accumulatedSeconds) {
-                return item;
-            }
-        }
-        // Fallback to the last item if time exceeds total planned duration
-        return currentSegment.items[currentSegment.items.length - 1];
-    }, [currentSegment, segmentElapsedSeconds]);
 
+    // Progress calculation
+    const progressPercent = Math.min(100, Math.max(0, (itemElapsedSeconds / currentPlannedSeconds) * 100));
+    
     const selectEvent = (eventId: string) => {
         router.get('/live-events/time-keeper', { event_id: eventId }, { preserveScroll: true, preserveState: true });
     };
@@ -285,7 +278,7 @@ export default function TimeKeeper({
                     )}
                 </div>
 
-                {/* Big Timer */}
+                {/* Big Timer (Countdown) */}
                 <div className="relative group flex items-center justify-center w-full">
                     {/* Shadow/Glow effect behind timer */}
                     <div className={`absolute inset-0 blur-[150px] transition-colors duration-500 opacity-25 pointer-events-none ${
@@ -299,7 +292,7 @@ export default function TimeKeeper({
                                 ? 'text-orange-500 animate-pulse'
                                 : 'text-white'
                     }`}>
-                        {formatDuration(countdownSeconds)}
+                        {isRunning ? formatDuration(countdownSeconds) : formatDuration(currentPlannedSeconds)}
                     </div>
                 </div>
 
@@ -316,7 +309,9 @@ export default function TimeKeeper({
                         </div>
                         <div className="flex justify-between mt-4 text-xs font-black tracking-[0.2em] uppercase text-white/20">
                             <span>00:00</span>
-                            <span>{formatDuration(currentPlannedSeconds)}</span>
+                            <span className={cn(isOverrun && "text-red-500 font-bold")}>
+                                {formatDuration(currentPlannedSeconds)}
+                            </span>
                         </div>
                     </div>
                 )}

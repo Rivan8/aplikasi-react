@@ -8,6 +8,13 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import {
+    Sheet,
+    SheetContent,
+    SheetDescription,
+    SheetHeader,
+    SheetTitle,
+} from '@/components/ui/sheet';
 import { Head, router } from '@inertiajs/react';
 import {
     AlertCircle,
@@ -15,14 +22,18 @@ import {
     CheckCircle2,
     ChevronRight,
     Clock,
+    FileText,
+    Info,
     ListChecks,
     MapPin,
     MonitorPlay,
+    Music,
     Play,
     Radio,
     RotateCcw,
     Square,
     Timer,
+    Youtube,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -33,7 +44,13 @@ interface RundownItem {
     song?: {
         id: number;
         title: string;
+        artist?: string;
         song_flow?: string;
+        bpm?: number;
+        keys?: string;
+        time_signature?: string;
+        lyrics?: string;
+        video_url?: string;
     } | null;
 }
 
@@ -56,14 +73,29 @@ interface SegmentRun {
     ended_at?: string | null;
 }
 
+interface ItemRun {
+    id: number;
+    segment_index: number;
+    item_index: number;
+    title: string;
+    planned_seconds: number;
+    actual_seconds: number;
+    overrun_seconds: number;
+    started_at?: string | null;
+    ended_at?: string | null;
+}
+
 interface LiveSession {
     id: number;
     status: 'idle' | 'running' | 'completed' | string;
     current_segment_index: number;
+    current_item_index: number;
     started_at?: string | null;
     segment_started_at?: string | null;
+    item_started_at?: string | null;
     finished_at?: string | null;
     runs: SegmentRun[];
+    item_runs: ItemRun[];
 }
 
 interface LiveEvent {
@@ -141,6 +173,7 @@ export default function LiveEvents({
 
     // 2. Track current time in state, updated every 100ms for smoother timer
     const [now, setNow] = useState(() => Date.now());
+    const [selectedSongItem, setSelectedSongItem] = useState<RundownItem | null>(null);
 
     useEffect(() => {
         const interval = window.setInterval(() => {
@@ -187,12 +220,19 @@ export default function LiveEvents({
     const session = selected_event?.live_session;
     const isRunning = session?.status === 'running';
 
-    // Use a memo for segment calculation to avoid unnecessary re-renders
+    // Use a memo for item calculation to avoid unnecessary re-renders
+    const itemElapsedSeconds = useMemo(() => {
+        if (!isRunning || !session?.item_started_at) return 0;
+
+        const itemStartedAt = new Date(session.item_started_at).getTime();
+        // now + serverOffset gives the current server-synced time
+        return Math.max(0, Math.floor((now + serverOffset - itemStartedAt) / 1000));
+    }, [now, serverOffset, isRunning, session?.item_started_at]);
+
     const segmentElapsedSeconds = useMemo(() => {
         if (!isRunning || !session?.segment_started_at) return 0;
 
         const segmentStartedAt = new Date(session.segment_started_at).getTime();
-        // now + serverOffset gives the current server-synced time
         return Math.max(0, Math.floor((now + serverOffset - segmentStartedAt) / 1000));
     }, [now, serverOffset, isRunning, session?.segment_started_at]);
 
@@ -200,18 +240,20 @@ export default function LiveEvents({
         selected_event?.rundown_segments[session?.current_segment_index ?? 0] ??
         null;
 
-    const currentPlannedSeconds = currentSegment?.duration_seconds || 0;
-    const countdownSeconds = isRunning
-        ? currentPlannedSeconds - segmentElapsedSeconds
-        : 0;
-    const currentOverrunSeconds = Math.max(
-        0,
-        segmentElapsedSeconds - currentPlannedSeconds,
-    );
+    const currentItem =
+        currentSegment?.items[session?.current_item_index ?? 0] ?? null;
+
+    const currentPlannedSeconds = currentItem?.duration_seconds || 0;
+    
+    // Countdown logic
+    const countdownSeconds = currentPlannedSeconds - itemElapsedSeconds;
+    
+    const isOverrun = countdownSeconds < 0;
+
     const completedSeconds =
-        session?.runs.reduce((total, run) => total + run.actual_seconds, 0) ||
+        session?.item_runs.reduce((total, run) => total + run.actual_seconds, 0) ||
         0;
-    const totalElapsedSeconds = completedSeconds + segmentElapsedSeconds;
+    const totalElapsedSeconds = completedSeconds + itemElapsedSeconds;
     const totalPlannedSeconds = getTotalPlannedSeconds(selected_event);
     const finishedSegments = session?.runs.length || 0;
 
@@ -277,9 +319,7 @@ export default function LiveEvents({
                             Live Event Rundown
                         </h1>
                         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-                            Jalankan rundown per segment. PIC menekan start,
-                            lalu next untuk memulai timer segment berikutnya
-                            dari nol.
+                            Jalankan rundown per item. Klik item lagu untuk melihat detail lirik dan aransemen.
                         </p>
                     </div>
 
@@ -339,7 +379,7 @@ export default function LiveEvents({
                         <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
                             <Card
                                 className={`border bg-card shadow-sm ${
-                                    currentOverrunSeconds > 0
+                                    isOverrun
                                         ? 'border-red-300 dark:border-red-900'
                                         : ''
                                 }`}
@@ -413,7 +453,7 @@ export default function LiveEvents({
                                                         className="gap-2"
                                                         onClick={nextSegment}
                                                     >
-                                                        Next Segment
+                                                        Next Item
                                                         <ChevronRight className="h-4 w-4" />
                                                     </Button>
                                                     <Button
@@ -433,28 +473,47 @@ export default function LiveEvents({
                                 <CardContent className="p-6">
                                     <div
                                         className={`rounded-xl border p-6 ${
-                                            currentOverrunSeconds > 0
+                                            isOverrun
                                                 ? 'border-red-300 bg-red-50 dark:border-red-900 dark:bg-red-950/20'
                                                 : 'bg-muted/20'
                                         }`}
                                     >
                                         <p className="text-xs font-bold tracking-widest text-muted-foreground uppercase">
-                                            Segment Aktif
+                                            Item Aktif
                                         </p>
-                                        <h2 className="mt-2 text-3xl font-bold tracking-tight text-foreground">
-                                            {isRunning && currentSegment
-                                                ? currentSegment.title
-                                                : session?.status ===
-                                                    'completed'
-                                                  ? 'Event selesai'
-                                                  : 'Belum dimulai'}
-                                        </h2>
+                                        <div className="mt-2 flex flex-col gap-1">
+                                            <div className="flex items-center gap-2">
+                                                <p className="text-sm font-semibold text-muted-foreground">
+                                                    {isRunning && currentSegment
+                                                        ? `${currentSegment.title}`
+                                                        : ''}
+                                                </p>
+                                                {currentItem?.song && (
+                                                    <Button 
+                                                        variant="ghost" 
+                                                        size="icon" 
+                                                        className="h-6 w-6 text-primary hover:bg-primary/10"
+                                                        onClick={() => setSelectedSongItem(currentItem)}
+                                                    >
+                                                        <Info className="h-4 w-4" />
+                                                    </Button>
+                                                )}
+                                            </div>
+                                            <h2 className="text-3xl font-bold tracking-tight text-foreground">
+                                                {isRunning && currentItem
+                                                    ? currentItem.title
+                                                    : session?.status ===
+                                                        'completed'
+                                                      ? 'Event selesai'
+                                                      : 'Belum dimulai'}
+                                            </h2>
+                                        </div>
 
                                         <div
                                             className={`mt-6 font-mono text-7xl font-bold tracking-tight ${
-                                                countdownSeconds < 0
+                                                isOverrun
                                                     ? 'text-red-600 dark:text-red-400'
-                                                    : countdownSeconds <= 30
+                                                    : countdownSeconds <= 30 && isRunning
                                                       ? 'text-orange-500 animate-pulse'
                                                       : 'text-foreground'
                                             }`}
@@ -468,7 +527,7 @@ export default function LiveEvents({
                                         <div className="mt-6 grid gap-3 md:grid-cols-3">
                                             <div className="rounded-lg border bg-background/80 p-4">
                                                 <p className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
-                                                    Target Segment
+                                                    Target Item
                                                 </p>
                                                 <p className="mt-1 font-mono text-xl font-semibold">
                                                     {formatDuration(
@@ -478,25 +537,22 @@ export default function LiveEvents({
                                             </div>
                                             <div
                                                 className={`rounded-lg border p-4 ${
-                                                    currentOverrunSeconds > 0
+                                                    isOverrun
                                                         ? 'border-red-200 bg-red-100 dark:border-red-900 dark:bg-red-950/30'
                                                         : 'bg-background/80'
                                                 }`}
                                             >
                                                 <p className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
-                                                    Lewat Segment
+                                                    Terpakai (Elapsed)
                                                 </p>
                                                 <p
                                                     className={`mt-1 font-mono text-xl font-semibold ${
-                                                        currentOverrunSeconds >
-                                                        0
+                                                        isOverrun
                                                             ? 'text-red-700 dark:text-red-300'
                                                             : ''
                                                     }`}
                                                 >
-                                                    {formatDuration(
-                                                        currentOverrunSeconds,
-                                                    )}
+                                                    {formatDuration(itemElapsedSeconds)}
                                                 </p>
                                             </div>
                                             <div className="rounded-lg border bg-background/80 p-4">
@@ -520,30 +576,89 @@ export default function LiveEvents({
                                                 </h3>
                                             </div>
                                             <div className="divide-y">
-                                                {currentSegment.items.map(
-                                                    (item, idx) => (
+                                                {currentSegment.items.map((item, idx) => {
+                                                    const run = session?.item_runs.find(
+                                                        (r) =>
+                                                            r.segment_index ===
+                                                                session?.current_segment_index &&
+                                                            r.item_index === idx,
+                                                    );
+                                                    const active =
+                                                        isRunning &&
+                                                        session?.current_item_index ===
+                                                            idx;
+
+                                                    return (
                                                         <div
                                                             key={`item-${item.id}-${idx}`}
-                                                            className="flex items-center justify-between gap-4 px-5 py-3 text-sm"
+                                                            className={`flex items-center justify-between gap-4 px-5 py-3 text-sm transition-colors cursor-pointer hover:bg-muted/50 ${active ? 'bg-primary/5' : ''}`}
+                                                            onClick={() => item.song && setSelectedSongItem(item)}
                                                         >
                                                             <div className="flex flex-col gap-1">
-                                                                <span className="text-foreground">
-                                                                    {item.title}
-                                                                </span>
-                                                                {item.song?.song_flow && (
-                                                                    <span className="text-[10px] text-emerald-600 font-bold uppercase tracking-tight">
-                                                                        Flow: {item.song.song_flow}
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="font-medium text-foreground">
+                                                                        {item.title}
+                                                                    </span>
+                                                                    {item.song && (
+                                                                        <Music className="h-3 w-3 text-primary/60" />
+                                                                    )}
+                                                                </div>
+                                                                {item.song
+                                                                    ?.song_flow && (
+                                                                    <span className="text-[10px] font-bold tracking-tight text-emerald-600 uppercase">
+                                                                        Flow:{' '}
+                                                                        {
+                                                                            item
+                                                                                .song
+                                                                                .song_flow
+                                                                        }
                                                                     </span>
                                                                 )}
                                                             </div>
-                                                            <span className="font-mono font-semibold">
-                                                                {formatDuration(
-                                                                    item.duration_seconds,
-                                                                )}
-                                                            </span>
+                                                            <div className="flex items-center gap-6">
+                                                                <div className="flex flex-col items-end">
+                                                                    <span className="text-[9px] font-bold tracking-tighter text-muted-foreground uppercase">
+                                                                        Rencana
+                                                                    </span>
+                                                                    <span className="font-mono text-xs">
+                                                                        {formatDuration(
+                                                                            item.duration_seconds,
+                                                                        )}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="flex min-w-[60px] flex-col items-end">
+                                                                    <span className="text-[9px] font-bold tracking-tighter text-muted-foreground uppercase">
+                                                                        Aktual
+                                                                    </span>
+                                                                    {run ? (
+                                                                        <span
+                                                                            className={`font-mono font-bold ${
+                                                                                run.actual_seconds >
+                                                                                item.duration_seconds
+                                                                                    ? 'text-red-600'
+                                                                                    : 'text-emerald-600'
+                                                                            }`}
+                                                                        >
+                                                                            {formatDuration(
+                                                                                run.actual_seconds,
+                                                                            )}
+                                                                        </span>
+                                                                    ) : active ? (
+                                                                        <span className="animate-pulse font-mono font-bold text-primary">
+                                                                            {formatDuration(
+                                                                                itemElapsedSeconds,
+                                                                            )}
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="font-mono font-bold text-muted-foreground/30">
+                                                                            --:--
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
                                                         </div>
-                                                    ),
-                                                )}
+                                                    );
+                                                })}
                                             </div>
                                         </div>
                                     ) : null}
@@ -807,6 +922,103 @@ export default function LiveEvents({
                     </>
                 )}
             </div>
+
+            {/* Song Detail Sidebar */}
+            <Sheet open={!!selectedSongItem} onOpenChange={(open) => !open && setSelectedSongItem(null)}>
+                <SheetContent className="sm:max-w-md md:max-w-lg lg:max-w-xl w-full overflow-y-auto">
+                    {selectedSongItem?.song && (
+                        <div className="space-y-8 py-6">
+                            <SheetHeader className="space-y-1">
+                                <div className="flex items-center gap-2 text-primary">
+                                    <Music className="h-5 w-5" />
+                                    <span className="text-xs font-black tracking-[0.3em] uppercase">Song Details</span>
+                                </div>
+                                <SheetTitle className="text-3xl font-bold tracking-tight">
+                                    {selectedSongItem.song.title}
+                                </SheetTitle>
+                                <SheetDescription className="text-lg">
+                                    {selectedSongItem.song.artist || 'Unknown Artist'}
+                                </SheetDescription>
+                            </SheetHeader>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="rounded-xl border bg-muted/30 p-4">
+                                    <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                                        <Timer className="h-4 w-4" />
+                                        <span className="text-[10px] font-bold tracking-widest uppercase">BPM</span>
+                                    </div>
+                                    <p className="text-2xl font-bold">{selectedSongItem.song.bpm || '-'}</p>
+                                </div>
+                                <div className="rounded-xl border bg-muted/30 p-4">
+                                    <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                                        <Music className="h-4 w-4" />
+                                        <span className="text-[10px] font-bold tracking-widest uppercase">Key</span>
+                                    </div>
+                                    <p className="text-2xl font-bold">{selectedSongItem.song.keys || '-'}</p>
+                                </div>
+                                <div className="rounded-xl border bg-muted/30 p-4">
+                                    <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                                        <ListChecks className="h-4 w-4" />
+                                        <span className="text-[10px] font-bold tracking-widest uppercase">Signature</span>
+                                    </div>
+                                    <p className="text-xl font-bold">{selectedSongItem.song.time_signature || '-'}</p>
+                                </div>
+                                <div className="rounded-xl border bg-muted/30 p-4">
+                                    <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                                        <Clock className="h-4 w-4" />
+                                        <span className="text-[10px] font-bold tracking-widest uppercase">Duration</span>
+                                    </div>
+                                    <p className="text-xl font-bold">{formatDuration(selectedSongItem.duration_seconds)}</p>
+                                </div>
+                            </div>
+
+                            {selectedSongItem.song.song_flow && (
+                                <div className="space-y-3">
+                                    <div className="flex items-center gap-2 text-muted-foreground">
+                                        <RotateCcw className="h-4 w-4" />
+                                        <span className="text-[10px] font-bold tracking-widest uppercase">Arrangement Flow</span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {selectedSongItem.song.song_flow.split(/[->|]/).map((part, i) => (
+                                            <Badge key={i} variant="secondary" className="px-3 py-1.5 text-sm font-semibold uppercase tracking-wider">
+                                                {part.trim()}
+                                            </Badge>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {selectedSongItem.song.video_url && (
+                                <Button 
+                                    variant="outline" 
+                                    className="w-full gap-2 border-red-200 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-900 dark:bg-red-950/30 dark:text-red-400"
+                                    onClick={() => window.open(selectedSongItem.song?.video_url, '_blank')}
+                                >
+                                    <Youtube className="h-4 w-4" />
+                                    Watch Reference Video
+                                </Button>
+                            )}
+
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between border-b pb-2">
+                                    <div className="flex items-center gap-2 text-muted-foreground">
+                                        <FileText className="h-4 w-4" />
+                                        <span className="text-[10px] font-bold tracking-widest uppercase">Lyrics / Notes</span>
+                                    </div>
+                                </div>
+                                <div className="bg-muted/30 rounded-xl p-6 min-h-[200px] whitespace-pre-wrap font-sans text-base leading-relaxed text-foreground border border-dashed">
+                                    {selectedSongItem.song.lyrics || (
+                                        <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2 py-12">
+                                            <Info className="h-8 w-8 opacity-20" />
+                                            <p className="text-sm italic">No lyrics provided for this arrangement</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </SheetContent>
+            </Sheet>
         </>
     );
 }

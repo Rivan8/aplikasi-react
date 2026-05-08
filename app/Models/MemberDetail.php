@@ -24,4 +24,9 @@ class MemberDetail extends Model
     {
         return $this->belongsTo(Department::class, 'department_id');
     }
+
+    public function categoryRoles()
+    {
+        return $this->belongsToMany(\App\Models\CategoryRole::class, 'user_category_roles');
+    }
 }

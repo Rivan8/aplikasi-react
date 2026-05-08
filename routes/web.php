@@ -402,4 +402,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('attendance/scan-member', [AttendanceController::class, 'scanMemberQr'])->name('attendance.scan-member');
 });
 
+// Settings Routes
+Route::get('/settings/roles', [SettingsController::class, 'roles'])
+    ->middleware('category.role:system_management,admin')
+    ->name('settings.roles');
+
+Route::post('/settings/roles/assign', [SettingsController::class, 'assignRole'])
+    ->middleware('category.role:system_management,admin')
+    ->name('settings.roles.assign');
+
 require __DIR__.'/settings.php';

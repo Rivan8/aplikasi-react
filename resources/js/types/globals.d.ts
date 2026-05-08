@@ -8,6 +8,10 @@ declare global {
      * @returns The generated URL
      */
     function route(name: string, params?: any): string;
+
+    interface Function {
+        form(options?: any): any;
+    }
 }
 
 export {};

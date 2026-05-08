@@ -49,6 +49,8 @@ import {
     ExternalLink,
     Play,
     FileText,
+    Video,
+    Info,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Activity, Music, Timer } from 'lucide-react';
@@ -1399,7 +1401,14 @@ export default function Dashboard({
                                                     </div>
                                                     <div className="divide-y divide-border/40">
                                                         {segment.items.sort((a, b) => a.sort_order - b.sort_order).map((item) => (
-                                                            <div key={item.id} className="px-6 py-4 flex items-start gap-4 hover:bg-muted/10 transition-colors">
+                                                            <div 
+                                                                key={item.id} 
+                                                                className={cn(
+                                                                    "px-6 py-4 flex items-start gap-4 transition-colors",
+                                                                    item.song ? "cursor-pointer hover:bg-primary/5" : "hover:bg-muted/10"
+                                                                )}
+                                                                onClick={() => item.song && setSelectedSong(item.song)}
+                                                            >
                                                                 <div className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded bg-muted/50 text-[10px] font-bold text-muted-foreground">
                                                                     {item.sort_order}
                                                                 </div>

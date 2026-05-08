@@ -2,30 +2,23 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
-// use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
 {
-    /**
-     * Seed the application's database.
-     */
     public function run(): void
     {
-        $admin = User::updateOrCreate(
-            ['email' => 'admin@attendance.com'],
-            [
-                'name' => 'Admin Attendance',
-                'password' => \Illuminate\Support\Facades\Hash::make('password'),
-                'role' => 'admin',
-            ]
-        );
+        // \App\Models\User::factory()->count(10)->create();
 
-        dump("Admin Created: " . $admin->email);
+        // $this->call([
+        //     MemberManagementSeeder::class,
+        //     SongSeeder::class,
+        // ]);
 
         $this->call([
             MemberManagementSeeder::class,
+            SongSeeder::class,
+            RoleSeeder::class,
         ]);
     }
 }

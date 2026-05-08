@@ -38,4 +38,47 @@ class User extends Authenticatable
             'two_factor_confirmed_at' => 'datetime',
         ];
     }
+
+    /**
+     * Get the member detail relationship.
+     */
+    public function member_detail()
+    {
+        return $this->hasOne(MemberDetail::class, 'member_id', 'member_id');
+    }
+
+    /**
+     * Check if user has specific role in a category
+     *
+     * @param string $categoryName
+     * @param array|string $allowedRoles
+     * @return bool
+     */
+    public function hasCategoryRole(string $categoryName, array|string $allowedRoles): bool
+    {
+        // Superadmin memiliki semua akses
+        if ($this->role === 'superadmin') {
+            return true;
+        }
+
+        // Admin memiliki akses penuh
+        if ($this->role === 'admin') {
+            return true;
+        }
+
+        // Periksa role berbasis kategori
+        $categoryId = \App\Models\Category::where('name', $categoryName)->value('id');
+        if (!$categoryId) return false;
+
+        // Cek apakah user memiliki relasi dengan member_detail
+        if (!$this->member_detail) {
+            return false;
+        }
+
+        // Cek apakah user memiliki role yang diizinkan di kategori tersebut
+        return $this->member_detail->categoryRoles()
+            ->where('category_id', $categoryId)
+            ->whereIn('role_name', (array) $allowedRoles)
+            ->exists();
+    }
 }
