@@ -48,6 +48,22 @@ class User extends Authenticatable
     }
 
     /**
+     * Check if user is superadmin
+     */
+    public function isSuperAdmin(): bool
+    {
+        return $this->role === 'superadmin';
+    }
+
+    /**
+     * Check if user is at least admin
+     */
+    public function isAdmin(): bool
+    {
+        return in_array($this->role, ['admin', 'superadmin']);
+    }
+
+    /**
      * Check if user has specific role in a category
      *
      * @param string $categoryName
@@ -57,7 +73,7 @@ class User extends Authenticatable
     public function hasCategoryRole(string $categoryName, array|string $allowedRoles): bool
     {
         // Superadmin memiliki semua akses
-        if ($this->role === 'superadmin') {
+        if ($this->isSuperAdmin()) {
             return true;
         }
 

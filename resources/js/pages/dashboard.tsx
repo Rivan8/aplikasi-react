@@ -519,7 +519,7 @@ function UserDashboard({ assignments }: { assignments: UserAssignment[] }) {
                                                                     assignment
                                                                         .event
                                                                         .date ??
-                                                                        '',
+                                                                    '',
                                                                 )}
                                                             </span>
                                                             <span className="flex items-center gap-1.5">
@@ -543,7 +543,7 @@ function UserDashboard({ assignments }: { assignments: UserAssignment[] }) {
                                                 {assignment.response_status !==
                                                     'accepted' &&
                                                     assignment.response_status !==
-                                                        'declined' && (
+                                                    'declined' && (
                                                         <div className="flex flex-wrap gap-2 lg:mt-1">
                                                             <Button
                                                                 className="h-9 gap-2 px-4"
@@ -823,9 +823,9 @@ export default function Dashboard({
         return `${s}s`;
     };
 
-    const selectedRundownEvent = useMemo(() => 
+    const selectedRundownEvent = useMemo(() =>
         upcomingServices.find(e => e.id === selectedRundownEventId),
-    [selectedRundownEventId, upcomingServices]);
+        [selectedRundownEventId, upcomingServices]);
 
     const handleReplaceVolunteer = () => {
         if (!replacingAssignment || !selectedNewMember) return;
@@ -934,8 +934,8 @@ export default function Dashboard({
                             onClick={() => setActiveTab(tab.id as any)}
                             className={cn(
                                 "flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-bold transition-all duration-300",
-                                activeTab === tab.id 
-                                    ? "bg-background text-primary shadow-lg shadow-primary/5 border border-primary/10 scale-[1.02]" 
+                                activeTab === tab.id
+                                    ? "bg-background text-primary shadow-lg shadow-primary/5 border border-primary/10 scale-[1.02]"
                                     : "text-muted-foreground hover:bg-background/50 hover:text-foreground"
                             )}
                         >
@@ -1142,10 +1142,10 @@ export default function Dashboard({
                                         const volunteerPercent =
                                             totalRoles > 0
                                                 ? Math.round(
-                                                      (event.volunteers /
-                                                          totalRoles) *
-                                                          100,
-                                                  )
+                                                    (event.volunteers /
+                                                        totalRoles) *
+                                                    100,
+                                                )
                                                 : 100;
 
                                         return (
@@ -1317,11 +1317,10 @@ export default function Dashboard({
                                         <button
                                             key={event.id}
                                             onClick={() => setSelectedRundownEventId(event.id)}
-                                            className={`w-full text-left p-3 rounded-lg transition-all border ${
-                                                selectedRundownEventId === event.id
+                                            className={`w-full text-left p-3 rounded-lg transition-all border ${selectedRundownEventId === event.id
                                                     ? 'bg-primary/5 border-primary/20 ring-1 ring-primary/20'
                                                     : 'border-transparent hover:bg-muted/50'
-                                            }`}
+                                                }`}
                                         >
                                             <div className="flex items-center justify-between gap-2">
                                                 <span className={`text-sm font-semibold truncate ${selectedRundownEventId === event.id ? 'text-primary' : 'text-foreground'}`}>
@@ -1401,8 +1400,8 @@ export default function Dashboard({
                                                     </div>
                                                     <div className="divide-y divide-border/40">
                                                         {segment.items.sort((a, b) => a.sort_order - b.sort_order).map((item) => (
-                                                            <div 
-                                                                key={item.id} 
+                                                            <div
+                                                                key={item.id}
                                                                 className={cn(
                                                                     "px-6 py-4 flex items-start gap-4 transition-colors",
                                                                     item.song ? "cursor-pointer hover:bg-primary/5" : "hover:bg-muted/10"
@@ -1423,7 +1422,7 @@ export default function Dashboard({
                                                                         </span>
                                                                     </div>
                                                                     {item.song && (
-                                                                        <button 
+                                                                        <button
                                                                             onClick={() => setSelectedSong(item.song)}
                                                                             className="mt-2 text-left group/song inline-flex items-center gap-3 px-3 py-1.5 rounded-lg bg-muted/40 border border-border/50 hover:bg-primary/5 hover:border-primary/20 transition-all duration-200"
                                                                         >
@@ -1536,7 +1535,7 @@ export default function Dashboard({
                                                 }
                                             >
                                                 {checkIn.status ===
-                                                'Present' ? (
+                                                    'Present' ? (
                                                     <CheckCircle2 className="mr-1 h-3 w-3" />
                                                 ) : (
                                                     <Clock className="mr-1 h-3 w-3" />
@@ -1621,7 +1620,7 @@ export default function Dashboard({
                                     {selectedSong.song_flow && (
                                         <p className="text-white font-semibold text-sm mt-2">{selectedSong.song_flow}</p>
                                     )}
-                                    
+
                                     <div className="flex gap-4 mt-5">
                                         <div className="bg-white/10 rounded-xl px-4 py-2 border border-white/20 backdrop-blur-sm">
                                             <p className="text-xs text-emerald-200 uppercase font-bold tracking-wider">Nada Dasar</p>
@@ -1659,12 +1658,12 @@ export default function Dashboard({
                                                 </a>
                                             </Button>
                                         </div>
-                                        
+
                                         <div className="aspect-video rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center relative overflow-hidden group">
                                             <div className="absolute inset-0 bg-slate-900/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                                                <a 
-                                                    href={selectedSong.video_url} 
-                                                    target="_blank" 
+                                                <a
+                                                    href={selectedSong.video_url}
+                                                    target="_blank"
                                                     rel="noopener noreferrer"
                                                     className="w-16 h-16 bg-rose-600 rounded-full flex items-center justify-center text-white shadow-xl transform group-hover:scale-110 transition-transform"
                                                 >
@@ -1687,7 +1686,7 @@ export default function Dashboard({
                                         </div>
                                         <h3 className="font-bold text-slate-900">Lirik Lagu</h3>
                                     </div>
-                                    
+
                                     <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100 relative group">
                                         <div className="prose prose-sm max-w-none">
                                             {selectedSong.lyrics ? (

@@ -125,13 +125,22 @@ class EventController extends Controller
 
     private function syncRundown(Event $event, ?string $payload): void
     {
-        $segments = is_string($payload) ? json_decode($payload, true) : [];
-
-        $event->rundownSegments()->delete();
-
-        if (! is_array($segments)) {
+        // Hanya superadmin yang bisa seting rundown
+        if (!auth()->user()->isSuperAdmin()) {
             return;
         }
+
+        // Jika payload null, jangan hapus rundown yang sudah ada
+        if ($payload === null) {
+            return;
+        }
+
+        $segments = json_decode($payload, true);
+        if (!is_array($segments)) {
+            return;
+        }
+
+        $event->rundownSegments()->delete();
 
         foreach (array_values($segments) as $segmentIndex => $segment) {
             $title = trim((string) ($segment['title'] ?? ''));

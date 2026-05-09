@@ -23,7 +23,7 @@ export default defineConfig(({ mode }) => {
                 },
             }),
             tailwindcss(),
-            wayfinder(),
+            wayfinder({ formVariants: true }),
         ],
         server: {
             host: '0.0.0.0',

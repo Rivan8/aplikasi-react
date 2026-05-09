@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\Song;
+use App\Models\SongArrangement;
 use Illuminate\Database\Seeder;
 
 class SongSeeder extends Seeder
@@ -13,9 +14,10 @@ class SongSeeder extends Seeder
     public function run(): void
     {
         $songs = [
+            // Existing English Songs
             [
                 'title' => 'Gratitude',
-                'arrangement_name' => 'Brandon Lake',
+                'artist' => 'Brandon Lake',
                 'bpm' => '78',
                 'keys' => 'B',
                 'has_lyrics' => true,
@@ -25,7 +27,7 @@ class SongSeeder extends Seeder
             ],
             [
                 'title' => 'Trust in God',
-                'arrangement_name' => 'Elevation Worship',
+                'artist' => 'Elevation Worship',
                 'bpm' => '74',
                 'keys' => 'C',
                 'has_lyrics' => true,
@@ -35,7 +37,7 @@ class SongSeeder extends Seeder
             ],
             [
                 'title' => 'Worthy of It All',
-                'arrangement_name' => 'CeCe Winans',
+                'artist' => 'CeCe Winans',
                 'bpm' => '68',
                 'keys' => 'G',
                 'has_lyrics' => true,
@@ -45,7 +47,7 @@ class SongSeeder extends Seeder
             ],
             [
                 'title' => 'Goodness of God',
-                'arrangement_name' => 'Bethel Music',
+                'artist' => 'Bethel Music',
                 'bpm' => '63',
                 'keys' => 'Ab',
                 'has_lyrics' => true,
@@ -55,7 +57,7 @@ class SongSeeder extends Seeder
             ],
             [
                 'title' => 'Praise',
-                'arrangement_name' => 'Elevation Worship',
+                'artist' => 'Elevation Worship',
                 'bpm' => '127',
                 'keys' => 'B',
                 'has_lyrics' => true,
@@ -65,7 +67,7 @@ class SongSeeder extends Seeder
             ],
             [
                 'title' => 'Holy Forever',
-                'arrangement_name' => 'Chris Tomlin',
+                'artist' => 'Chris Tomlin',
                 'bpm' => '72',
                 'keys' => 'Db',
                 'has_lyrics' => true,
@@ -75,7 +77,7 @@ class SongSeeder extends Seeder
             ],
             [
                 'title' => 'Firm Foundation (He Won\'t)',
-                'arrangement_name' => 'Maverick City Music',
+                'artist' => 'Maverick City Music',
                 'bpm' => '75',
                 'keys' => 'Bb',
                 'has_lyrics' => true,
@@ -85,7 +87,7 @@ class SongSeeder extends Seeder
             ],
             [
                 'title' => 'King of Kings',
-                'arrangement_name' => 'Hillsong Worship',
+                'artist' => 'Hillsong Worship',
                 'bpm' => '68',
                 'keys' => 'D',
                 'has_lyrics' => true,
@@ -95,7 +97,7 @@ class SongSeeder extends Seeder
             ],
             [
                 'title' => 'Same God',
-                'arrangement_name' => 'Elevation Worship',
+                'artist' => 'Elevation Worship',
                 'bpm' => '72',
                 'keys' => 'Db',
                 'has_lyrics' => true,
@@ -105,7 +107,7 @@ class SongSeeder extends Seeder
             ],
             [
                 'title' => 'What A Beautiful Name',
-                'arrangement_name' => 'Hillsong Worship',
+                'artist' => 'Hillsong Worship',
                 'bpm' => '68',
                 'keys' => 'D',
                 'has_lyrics' => true,
@@ -113,12 +115,229 @@ class SongSeeder extends Seeder
                 'has_pdf' => true,
                 'has_audio' => true,
             ],
+
+            // 20 Indonesian Songs (2000s - Present)
+            [
+                'title' => 'Waktu Tuhan',
+                'artist' => 'NDC Worship',
+                'bpm' => '72',
+                'keys' => 'G',
+                'has_lyrics' => true,
+                'has_chords' => true,
+                'has_pdf' => true,
+                'has_audio' => true,
+            ],
+            [
+                'title' => 'Sampai Akhir Hidupku',
+                'artist' => 'JPCC Worship',
+                'bpm' => '70',
+                'keys' => 'A',
+                'has_lyrics' => true,
+                'has_chords' => true,
+                'has_pdf' => true,
+                'has_audio' => true,
+            ],
+            [
+                'title' => 'Kebaikan-Mu',
+                'artist' => 'GMS Live',
+                'bpm' => '68',
+                'keys' => 'E',
+                'has_lyrics' => true,
+                'has_chords' => true,
+                'has_pdf' => true,
+                'has_audio' => true,
+            ],
+            [
+                'title' => 'Kunyanyi Haleluya',
+                'artist' => 'Symphony Music',
+                'bpm' => '74',
+                'keys' => 'C',
+                'has_lyrics' => true,
+                'has_chords' => true,
+                'has_pdf' => true,
+                'has_audio' => true,
+            ],
+            [
+                'title' => 'Kasih-Mu Mempesona',
+                'artist' => 'NDC Worship',
+                'bpm' => '72',
+                'keys' => 'D',
+                'has_lyrics' => true,
+                'has_chords' => true,
+                'has_pdf' => true,
+                'has_audio' => true,
+            ],
+            [
+                'title' => 'Jangan Pernah Menyerah',
+                'artist' => 'Edward Chen',
+                'bpm' => '65',
+                'keys' => 'G',
+                'has_lyrics' => true,
+                'has_chords' => true,
+                'has_pdf' => true,
+                'has_audio' => true,
+            ],
+            [
+                'title' => 'Yesus Aku Percaya',
+                'artist' => 'JPCC Worship',
+                'bpm' => '70',
+                'keys' => 'D',
+                'has_lyrics' => true,
+                'has_chords' => true,
+                'has_pdf' => true,
+                'has_audio' => true,
+            ],
+            [
+                'title' => 'Hadirat-Mu',
+                'artist' => 'Symphony Music',
+                'bpm' => '68',
+                'keys' => 'G',
+                'has_lyrics' => true,
+                'has_chords' => true,
+                'has_pdf' => true,
+                'has_audio' => true,
+            ],
+            [
+                'title' => 'Pertolongan-Mu',
+                'artist' => 'Citra Scholastika',
+                'bpm' => '72',
+                'keys' => 'C',
+                'has_lyrics' => true,
+                'has_chords' => true,
+                'has_pdf' => true,
+                'has_audio' => true,
+            ],
+            [
+                'title' => 'Satu Hal Yang Kurindu',
+                'artist' => 'JPCC Worship',
+                'bpm' => '65',
+                'keys' => 'G',
+                'has_lyrics' => true,
+                'has_chords' => true,
+                'has_pdf' => true,
+                'has_audio' => true,
+            ],
+            [
+                'title' => 'Ku Beri Yang Terbaik',
+                'artist' => 'JPCC Worship',
+                'bpm' => '120',
+                'keys' => 'G',
+                'has_lyrics' => true,
+                'has_chords' => true,
+                'has_pdf' => true,
+                'has_audio' => true,
+            ],
+            [
+                'title' => 'Janji-Mu Seperti Fajar',
+                'artist' => 'Nikita',
+                'bpm' => '68',
+                'keys' => 'F',
+                'has_lyrics' => true,
+                'has_chords' => true,
+                'has_pdf' => true,
+                'has_audio' => true,
+            ],
+            [
+                'title' => 'Bagai Rajawali',
+                'artist' => 'Jeffry S. Tjandra',
+                'bpm' => '65',
+                'keys' => 'G',
+                'has_lyrics' => true,
+                'has_chords' => true,
+                'has_pdf' => true,
+                'has_audio' => true,
+            ],
+            [
+                'title' => 'Tuhan Pasti Sanggup',
+                'artist' => 'Mike Mohede',
+                'bpm' => '68',
+                'keys' => 'G',
+                'has_lyrics' => true,
+                'has_chords' => true,
+                'has_pdf' => true,
+                'has_audio' => true,
+            ],
+            [
+                'title' => 'Hanya Kau',
+                'artist' => 'GMS Live',
+                'bpm' => '70',
+                'keys' => 'D',
+                'has_lyrics' => true,
+                'has_chords' => true,
+                'has_pdf' => true,
+                'has_audio' => true,
+            ],
+            [
+                'title' => 'Terpujilah Nama-Mu',
+                'artist' => 'JPCC Worship',
+                'bpm' => '128',
+                'keys' => 'A',
+                'has_lyrics' => true,
+                'has_chords' => true,
+                'has_pdf' => true,
+                'has_audio' => true,
+            ],
+            [
+                'title' => 'Besar Anugerah-Mu',
+                'artist' => 'Symphony Music',
+                'bpm' => '72',
+                'keys' => 'G',
+                'has_lyrics' => true,
+                'has_chords' => true,
+                'has_pdf' => true,
+                'has_audio' => true,
+            ],
+            [
+                'title' => 'Mujizat Itu Nyata',
+                'artist' => 'Jonathan Prawira',
+                'bpm' => '65',
+                'keys' => 'C',
+                'has_lyrics' => true,
+                'has_chords' => true,
+                'has_pdf' => true,
+                'has_audio' => true,
+            ],
+            [
+                'title' => 'S\'bab Kau Besar',
+                'artist' => 'Symphony Music',
+                'bpm' => '70',
+                'keys' => 'G',
+                'has_lyrics' => true,
+                'has_chords' => true,
+                'has_pdf' => true,
+                'has_audio' => true,
+            ],
+            [
+                'title' => 'Kaulah Harapan',
+                'artist' => 'Sari Simorangkir',
+                'bpm' => '68',
+                'keys' => 'G',
+                'has_lyrics' => true,
+                'has_chords' => true,
+                'has_pdf' => true,
+                'has_audio' => true,
+            ],
         ];
 
-        foreach ($songs as $song) {
-            Song::updateOrCreate(
-                ['title' => $song['title'], 'arrangement_name' => $song['arrangement_name']],
-                $song
+        foreach ($songs as $songData) {
+            $song = Song::updateOrCreate(
+                ['title' => $songData['title']],
+                ['artist' => $songData['artist']]
+            );
+
+            SongArrangement::updateOrCreate(
+                [
+                    'song_id' => $song->id,
+                    'name' => 'Default Arrangement'
+                ],
+                [
+                    'bpm' => $songData['bpm'],
+                    'keys' => $songData['keys'],
+                    'has_lyrics' => $songData['has_lyrics'],
+                    'has_chords' => $songData['has_chords'],
+                    'has_pdf' => $songData['has_pdf'],
+                    'has_audio' => $songData['has_audio'],
+                ]
             );
         }
     }
