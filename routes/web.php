@@ -5,6 +5,7 @@ use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\LiveEventController;
+use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\SongController;
 use App\Models\Attendance;
 use App\Models\Category;
@@ -18,6 +19,7 @@ use App\Models\MemberStatus;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Storage;
 
 Route::inertia('/', 'welcome')->name('home');
 
@@ -405,6 +407,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('attendance/{event}/scan', [AttendanceController::class, 'showEventScan'])->name('attendance.scan');
     Route::post('attendance/{event}/scan-event', [AttendanceController::class, 'scanEventQr'])->name('attendance.scan-event');
     Route::post('attendance/scan-member', [AttendanceController::class, 'scanMemberQr'])->name('attendance.scan-member');
+
+    Route::get('event-images/{path}', function (string $path) {
+        abort_if(str_contains($path, '..'), 404);
+
+        $disk = Storage::disk('public');
+        abort_unless($disk->exists($path), 404);
+
+        return response()->file($disk->path($path));
+    })->where('path', '.*')->name('event-images.show');
 });
 
 // Settings Routes

@@ -6,6 +6,8 @@ use App\Models\Event;
 use App\Models\ExternalMember;
 use App\Models\EventVolunteer;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 use App\Models\Category;
@@ -62,8 +64,14 @@ class EventController extends Controller
         $data['total_sessions'] = $validated['total_sessions'] ?? 1;
 
         if ($request->hasFile('image')) {
-            $path = $request->file('image')->store('events', 'public');
-            $data['image_path'] = '/storage/' . $path;
+            $path = Storage::disk('public')->putFile('events', $request->file('image'));
+            if ($path === false) {
+                throw ValidationException::withMessages([
+                    'image' => 'Gambar gagal disimpan. Periksa permission folder storage.',
+                ]);
+            }
+
+            $data['image_path'] = '/event-images/' . $path;
         }
 
         $event = Event::create($data);
@@ -109,11 +117,19 @@ class EventController extends Controller
 
         if ($request->hasFile('image')) {
             if ($event->image_path) {
-                $oldPath = str_replace('/storage/', '', $event->image_path);
-                \Illuminate\Support\Facades\Storage::disk('public')->delete($oldPath);
+                $oldPath = str_starts_with($event->image_path, '/event-images/')
+                    ? substr($event->image_path, strlen('/event-images/'))
+                    : str_replace('/storage/', '', $event->image_path);
+                Storage::disk('public')->delete($oldPath);
             }
-            $path = $request->file('image')->store('events', 'public');
-            $data['image_path'] = '/storage/' . $path;
+            $path = Storage::disk('public')->putFile('events', $request->file('image'));
+            if ($path === false) {
+                throw ValidationException::withMessages([
+                    'image' => 'Gambar gagal disimpan. Periksa permission folder storage.',
+                ]);
+            }
+
+            $data['image_path'] = '/event-images/' . $path;
         }
 
         $event->update($data);

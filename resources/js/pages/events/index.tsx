@@ -175,6 +175,14 @@ interface Song {
     arrangements: SongArrangement[];
 }
 
+const getEventImageUrl = (path: string | null) => {
+    if (!path) return null;
+
+    return path.startsWith('/storage/')
+        ? `/event-images/${path.slice('/storage/'.length)}`
+        : path;
+};
+
 function SearchableSelect({
     value,
     onSelect,
@@ -286,6 +294,10 @@ export default function Events({
     const [openCategories, setOpenCategories] = useState<string[]>([]);
     const [activeTab, setActiveTab] = useState<'basic' | 'participants' | 'rundown' | 'volunteers'>('basic');
     const [selectedMemberToEnroll, setSelectedMemberToEnroll] = useState<number | null>(null);
+    const [eventSearch, setEventSearch] = useState('');
+    const [eventCategory, setEventCategory] = useState('all');
+    const [eventStatus, setEventStatus] = useState<'all' | 'upcoming' | 'past'>('all');
+    const [eventSort, setEventSort] = useState<'date-asc' | 'date-desc' | 'title'>('date-asc');
 
     const { data, setData, post, reset, processing, errors } = useForm({
         title: '',
@@ -365,6 +377,12 @@ export default function Events({
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
+            if (file.size > 2 * 1024 * 1024) {
+                toast.error('Ukuran gambar maksimal 2 MB.');
+                e.target.value = '';
+                return;
+            }
+
             setData('image', file);
             const reader = new FileReader();
             reader.onloadend = () => {
@@ -490,6 +508,12 @@ export default function Events({
                 setImagePreview(null);
                 reset();
             },
+            onError: (formErrors) => {
+                const imageError = formErrors.image;
+                if (imageError) {
+                    toast.error(imageError);
+                }
+            },
         });
     };
 
@@ -498,17 +522,17 @@ export default function Events({
             // Rehydrate volunteers with role IDs by matching roles in the category
             const selectedCategory = categories.find(c => c.name === editingEvent.category);
             const roles = selectedCategory ? selectedCategory.roles : [];
-            
+
             // Track used role IDs to handle duplicate role names correctly
             const usedRoleIds = new Set<number>();
 
             const rehydratedVolunteers = editingEvent.volunteers.map((v) => {
-                const matchingRole = roles.find(r => 
-                    r.role_name === v.role_name && 
+                const matchingRole = roles.find(r =>
+                    r.role_name === v.role_name &&
                     r.department.name === v.role_category &&
                     !usedRoleIds.has(r.id)
                 );
-                
+
                 if (matchingRole) {
                     usedRoleIds.add(matchingRole.id);
                 }
@@ -551,7 +575,7 @@ export default function Events({
                             })) || [],
                     })) || [],
             });
-            setImagePreview(editingEvent.image_path);
+            setImagePreview(getEventImageUrl(editingEvent.image_path));
             setIsAddModalOpen(true);
         }
     }, [editingEvent, categories]);
@@ -571,15 +595,22 @@ export default function Events({
     }, [timerRunning]);
 
     const rundownTotalSeconds = useMemo(() => {
-        if (!rundownEvent) return 0;
+        if (!rundownEvent) {
+            return 0;
+        }
+
         return getRundownTotalSeconds(rundownEvent.rundown_segments);
     }, [rundownEvent]);
 
     const overdueSeconds = Math.max(0, elapsedSeconds - rundownTotalSeconds);
 
     const rundownTimerPlan = useMemo(() => {
-        if (!rundownEvent) return [];
+        if (!rundownEvent) {
+            return [];
+        }
+
         let currentTime = 0;
+
         return rundownEvent.rundown_segments.map((s, i) => {
             const startsAt = currentTime;
             const endsAt = startsAt + s.duration_seconds;
@@ -593,6 +624,65 @@ export default function Events({
             };
         });
     }, [rundownEvent]);
+
+    const filteredEvents = useMemo(() => {
+        const normalizedSearch = eventSearch.trim().toLowerCase();
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        return events
+            .filter((event) => {
+                const matchesSearch =
+                    !normalizedSearch ||
+                    [event.title, event.category, event.location, event.address].some(
+                        (value) => value?.toLowerCase().includes(normalizedSearch),
+                    );
+                const matchesCategory =
+                    eventCategory === 'all' || event.category === eventCategory;
+                const eventDate = event.date ? new Date(`${event.date}T00:00:00`) : null;
+                const matchesStatus =
+                    eventStatus === 'all' ||
+                    (eventStatus === 'upcoming' &&
+                        eventDate !== null &&
+                        eventDate >= today) ||
+                    (eventStatus === 'past' &&
+                        eventDate !== null &&
+                        eventDate < today);
+
+                return matchesSearch && matchesCategory && matchesStatus;
+            })
+            .sort((firstEvent, secondEvent) => {
+                if (eventSort === 'title') {
+                    return firstEvent.title.localeCompare(secondEvent.title, 'id');
+                }
+
+                const firstDate = firstEvent.date
+                    ? new Date(
+                          `${firstEvent.date}T${firstEvent.time || '00:00:00'}`,
+                      ).getTime()
+                    : 0;
+                const secondDate = secondEvent.date
+                    ? new Date(
+                          `${secondEvent.date}T${secondEvent.time || '00:00:00'}`,
+                      ).getTime()
+                    : 0;
+
+                return eventSort === 'date-asc' ? firstDate - secondDate : secondDate - firstDate;
+            });
+    }, [eventCategory, eventSearch, eventSort, eventStatus, events]);
+
+    const hasActiveEventFilters =
+        Boolean(eventSearch.trim()) ||
+        eventCategory !== 'all' ||
+        eventStatus !== 'all' ||
+        eventSort !== 'date-asc';
+
+    const resetEventFilters = () => {
+        setEventSearch('');
+        setEventCategory('all');
+        setEventStatus('all');
+        setEventSort('date-asc');
+    };
 
     return (
         <>
@@ -622,16 +712,90 @@ export default function Events({
                     </Button>
                 </div>
 
+                <section className="space-y-4" aria-label="Filter daftar event">
+                    <div className="rounded-2xl border border-border/60 bg-card/80 p-4 shadow-sm backdrop-blur-sm lg:p-5">
+                        <div className="flex flex-col gap-4 xl:flex-row xl:items-center">
+                            <div className="relative min-w-0 flex-1">
+                                <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                <Input
+                                    value={eventSearch}
+                                    onChange={(e) => setEventSearch(e.target.value)}
+                                    placeholder="Cari nama, kategori, atau lokasi event..."
+                                    aria-label="Cari event"
+                                    className="h-11 rounded-xl border-border/60 bg-background pl-10 pr-10"
+                                />
+                                {eventSearch && (
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        aria-label="Hapus pencarian"
+                                        className="absolute right-1 top-1/2 h-9 w-9 -translate-y-1/2 rounded-lg text-muted-foreground hover:text-foreground"
+                                        onClick={() => setEventSearch('')}
+                                    >
+                                        <X className="h-4 w-4" />
+                                    </Button>
+                                )}
+                            </div>
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 xl:w-[560px]">
+                                <Select value={eventCategory} onValueChange={setEventCategory}>
+                                    <SelectTrigger className="h-11 w-full rounded-xl bg-background">
+                                        <SelectValue placeholder="Semua kategori" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">Semua kategori</SelectItem>
+                                        {categories.map((category) => (
+                                            <SelectItem key={category.id} value={category.name}>{category.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <Select value={eventStatus} onValueChange={(value) => setEventStatus(value as typeof eventStatus)}>
+                                    <SelectTrigger className="h-11 w-full rounded-xl bg-background">
+                                        <SelectValue placeholder="Semua status" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">Semua status</SelectItem>
+                                        <SelectItem value="upcoming">Akan datang</SelectItem>
+                                        <SelectItem value="past">Sudah berlalu</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <Select value={eventSort} onValueChange={(value) => setEventSort(value as typeof eventSort)}>
+                                    <SelectTrigger className="h-11 w-full rounded-xl bg-background">
+                                        <SelectValue placeholder="Urutkan" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="date-asc">Tanggal terdekat</SelectItem>
+                                        <SelectItem value="date-desc">Tanggal terbaru</SelectItem>
+                                        <SelectItem value="title">Nama A-Z</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                        <div className="mt-4 flex flex-col gap-2 border-t border-border/50 pt-4 text-xs sm:flex-row sm:items-center sm:justify-between">
+                            <p className="text-muted-foreground">
+                                Menampilkan <span className="font-bold text-foreground">{filteredEvents.length}</span> dari <span className="font-bold text-foreground">{events.length}</span> event
+                            </p>
+                            {hasActiveEventFilters && (
+                                <Button type="button" variant="ghost" size="sm" onClick={resetEventFilters} className="h-8 w-fit gap-2 px-2 text-xs text-primary hover:text-primary">
+                                    <RotateCcw className="h-3.5 w-3.5" />
+                                    Reset filter
+                                </Button>
+                            )}
+                        </div>
+                    </div>
+                </section>
+
+                {filteredEvents.length > 0 && (
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
-                    {events.map((event) => (
+                    {filteredEvents.map((event) => (
                         <Card
                             key={`event-card-${event.id}`}
                             className="group relative flex flex-col overflow-hidden border-none bg-card/50 backdrop-blur-sm transition-all duration-500 hover:-translate-y-1 hover:bg-card hover:shadow-2xl hover:shadow-primary/10"
                         >
                             <div className="relative aspect-[16/10] w-full overflow-hidden">
-                                {event.image_path ? (
+                                {getEventImageUrl(event.image_path) ? (
                                     <img
-                                        src={event.image_path}
+                                        src={getEventImageUrl(event.image_path) ?? undefined}
                                         alt={event.title}
                                         className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
                                     />
@@ -641,13 +805,13 @@ export default function Events({
                                     </div>
                                 )}
                                 <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
-                                
+
                                 <div className="absolute top-4 left-4">
                                     <Badge className="bg-background/40 text-foreground border-white/20 shadow-xl backdrop-blur-xl px-3 py-1 text-[10px] font-bold uppercase tracking-wider">
                                         {event.category}
                                     </Badge>
                                 </div>
-                                
+
                                 <div className="absolute top-4 right-4 flex gap-2 translate-y-[-10px] opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
                                     <Button
                                         variant="secondary"
@@ -677,7 +841,7 @@ export default function Events({
                                         <MoreHorizontal className="h-5 w-5" />
                                     </Button>
                                 </div>
-                                
+
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground bg-muted/30 px-3 py-2 rounded-lg">
                                         <CalendarDays className="h-4 w-4 text-primary/60" />
@@ -694,7 +858,7 @@ export default function Events({
                                         {event.time}
                                     </div>
                                 </div>
-                                
+
                                 {event.location && (
                                     <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground bg-muted/30 px-3 py-2 rounded-lg">
                                         <MapPin className="h-4 w-4 text-primary/60" />
@@ -755,6 +919,7 @@ export default function Events({
                         </Card>
                     ))}
                 </div>
+                )}
 
                 {events.length === 0 && (
                     <div className="flex min-h-[450px] flex-col items-center justify-center rounded-[32px] border-2 border-dashed border-muted-foreground/20 bg-muted/5 p-12 text-center animate-in fade-in zoom-in duration-500">
@@ -780,6 +945,18 @@ export default function Events({
                         </Button>
                     </div>
                 )}
+
+                {events.length > 0 && filteredEvents.length === 0 && (
+                    <div className="flex min-h-[280px] flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card/60 p-8 text-center">
+                        <Search className="mb-4 h-9 w-9 text-muted-foreground/50" />
+                        <h3 className="text-lg font-bold text-foreground">Event tidak ditemukan</h3>
+                        <p className="mt-1 max-w-sm text-sm text-muted-foreground">Coba ubah kata kunci atau filter yang dipilih untuk melihat event lainnya.</p>
+                        <Button type="button" variant="outline" onClick={resetEventFilters} className="mt-5 gap-2">
+                            <RotateCcw className="h-4 w-4" />
+                            Tampilkan semua event
+                        </Button>
+                    </div>
+                )}
             </div>
 
             {/* Add/Edit Modal */}
@@ -802,13 +979,13 @@ export default function Events({
                                     {editingEvent ? 'Edit Event' : 'Buat Event Baru'}
                                 </DialogTitle>
                                 <DialogDescription className="text-sm font-medium text-muted-foreground/80">
-                                    {editingEvent 
-                                        ? 'Perbarui detail event dan jadwal pelayanan Anda.' 
+                                    {editingEvent
+                                        ? 'Perbarui detail event dan jadwal pelayanan Anda.'
                                         : 'Lengkapi detail untuk menjadwalkan pelayanan gereja Anda.'}
                                 </DialogDescription>
                             </div>
                         </div>
-                        
+
                         {/* Tab Switcher */}
                         <div className="mt-8 flex gap-1 p-1.5 bg-muted/40 rounded-2xl w-fit border border-border/40 backdrop-blur-md">
                             {[
@@ -825,8 +1002,8 @@ export default function Events({
                                     onClick={() => setActiveTab(tab.id as any)}
                                     className={cn(
                                         "flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-bold transition-all duration-300",
-                                        activeTab === tab.id 
-                                            ? "bg-background text-primary shadow-lg shadow-primary/5 border border-primary/10 scale-[1.02]" 
+                                        activeTab === tab.id
+                                            ? "bg-background text-primary shadow-lg shadow-primary/5 border border-primary/10 scale-[1.02]"
                                             : "text-muted-foreground hover:bg-background/50 hover:text-foreground"
                                     )}
                                 >
@@ -1256,6 +1433,11 @@ export default function Events({
                                                             </div>
                                                         </div>
                                                         <p className="text-sm font-bold text-foreground/80">Upload Poster Event</p>
+                                                        {errors.image && (
+                                                            <p className="mt-2 text-xs font-semibold text-destructive">
+                                                                {errors.image}
+                                                            </p>
+                                                        )}
                                                         <input
                                                             id="image-upload"
                                                             type="file"
@@ -1317,11 +1499,11 @@ export default function Events({
 
                                                 <div className="mt-8 space-y-4 relative">
                                                     <div className="absolute left-6 top-0 bottom-0 w-px bg-gradient-to-b from-primary/20 via-border/40 to-transparent" />
-                                                    
+
                                                     {segment.items.map((item, itemIndex) => (
                                                         <div key={itemIndex} className="relative pl-14 group/item">
                                                             <div className="absolute left-[22px] top-4 h-3 w-3 rounded-full border-2 border-primary bg-background shadow-lg z-10 group-hover/item:scale-125 transition-transform" />
-                                                            
+
                                                             <div className="grid grid-cols-1 md:grid-cols-[1fr_120px_48px] gap-4 items-center p-4 rounded-[20px] bg-background border border-border/30 shadow-sm transition-all hover:border-primary/20 hover:shadow-md">
                                                                 <div className="space-y-3">
                                                                     <div className="flex gap-2">
@@ -1360,15 +1542,15 @@ export default function Events({
                                                                                     <div className="max-h-[300px] overflow-y-auto space-y-1 pr-2 custom-scrollbar">
                                                                                         {songs.map((song) => (
                                                                                             <DialogClose key={song.id} asChild>
-                                                                                                <Button 
-                                                                                                    variant="ghost" 
-                                                                                                    className="song-item-row w-full justify-between h-11 px-4 rounded-xl text-xs font-semibold hover:bg-primary/5 hover:text-primary transition-all" 
-                                                                                                    data-title={song.title} 
+                                                                                                <Button
+                                                                                                    variant="ghost"
+                                                                                                    className="song-item-row w-full justify-between h-11 px-4 rounded-xl text-xs font-semibold hover:bg-primary/5 hover:text-primary transition-all"
+                                                                                                    data-title={song.title}
                                                                                                     onClick={() => {
                                                                                                         const defaultArr = song.arrangements?.[0] || null;
-                                                                                                        updateRundownItem(segmentIndex, itemIndex, { 
-                                                                                                            song_id: song.id, 
-                                                                                                            song, 
+                                                                                                        updateRundownItem(segmentIndex, itemIndex, {
+                                                                                                            song_id: song.id,
+                                                                                                            song,
                                                                                                             title: song.title,
                                                                                                             song_arrangement_id: defaultArr?.id || null,
                                                                                                             arrangement: defaultArr
@@ -1393,12 +1575,12 @@ export default function Events({
                                                                     />
                                                                     {item.song && item.song.arrangements && item.song.arrangements.length > 0 && (
                                                                         <div className="flex flex-col gap-2">
-                                                                            <Select 
-                                                                                value={item.song_arrangement_id?.toString() || ""} 
+                                                                            <Select
+                                                                                value={item.song_arrangement_id?.toString() || ""}
                                                                                 onValueChange={(val) => {
                                                                                     const arrId = parseInt(val);
                                                                                     const arr = item.song?.arrangements.find(a => a.id === arrId);
-                                                                                    updateRundownItem(segmentIndex, itemIndex, { 
+                                                                                    updateRundownItem(segmentIndex, itemIndex, {
                                                                                         song_arrangement_id: arrId,
                                                                                         arrangement: arr || null
                                                                                     });
@@ -1531,8 +1713,8 @@ export default function Events({
                                                 <Users className="h-10 w-10 text-muted-foreground/20" />
                                             </div>
                                             <h4 className="text-xl font-bold text-foreground/90">Kategori Belum Dipilih</h4>
-                                            <Button 
-                                                variant="outline" 
+                                            <Button
+                                                variant="outline"
                                                 className="mt-8 h-12 px-8 rounded-2xl border-primary/20 text-primary font-bold hover:bg-primary/5"
                                                 onClick={() => setActiveTab('basic')}
                                             >
@@ -1590,9 +1772,9 @@ export default function Events({
                                 </DialogDescription>
                             </DialogHeader>
                             <div className="relative aspect-video w-full bg-muted">
-                                {viewingEvent.image_path ? (
+                                {getEventImageUrl(viewingEvent.image_path) ? (
                                     <img
-                                        src={viewingEvent.image_path}
+                                        src={getEventImageUrl(viewingEvent.image_path) ?? undefined}
                                         alt={viewingEvent.title}
                                         className="h-full w-full object-cover"
                                     />
