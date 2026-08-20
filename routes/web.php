@@ -392,6 +392,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Song Bank Routes
     Route::resource('songs', SongController::class)->except(['create', 'edit', 'show']);
     Route::post('songs/{song}/arrangements', [SongController::class, 'storeArrangement'])->name('songs.arrangements.store');
+    Route::get('arrangements/{arrangement}/pdf', [SongController::class, 'viewPdf'])->name('arrangements.pdf');
+    Route::post('arrangements/{arrangement}/duplicate', [SongController::class, 'duplicateArrangement'])->name('arrangements.duplicate');
     Route::put('arrangements/{arrangement}', [SongController::class, 'updateArrangement'])->name('arrangements.update');
     Route::delete('arrangements/{arrangement}', [SongController::class, 'destroyArrangement'])->name('arrangements.destroy');
 

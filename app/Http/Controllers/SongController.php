@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class SongController extends Controller
 {
@@ -52,22 +53,22 @@ class SongController extends Controller
         return DB::transaction(function () use ($request, $validated) {
             $song = Song::create([
                 'title' => $validated['title'],
-                'artist' => $validated['artist'],
+                'artist' => $validated['artist'] ?? null,
             ]);
 
             $arrangementData = [
                 'song_id' => $song->id,
                 'name' => $validated['arrangement_name'],
-                'duration' => $validated['duration'],
-                'bpm' => $validated['bpm'],
-                'time_signature' => $validated['time_signature'],
-                'song_flow' => $validated['song_flow'],
-                'keys' => $validated['keys'],
-                'lyrics' => $validated['lyrics'],
-                'chords' => $validated['chords'],
-                'video_url' => $validated['video_url'],
-                'has_lyrics' => !empty($validated['lyrics']),
-                'has_chords' => !empty($validated['chords']),
+                'duration' => $validated['duration'] ?? null,
+                'bpm' => $validated['bpm'] ?? null,
+                'time_signature' => $validated['time_signature'] ?? null,
+                'song_flow' => $validated['song_flow'] ?? null,
+                'keys' => $validated['keys'] ?? null,
+                'lyrics' => $validated['lyrics'] ?? null,
+                'chords' => $validated['chords'] ?? null,
+                'video_url' => $validated['video_url'] ?? null,
+                'has_lyrics' => !empty($validated['lyrics'] ?? null),
+                'has_chords' => !empty($validated['chords'] ?? null),
             ];
 
             if ($request->hasFile('pdf_file')) {
@@ -108,10 +109,19 @@ class SongController extends Controller
             'pdf_file' => 'nullable|file|mimes:pdf|max:10240',
         ]);
 
-        $arrangementData = array_merge($validated, [
+        $arrangementData = array_merge([
+            'duration' => null,
+            'bpm' => null,
+            'time_signature' => null,
+            'song_flow' => null,
+            'keys' => null,
+            'lyrics' => null,
+            'chords' => null,
+            'video_url' => null,
+        ], $validated, [
             'song_id' => $song->id,
-            'has_lyrics' => !empty($validated['lyrics']),
-            'has_chords' => !empty($validated['chords']),
+            'has_lyrics' => !empty($validated['lyrics'] ?? null),
+            'has_chords' => !empty($validated['chords'] ?? null),
         ]);
 
         if ($request->hasFile('pdf_file')) {
@@ -139,9 +149,18 @@ class SongController extends Controller
             'pdf_file' => 'nullable|file|mimes:pdf|max:10240',
         ]);
 
-        $updateData = array_merge($validated, [
-            'has_lyrics' => !empty($validated['lyrics']),
-            'has_chords' => !empty($validated['chords']),
+        $updateData = array_merge([
+            'duration' => null,
+            'bpm' => null,
+            'time_signature' => null,
+            'song_flow' => null,
+            'keys' => null,
+            'lyrics' => null,
+            'chords' => null,
+            'video_url' => null,
+        ], $validated, [
+            'has_lyrics' => !empty($validated['lyrics'] ?? null),
+            'has_chords' => !empty($validated['chords'] ?? null),
         ]);
 
         if ($request->hasFile('pdf_file')) {
@@ -177,5 +196,34 @@ class SongController extends Controller
         $song->delete();
 
         return back()->with('success', 'Lagu berhasil dihapus.');
+    }
+
+    public function viewPdf(SongArrangement $arrangement)
+    {
+        if (!$arrangement->pdf_path || !Storage::disk('public')->exists($arrangement->pdf_path)) {
+            abort(404, 'File PDF tidak ditemukan.');
+        }
+
+        return response()->file(Storage::disk('public')->path($arrangement->pdf_path), [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="' . basename($arrangement->pdf_path) . '"',
+        ]);
+    }
+
+    public function duplicateArrangement(SongArrangement $arrangement)
+    {
+        $newArrangement = $arrangement->replicate();
+        $newArrangement->name = $arrangement->name . ' (Copy)';
+
+        if ($arrangement->pdf_path && Storage::disk('public')->exists($arrangement->pdf_path)) {
+            $ext = pathinfo($arrangement->pdf_path, PATHINFO_EXTENSION);
+            $newPdfPath = 'songs/pdf/' . Str::uuid() . '.' . $ext;
+            Storage::disk('public')->copy($arrangement->pdf_path, $newPdfPath);
+            $newArrangement->pdf_path = $newPdfPath;
+        }
+
+        $newArrangement->save();
+
+        return back()->with('success', 'Aransemen berhasil diduplikasi.');
     }
 }

@@ -43,6 +43,7 @@ import {
     MoreVertical,
     PlusSquare,
     Link as LinkIcon,
+    Copy,
 } from 'lucide-react';
 import { useEffect, useState, useMemo } from 'react';
 import { toast } from 'sonner';
@@ -130,6 +131,8 @@ export default function SongsIndex({ songs, filters, breadcrumbs }: Props) {
         duration: '',
         bpm: '',
         time_signature: '4/4',
+        keys: 'C',
+        song_flow: '',
     });
 
     const arrangementForm = useForm({
@@ -173,6 +176,8 @@ export default function SongsIndex({ songs, filters, breadcrumbs }: Props) {
             duration: '',
             bpm: '',
             time_signature: '',
+            keys: 'C',
+            song_flow: '',
         });
         setIsSongModalOpen(true);
     };
@@ -258,6 +263,12 @@ export default function SongsIndex({ songs, filters, breadcrumbs }: Props) {
         if (confirm('Hapus aransemen ini?')) {
             router.delete(`/arrangements/${id}`, { onSuccess: () => toast.success('Aransemen dihapus') });
         }
+    };
+
+    const duplicateArrangement = (id: number) => {
+        router.post(`/arrangements/${id}/duplicate`, {}, {
+            onSuccess: () => toast.success('Aransemen berhasil diduplikasi'),
+        });
     };
 
     // --- Helpers ---
@@ -396,12 +407,15 @@ export default function SongsIndex({ songs, filters, breadcrumbs }: Props) {
                                         <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500">
                                             {/* Top Metadata */}
                                             <div className="flex flex-wrap items-center gap-8 border-b pb-8">
-                                                <div className="flex items-center gap-4">
+                                                <div className="flex items-center gap-2">
                                                     <h2 className="text-3xl font-bold">{activeArrangement.name}</h2>
-                                                    <Button size="icon" variant="ghost" onClick={() => openEditArrangement(activeArrangement)} className="h-8 w-8 text-slate-400 hover:text-emerald-600">
+                                                    <Button size="icon" variant="ghost" title="Duplikasi Aransemen" onClick={() => duplicateArrangement(activeArrangement.id)} className="h-8 w-8 text-slate-400 hover:text-blue-600">
+                                                        <Copy className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button size="icon" variant="ghost" title="Edit Aransemen" onClick={() => openEditArrangement(activeArrangement)} className="h-8 w-8 text-slate-400 hover:text-emerald-600">
                                                         <Pencil className="h-4 w-4" />
                                                     </Button>
-                                                    <Button size="icon" variant="ghost" onClick={() => deleteArrangement(activeArrangement.id)} className="h-8 w-8 text-slate-400 hover:text-rose-600">
+                                                    <Button size="icon" variant="ghost" title="Hapus Aransemen" onClick={() => deleteArrangement(activeArrangement.id)} className="h-8 w-8 text-slate-400 hover:text-rose-600">
                                                         <Trash2 className="h-4 w-4" />
                                                     </Button>
                                                 </div>
@@ -509,7 +523,7 @@ export default function SongsIndex({ songs, filters, breadcrumbs }: Props) {
                                                                     </div>
                                                                 </div>
                                                                 <Button size="sm" asChild variant="outline" className="h-8 text-xs font-bold">
-                                                                    <a href={`/storage/${activeArrangement.pdf_path}`} target="_blank">View File</a>
+                                                                    <a href={`/arrangements/${activeArrangement.id}/pdf`} target="_blank" rel="noopener noreferrer">View File</a>
                                                                 </Button>
                                                             </div>
                                                         ) : (
@@ -585,7 +599,14 @@ export default function SongsIndex({ songs, filters, breadcrumbs }: Props) {
                                         <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Arrangement Name</Label>
                                         <Input value={songForm.data.arrangement_name} onChange={e => songForm.setData('arrangement_name', e.target.value)} placeholder="e.g. Original, Studio, Elsa" />
                                     </div>
-                                    <div className="grid grid-cols-3 gap-4">
+                                    <div className="grid grid-cols-4 gap-4">
+                                        <div className="space-y-2">
+                                            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Key</Label>
+                                            <Select value={songForm.data.keys} onValueChange={v => songForm.setData('keys', v)}>
+                                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                                <SelectContent>{MUSICAL_KEYS.map(k => <SelectItem key={k} value={k}>{k}</SelectItem>)}</SelectContent>
+                                            </Select>
+                                        </div>
                                         <div className="space-y-2">
                                             <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Length</Label>
                                             <Input value={songForm.data.duration} onChange={e => songForm.setData('duration', e.target.value)} placeholder="4:21" />
