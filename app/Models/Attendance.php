@@ -15,6 +15,7 @@ class Attendance extends Model
 
     protected $fillable = [
         'event_id',
+        'event_session_id',
         'member_id',
         'scan_time',
         'status',
@@ -27,5 +28,10 @@ class Attendance extends Model
     public function event()
     {
         return $this->belongsTo(Event::class);
+    }
+
+    public function session()
+    {
+        return $this->belongsTo(EventSession::class, 'event_session_id');
     }
 }

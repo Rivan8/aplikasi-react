@@ -61,13 +61,17 @@ import {
     CheckCircle2,
     Sparkles,
     Info,
+    Music,
 } from 'lucide-react';
 import { QRCodeSVG as QRCodeComponent } from 'qrcode.react';
 import { useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 
 interface ExternalMember {
-    id: number;
-    name: string;
+    idjemaat: number;
+    namalengkap: string;
+    id?: number;
+    name?: string;
 }
 
 interface VolunteerMember {
@@ -101,6 +105,26 @@ interface EventRundownSegment {
     items: EventRundownItem[];
 }
 
+interface EventSession {
+    id?: number;
+    session_number: number;
+    title: string;
+    date: string;
+    start_time?: string;
+    end_time?: string;
+}
+
+interface EventParticipant {
+    id?: number;
+    member_id: number;
+    status: 'registered' | 'active' | 'passed' | 'dropped';
+    registered_at?: string;
+    member?: {
+        idjemaat: number;
+        namalengkap: string;
+    };
+}
+
 interface Event {
     id: number;
     title: string;
@@ -110,10 +134,14 @@ interface Event {
     location: string | null;
     address: string | null;
     category: string;
+    attendance_type?: 'volunteer' | 'class_participant';
+    total_sessions?: number;
     expected: number;
     image_path: string | null;
     volunteers: Volunteer[];
     rundown_segments: EventRundownSegment[];
+    sessions?: EventSession[];
+    participants?: EventParticipant[];
 }
 
 interface CategoryRole {
@@ -162,12 +190,12 @@ function SearchableSelect({
     const filteredMembers = useMemo(() => {
         return external_members
             .filter((m) =>
-                (m.name || '').toLowerCase().includes(search.toLowerCase()),
+                (m.namalengkap || m.name || '').toLowerCase().includes(search.toLowerCase()),
             )
             .slice(0, 50);
     }, [search, external_members]);
 
-    const selectedMember = external_members.find((m) => m.id === value);
+    const selectedMember = external_members.find((m) => (m.idjemaat ?? m.id) === value);
 
     return (
         <Popover open={open} onOpenChange={setOpen}>
@@ -180,7 +208,7 @@ function SearchableSelect({
                 >
                     {selectedMember ? (
                         <span className="truncate">
-                            {selectedMember.name}
+                            {selectedMember.namalengkap || selectedMember.name}
                         </span>
                     ) : (
                         <span className="text-muted-foreground">
@@ -211,19 +239,23 @@ function SearchableSelect({
                     >
                         -- Kosongkan --
                     </Button>
-                    {filteredMembers.map((member) => (
-                        <Button
-                            key={member.id}
-                            variant="ghost"
-                            className="w-full justify-start px-2 py-1.5 text-xs"
-                            onClick={() => {
-                                onSelect(member.id);
-                                setOpen(false);
-                            }}
-                        >
-                            {member.name}
-                        </Button>
-                    ))}
+                    {filteredMembers.map((member) => {
+                        const mId = member.idjemaat ?? member.id;
+                        const mName = member.namalengkap || member.name || `Member #${mId}`;
+                        return (
+                            <Button
+                                key={mId}
+                                variant="ghost"
+                                className="w-full justify-start px-2 py-1.5 text-xs"
+                                onClick={() => {
+                                    onSelect(mId ?? null);
+                                    setOpen(false);
+                                }}
+                            >
+                                {mName}
+                            </Button>
+                        );
+                    })}
                     {filteredMembers.length === 0 && (
                         <div className="px-2 py-3 text-center text-xs text-muted-foreground">
                             Member tidak ditemukan.
@@ -252,7 +284,8 @@ export default function Events({
     const [qrEvent, setQrEvent] = useState<Event | null>(null);
     const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [openCategories, setOpenCategories] = useState<string[]>([]);
-    const [activeTab, setActiveTab] = useState<'basic' | 'rundown' | 'volunteers'>('basic');
+    const [activeTab, setActiveTab] = useState<'basic' | 'participants' | 'rundown' | 'volunteers'>('basic');
+    const [selectedMemberToEnroll, setSelectedMemberToEnroll] = useState<number | null>(null);
 
     const { data, setData, post, reset, processing, errors } = useForm({
         title: '',
@@ -262,10 +295,14 @@ export default function Events({
         location: '',
         address: '',
         category: '',
+        attendance_type: 'volunteer' as 'volunteer' | 'class_participant',
+        total_sessions: 1,
         expected: 0,
         image: null as File | null,
         volunteers: [] as Volunteer[],
         rundown_segments: [] as EventRundownSegment[],
+        sessions: [] as EventSession[],
+        participants: [] as EventParticipant[],
     });
 
     const volunteerGroups = useMemo(() => {
@@ -427,11 +464,15 @@ export default function Events({
         formData.append('location', data.location);
         formData.append('address', data.address);
         formData.append('category', data.category);
+        formData.append('attendance_type', data.attendance_type);
+        formData.append('total_sessions', data.total_sessions.toString());
         formData.append('expected', data.expected.toString());
         if (data.image) formData.append('image', data.image);
 
         // JSON-stringify arrays to prevent FormData duplication
         formData.append('volunteers', JSON.stringify(data.volunteers));
+        formData.append('sessions', JSON.stringify(data.sessions));
+        formData.append('participants', JSON.stringify(data.participants));
 
         const segmentsPayload = data.rundown_segments.map((s) => ({
             ...s,
@@ -488,9 +529,13 @@ export default function Events({
                 location: editingEvent.location || '',
                 address: editingEvent.address || '',
                 category: editingEvent.category,
+                attendance_type: editingEvent.attendance_type || 'volunteer',
+                total_sessions: editingEvent.total_sessions || 1,
                 expected: editingEvent.expected,
                 image: null,
                 volunteers: rehydratedVolunteers,
+                sessions: editingEvent.sessions || [],
+                participants: editingEvent.participants || [],
                 rundown_segments:
                     editingEvent.rundown_segments?.map((segment) => ({
                         title: segment.title,
@@ -768,6 +813,9 @@ export default function Events({
                         <div className="mt-8 flex gap-1 p-1.5 bg-muted/40 rounded-2xl w-fit border border-border/40 backdrop-blur-md">
                             {[
                                 { id: 'basic', label: 'Informasi Dasar', icon: Info },
+                                ...(data.attendance_type === 'class_participant'
+                                    ? [{ id: 'participants', label: `Peserta Kelas (${data.participants.length})`, icon: Users }]
+                                    : []),
                                 { id: 'rundown', label: 'Rundown & Lagu', icon: ListChecks },
                                 { id: 'volunteers', label: 'Tim Volunteer', icon: Users },
                             ].map((tab) => (
@@ -794,12 +842,249 @@ export default function Events({
                         className="flex flex-col overflow-hidden"
                     >
                         <div className="overflow-y-auto max-h-[65vh] scrollbar-hide">
+                            {/* Tab Peserta Kelas */}
+                            {activeTab === 'participants' && (
+                                <div className="p-8 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <h3 className="text-lg font-bold text-foreground">Peserta Kelas Terdaftar</h3>
+                                            <p className="text-xs text-muted-foreground">Pilih jemaat yang akan mendaftar mengikuti kelas ini.</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex gap-3 items-center bg-muted/20 p-4 rounded-2xl border border-border/40">
+                                        <div className="flex-1">
+                                            <SearchableSelect
+                                                value={selectedMemberToEnroll}
+                                                onSelect={(val) => setSelectedMemberToEnroll(val)}
+                                                external_members={external_members}
+                                            />
+                                        </div>
+                                        <Button
+                                            type="button"
+                                            disabled={!selectedMemberToEnroll}
+                                            onClick={() => {
+                                                if (!selectedMemberToEnroll) return;
+                                                if (data.participants.some(p => p.member_id === selectedMemberToEnroll)) {
+                                                    toast.error('Member ini sudah ada dalam daftar.');
+                                                    return;
+                                                }
+                                                const memberObj = external_members.find(m => m.idjemaat === selectedMemberToEnroll);
+                                                const updated = [
+                                                    ...data.participants,
+                                                    {
+                                                        member_id: selectedMemberToEnroll,
+                                                        status: 'registered' as const,
+                                                        member: memberObj ? { idjemaat: memberObj.idjemaat, namalengkap: memberObj.namalengkap } : undefined,
+                                                    }
+                                                ];
+                                                setData('participants', updated);
+                                                setSelectedMemberToEnroll(null);
+                                                toast.success('Peserta ditambahkan.');
+                                            }}
+                                            className="h-11 font-bold gap-1 text-xs px-5 rounded-xl"
+                                        >
+                                            <Plus className="h-4 w-4" /> Tambah Peserta
+                                        </Button>
+                                    </div>
+
+                                    <div className="divide-y rounded-2xl border bg-background overflow-hidden">
+                                        {data.participants.map((p, idx) => {
+                                            const mName = p.member?.namalengkap || external_members.find(m => m.idjemaat === p.member_id)?.namalengkap || `Member #${p.member_id}`;
+                                            return (
+                                                <div key={idx} className="flex items-center justify-between p-4 text-xs">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs">
+                                                            {mName.slice(0, 2).toUpperCase()}
+                                                        </div>
+                                                        <div>
+                                                            <p className="font-bold text-foreground text-sm">{mName}</p>
+                                                            <p className="text-[10px] text-muted-foreground">Status: {p.status}</p>
+                                                        </div>
+                                                    </div>
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        onClick={() => {
+                                                            const updated = data.participants.filter((_, i) => i !== idx);
+                                                            setData('participants', updated);
+                                                        }}
+                                                        className="h-8 w-8 text-destructive hover:text-destructive"
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            );
+                                        })}
+                                        {data.participants.length === 0 && (
+                                            <div className="p-8 text-center text-xs text-muted-foreground italic">
+                                                Belum ada peserta ditambahkan. Gunakan pencarian di atas untuk memilih jemaat.
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                             {/* Tab 1: Basic Info */}
                             {activeTab === 'basic' && (
                                 <div className="p-8 space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
                                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
                                         <div className="lg:col-span-7 space-y-8">
                                             <section className="space-y-6">
+                                                <div className="space-y-4 rounded-2xl border border-primary/20 bg-primary/5 p-5">
+                                                    <div className="flex items-center justify-between">
+                                                        <div>
+                                                            <h4 className="text-xs font-extrabold text-foreground">Mode Presensi Event</h4>
+                                                            <p className="text-[11px] text-muted-foreground">Pilih jenis absensi untuk event ini</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setData('attendance_type', 'volunteer')}
+                                                            className={cn(
+                                                                "p-3 rounded-xl border text-left transition-all text-xs font-bold flex items-center gap-2",
+                                                                data.attendance_type === 'volunteer'
+                                                                    ? "bg-background border-primary text-primary shadow-sm"
+                                                                    : "border-border/40 text-muted-foreground hover:bg-background/50"
+                                                            )}
+                                                        >
+                                                            <Users className="h-4 w-4" />
+                                                            <div>
+                                                                <div>Volunteer / Pelayanan</div>
+                                                                <div className="text-[10px] font-normal text-muted-foreground">Absen petugas pelayanan</div>
+                                                            </div>
+                                                        </button>
+
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setData('attendance_type', 'class_participant');
+                                                                if (data.sessions.length === 0) {
+                                                                    setData('sessions', [{
+                                                                        session_number: 1,
+                                                                        title: 'Sesi 1',
+                                                                        date: data.date ? format(data.date, 'yyyy-MM-dd') : '',
+                                                                        start_time: data.time || '09:00',
+                                                                        end_time: '12:00',
+                                                                    }]);
+                                                                }
+                                                            }}
+                                                            className={cn(
+                                                                "p-3 rounded-xl border text-left transition-all text-xs font-bold flex items-center gap-2",
+                                                                data.attendance_type === 'class_participant'
+                                                                    ? "bg-background border-primary text-primary shadow-sm"
+                                                                    : "border-border/40 text-muted-foreground hover:bg-background/50"
+                                                            )}
+                                                        >
+                                                            <Sparkles className="h-4 w-4" />
+                                                            <div>
+                                                                <div>Peserta Kelas (Multi-Sesi)</div>
+                                                                <div className="text-[10px] font-normal text-muted-foreground">Absen peserta per sesi</div>
+                                                            </div>
+                                                        </button>
+                                                    </div>
+
+                                                    {data.attendance_type === 'class_participant' && (
+                                                        <div className="mt-4 space-y-3 pt-3 border-t border-primary/10">
+                                                            <div className="flex items-center justify-between">
+                                                                <Label className="text-xs font-bold text-primary">Jadwal Sesi Kelas (Tanggal Bebas)</Label>
+                                                                <Button
+                                                                    type="button"
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    onClick={() => {
+                                                                        const nextNum = data.sessions.length + 1;
+                                                                        const newSess = [
+                                                                            ...data.sessions,
+                                                                            {
+                                                                                session_number: nextNum,
+                                                                                title: `Sesi ${nextNum}`,
+                                                                                date: data.date ? format(data.date, 'yyyy-MM-dd') : '',
+                                                                                start_time: data.time || '09:00',
+                                                                                end_time: '12:00',
+                                                                            }
+                                                                        ];
+                                                                        setData('sessions', newSess);
+                                                                        setData('total_sessions', newSess.length);
+                                                                    }}
+                                                                    className="h-7 text-[11px] gap-1 px-2 font-bold"
+                                                                >
+                                                                    <Plus className="h-3 w-3" /> Sesi
+                                                                </Button>
+                                                            </div>
+
+                                                            {data.sessions.map((sess, idx) => (
+                                                                <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-background p-3 rounded-xl border border-border/40 text-xs">
+                                                                    <div className="col-span-3">
+                                                                        <Input
+                                                                            value={sess.title}
+                                                                            onChange={(e) => {
+                                                                                const updated = [...data.sessions];
+                                                                                updated[idx].title = e.target.value;
+                                                                                setData('sessions', updated);
+                                                                            }}
+                                                                            placeholder={`Sesi ${idx + 1}`}
+                                                                            className="h-8 text-xs"
+                                                                        />
+                                                                    </div>
+                                                                    <div className="col-span-4">
+                                                                        <Input
+                                                                            type="date"
+                                                                            value={sess.date}
+                                                                            onChange={(e) => {
+                                                                                const updated = [...data.sessions];
+                                                                                updated[idx].date = e.target.value;
+                                                                                setData('sessions', updated);
+                                                                            }}
+                                                                            className="h-8 text-xs"
+                                                                        />
+                                                                    </div>
+                                                                    <div className="col-span-2">
+                                                                        <Input
+                                                                            type="time"
+                                                                            value={sess.start_time || ''}
+                                                                            onChange={(e) => {
+                                                                                const updated = [...data.sessions];
+                                                                                updated[idx].start_time = e.target.value;
+                                                                                setData('sessions', updated);
+                                                                            }}
+                                                                            className="h-8 text-xs"
+                                                                        />
+                                                                    </div>
+                                                                    <div className="col-span-2">
+                                                                        <Input
+                                                                            type="time"
+                                                                            value={sess.end_time || ''}
+                                                                            onChange={(e) => {
+                                                                                const updated = [...data.sessions];
+                                                                                updated[idx].end_time = e.target.value;
+                                                                                setData('sessions', updated);
+                                                                            }}
+                                                                            className="h-8 text-xs"
+                                                                        />
+                                                                    </div>
+                                                                    <div className="col-span-1 flex justify-end">
+                                                                        <Button
+                                                                            type="button"
+                                                                            variant="ghost"
+                                                                            size="icon"
+                                                                            onClick={() => {
+                                                                                const updated = data.sessions.filter((_, i) => i !== idx).map((s, i) => ({ ...s, session_number: i + 1 }));
+                                                                                setData('sessions', updated);
+                                                                                setData('total_sessions', Math.max(1, updated.length));
+                                                                            }}
+                                                                            className="h-7 w-7 text-destructive hover:text-destructive"
+                                                                        >
+                                                                            <Trash2 className="h-3.5 w-3.5" />
+                                                                        </Button>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+
                                                 <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-primary/70">
                                                     <span className="h-px w-8 bg-primary/30" />
                                                     Detail Utama
@@ -1474,9 +1759,9 @@ export default function Events({
                                                                                             <Music className="h-2.5 w-2.5" />
                                                                                             {item.song.title}
                                                                                         </p>
-                                                                                        {item.song.song_flow && (
+                                                                                        {(item.arrangement?.song_flow || item.song.arrangements?.[0]?.song_flow) && (
                                                                                             <p className="text-[9px] text-emerald-600 font-bold uppercase tracking-tight ml-3.5">
-                                                                                                Flow: {item.song.song_flow}
+                                                                                                Flow: {item.arrangement?.song_flow || item.song.arrangements?.[0]?.song_flow}
                                                                                             </p>
                                                                                         )}
                                                                                     </div>

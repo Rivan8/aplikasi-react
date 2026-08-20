@@ -23,6 +23,7 @@ interface AttendanceLog {
     member_name: string;
     member_nik: string | null;
     event_title: string;
+    session_title?: string | null;
     event_location: string;
     event_date: string | null;
     scan_time: string;
@@ -30,10 +31,19 @@ interface AttendanceLog {
     status: 'Present' | 'Late';
 }
 
+interface EventSessionOption {
+    id: number;
+    session_number: number;
+    title: string;
+    date: string;
+}
+
 interface EventOption {
     id: number;
     title: string;
     date: string;
+    attendance_type?: string;
+    sessions?: EventSessionOption[];
 }
 
 interface PaginationLinks {
@@ -55,6 +65,7 @@ interface PaginatedAttendances {
 
 interface Filters {
     event_id?: string;
+    event_session_id?: string;
     status?: string;
     date_from?: string;
     date_to?: string;
@@ -71,14 +82,18 @@ const avatarColors = ['bg-primary', 'bg-chart-2', 'bg-chart-3', 'bg-chart-4', 'b
 
 export default function AttendanceHistory({ attendances, events, filters }: Props) {
     const [filterEventId, setFilterEventId] = useState(filters.event_id || 'all');
+    const [filterSessionId, setFilterSessionId] = useState(filters.event_session_id || 'all');
     const [filterStatus, setFilterStatus] = useState(filters.status || 'all');
     const [filterDateFrom, setFilterDateFrom] = useState(filters.date_from || '');
     const [filterDateTo, setFilterDateTo] = useState(filters.date_to || '');
     const [searchQuery, setSearchQuery] = useState(filters.search || '');
 
+    const selectedEventObj = events.find(e => String(e.id) === filterEventId);
+
     const applyFilters = () => {
         const params: Record<string, string> = {};
         if (filterEventId && filterEventId !== 'all') params.event_id = filterEventId;
+        if (filterSessionId && filterSessionId !== 'all') params.event_session_id = filterSessionId;
         if (filterStatus && filterStatus !== 'all') params.status = filterStatus;
         if (filterDateFrom) params.date_from = filterDateFrom;
         if (filterDateTo) params.date_to = filterDateTo;
@@ -92,6 +107,7 @@ export default function AttendanceHistory({ attendances, events, filters }: Prop
 
     const resetFilters = () => {
         setFilterEventId('all');
+        setFilterSessionId('all');
         setFilterStatus('all');
         setFilterDateFrom('');
         setFilterDateTo('');
@@ -121,6 +137,7 @@ export default function AttendanceHistory({ attendances, events, filters }: Prop
         const params: Record<string, string> = {};
 
         if (filterEventId && filterEventId !== 'all') params.event_id = filterEventId;
+        if (filterSessionId && filterSessionId !== 'all') params.event_session_id = filterSessionId;
         if (filterStatus && filterStatus !== 'all') params.status = filterStatus;
         if (filterDateFrom) params.date_from = filterDateFrom;
         if (filterDateTo) params.date_to = filterDateTo;
@@ -208,7 +225,10 @@ export default function AttendanceHistory({ attendances, events, filters }: Prop
                             <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
                                 Filter Event
                             </label>
-                            <Select value={filterEventId} onValueChange={setFilterEventId}>
+                            <Select value={filterEventId} onValueChange={(val) => {
+                                setFilterEventId(val);
+                                setFilterSessionId('all');
+                            }}>
                                 <SelectTrigger className="w-full bg-muted/30 border-border">
                                     <SelectValue placeholder="Semua Event" />
                                 </SelectTrigger>
@@ -222,6 +242,27 @@ export default function AttendanceHistory({ attendances, events, filters }: Prop
                                 </SelectContent>
                             </Select>
                         </div>
+
+                        {selectedEventObj?.sessions && selectedEventObj.sessions.length > 0 && (
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold uppercase tracking-widest text-primary">
+                                    Filter Sesi Kelas
+                                </label>
+                                <Select value={filterSessionId} onValueChange={setFilterSessionId}>
+                                    <SelectTrigger className="w-full bg-primary/5 border-primary/20 font-semibold text-xs">
+                                        <SelectValue placeholder="Semua Sesi Kelas" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">Semua Sesi Kelas</SelectItem>
+                                        {selectedEventObj.sessions.map(s => (
+                                            <SelectItem key={s.id} value={String(s.id)}>
+                                                {s.title} ({s.date})
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
                         <div className="space-y-2">
                             <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
                                 Status
@@ -319,14 +360,19 @@ export default function AttendanceHistory({ attendances, events, filters }: Prop
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4">
-                                                <div className="flex flex-col gap-1">
-                                                    <span className="font-medium text-foreground/80">{log.event_title}</span>
-                                                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                                        <MapPin className="h-3 w-3" />
-                                                        {log.event_location}
-                                                    </div>
-                                                </div>
-                                            </td>
+                                                 <div className="flex flex-col gap-1">
+                                                     <span className="font-medium text-foreground/80">{log.event_title}</span>
+                                                     {log.session_title && (
+                                                         <Badge variant="outline" className="w-fit text-[10px] bg-primary/5 text-primary border-primary/20 font-bold">
+                                                             {log.session_title}
+                                                         </Badge>
+                                                     )}
+                                                     <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                                         <MapPin className="h-3 w-3" />
+                                                         {log.event_location}
+                                                     </div>
+                                                 </div>
+                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-2 text-foreground/70">
                                                     <Clock className="h-4 w-4 text-muted-foreground" />

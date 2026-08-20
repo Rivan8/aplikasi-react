@@ -18,12 +18,17 @@ class AttendanceController extends Controller
      */
     public function history(Request $request)
     {
-        $query = Attendance::with('event')
+        $query = Attendance::with(['event', 'session'])
             ->orderBy('scan_time', 'desc');
 
         // Filter by event
         if ($request->filled('event_id') && $request->event_id !== 'all') {
             $query->where('event_id', $request->event_id);
+        }
+
+        // Filter by session
+        if ($request->filled('event_session_id') && $request->event_session_id !== 'all') {
+            $query->where('event_session_id', $request->event_session_id);
         }
 
         // Filter by status
@@ -73,6 +78,7 @@ class AttendanceController extends Controller
                 'member_name' => $memberInfo ? $memberInfo['name'] : 'Member #' . $attendance->member_id,
                 'member_nik' => $memberInfo ? $memberInfo['nik'] : null,
                 'event_title' => $attendance->event?->title ?? 'Event Dihapus',
+                'session_title' => $attendance->session ? ($attendance->session->title . ' (' . $attendance->session->date . ')') : null,
                 'event_location' => $attendance->event?->location ?? '-',
                 'event_date' => $attendance->event?->date ?? null,
                 'scan_time' => $attendance->scan_time?->format('d M Y, H:i'),
@@ -81,13 +87,13 @@ class AttendanceController extends Controller
             ];
         });
 
-        // Ambil semua events untuk filter dropdown
-        $events = Event::orderBy('date', 'desc')->get(['id', 'title', 'date']);
+        // Ambil semua events beserta sessions untuk filter dropdown
+        $events = Event::with('sessions')->orderBy('date', 'desc')->get();
 
         return Inertia::render('attendance-history/index', [
             'attendances' => $attendanceLogs,
             'events' => $events,
-            'filters' => $request->only(['event_id', 'status', 'date_from', 'date_to', 'search']),
+            'filters' => $request->only(['event_id', 'event_session_id', 'status', 'date_from', 'date_to', 'search']),
         ]);
     }
 
@@ -112,11 +118,15 @@ class AttendanceController extends Controller
 
     private function buildAttendanceExportRows(Request $request): array
     {
-        $query = Attendance::with('event')
+        $query = Attendance::with(['event', 'session'])
             ->orderBy('scan_time', 'desc');
 
         if ($request->filled('event_id') && $request->event_id !== 'all') {
             $query->where('event_id', $request->event_id);
+        }
+
+        if ($request->filled('event_session_id') && $request->event_session_id !== 'all') {
+            $query->where('event_session_id', $request->event_session_id);
         }
 
         if ($request->filled('status') && $request->status !== 'all') {
@@ -157,6 +167,7 @@ class AttendanceController extends Controller
                 'Nama Jemaat' => $memberInfo ? $memberInfo['name'] : 'Member #' . $attendance->member_id,
                 'NIK' => $memberInfo ? $memberInfo['nik'] : '-',
                 'Event' => $attendance->event?->title ?? 'Event Dihapus',
+                'Sesi Kelas' => $attendance->session?->title ? ($attendance->session->title . ' (' . $attendance->session->date . ')') : '-',
                 'Lokasi' => $attendance->event?->location ?? '-',
                 'Tanggal Event' => $attendance->event?->date ?? '-',
                 'Waktu Scan' => $attendance->scan_time?->format('d M Y, H:i'),
@@ -176,26 +187,31 @@ class AttendanceController extends Controller
      */
     public function showAdminScan(Request $request)
     {
-        $events = Event::orderBy('date', 'desc')->get();
+        $events = Event::with('sessions')->orderBy('date', 'desc')->get();
 
-        // Jika tidak ada event_id di request, redirect ke event pertama agar URL "sticky"
         if (!$request->has('event_id') && $events->isNotEmpty()) {
             return redirect()->route('scan-qr', ['event_id' => $events->first()->id]);
         }
 
         $selectedEventId = $request->input('event_id');
+        $selectedSessionId = $request->input('event_session_id');
         $selectedEventIdStr = (string) $selectedEventId;
 
         $recentAttendances = [];
         $totalScanned = 0;
 
         if ($selectedEventId) {
-            $attendances = Attendance::where('event_id', $selectedEventId)
-                ->orderBy('scan_time', 'desc')
+            $query = Attendance::where('event_id', $selectedEventId);
+
+            if ($selectedSessionId) {
+                $query->where('event_session_id', $selectedSessionId);
+            }
+
+            $attendances = (clone $query)->orderBy('scan_time', 'desc')
                 ->take(10)
                 ->get();
 
-            $totalScanned = Attendance::where('event_id', $selectedEventId)->count();
+            $totalScanned = (clone $query)->count();
 
             $memberIds = $attendances->pluck('member_id')->unique()->toArray();
             $members = [];
@@ -228,23 +244,21 @@ class AttendanceController extends Controller
             'recentScans' => $recentAttendances,
             'totalScanned' => $totalScanned,
             'filters' => [
-                'event_id' => $selectedEventIdStr
+                'event_id' => $selectedEventIdStr,
+                'event_session_id' => $selectedSessionId,
             ]
         ]);
     }
 
-    /**
-     * Halaman scan untuk event tertentu (GET route untuk QR code clickable)
-     */
     public function showEventScan(Event $event)
     {
+        $event->load('sessions');
         return Inertia::render('my/scan/index', [
             'event' => $event,
             'qr_value' => route('attendance.scan-event', $event)
         ]);
     }
 
-    // Mode 1: Jemaat scan QR Event (POST)
     public function scanEventQr(Request $request, Event $event)
     {
         $user = $request->user();
@@ -253,25 +267,34 @@ class AttendanceController extends Controller
             return back()->with('error', 'Akun Anda belum terhubung dengan data jemaat. Silakan hubungi admin.');
         }
 
-        // Cek apakah sudah absen
-        $exists = Attendance::where('event_id', $event->id)
-            ->where('member_id', $user->member_id)
-            ->exists();
+        $sessionId = $request->input('event_session_id');
 
-        if ($exists) {
-            return back()->with('info', 'Anda sudah melakukan absensi untuk event ini.');
+        // Auto-match session by date if event is class_participant and session not specified
+        if (!$sessionId && $event->attendance_type === 'class_participant') {
+            $matchedSession = $event->sessions()->whereDate('date', now()->toDateString())->first();
+            if ($matchedSession) {
+                $sessionId = $matchedSession->id;
+            }
         }
 
-        // Tentukan status (Present vs Late) berdasarkan waktu absensi yang fleksibel
-        // Prioritas: 1. attendance_start_time, 2. event time (default)
-        $compareTime = $event->attendance_start_time ?? $event->time;
+        $query = Attendance::where('event_id', $event->id)
+            ->where('member_id', $user->member_id);
 
-        // Beri toleransi 1 menit
+        if ($sessionId) {
+            $query->where('event_session_id', $sessionId);
+        }
+
+        if ($query->exists()) {
+            return back()->with('info', 'Anda sudah melakukan absensi untuk sesi ini.');
+        }
+
+        $compareTime = $event->attendance_start_time ?? $event->time;
         $eventDateTime = \Carbon\Carbon::parse($event->date . ' ' . $compareTime)->addMinute();
         $status = now()->greaterThan($eventDateTime) ? 'Late' : 'Present';
 
         Attendance::create([
             'event_id' => $event->id,
+            'event_session_id' => $sessionId,
             'member_id' => $user->member_id,
             'scan_time' => now(),
             'status' => $status,
@@ -281,45 +304,49 @@ class AttendanceController extends Controller
         return back()->with('success', $message);
     }
 
-    // Mode 2: Admin scan NIK jemaat dari kartu (POST)
     public function scanMemberQr(Request $request)
     {
         $request->validate([
             'event_id' => 'required|exists:events,id',
+            'event_session_id' => 'nullable|exists:event_sessions,id',
             'nik' => 'required|string',
         ]);
 
         $nik = trim($request->nik);
-
-        // Cari member berdasarkan NIK di DB external
         $member = ExternalMember::byNik($nik)->first();
 
         if (!$member) {
             return back()->with('error', 'QR Code tidak dikenali. Pastikan kartu member valid. (Kode: ' . $nik . ')');
         }
 
-        // Cek apakah sudah absen
-        $exists = Attendance::where('event_id', $request->event_id)
-            ->where('member_id', $member->id)
-            ->exists();
-
-        if ($exists) {
-            return back()->with('info', $member->name . ' sudah tercatat hadir di event ini.');
-        }
-
-        // Ambil data event untuk mengecek waktu
+        $sessionId = $request->input('event_session_id');
         $event = Event::find($request->event_id);
 
-        // Tentukan status (Present vs Late) berdasarkan waktu absensi yang fleksibel
-        // Prioritas: 1. attendance_start_time, 2. event time (default)
-        $compareTime = $event->attendance_start_time ?? $event->time;
+        if (!$sessionId && $event->attendance_type === 'class_participant') {
+            $matchedSession = $event->sessions()->whereDate('date', now()->toDateString())->first();
+            if ($matchedSession) {
+                $sessionId = $matchedSession->id;
+            }
+        }
 
-        // Beri toleransi 1 menit
+        $query = Attendance::where('event_id', $request->event_id)
+            ->where('member_id', $member->id);
+
+        if ($sessionId) {
+            $query->where('event_session_id', $sessionId);
+        }
+
+        if ($query->exists()) {
+            return back()->with('info', $member->name . ' sudah tercatat hadir untuk sesi/event ini.');
+        }
+
+        $compareTime = $event->attendance_start_time ?? $event->time;
         $eventDateTime = \Carbon\Carbon::parse($event->date . ' ' . $compareTime)->addMinute();
         $status = now()->greaterThan($eventDateTime) ? 'Late' : 'Present';
 
         Attendance::create([
             'event_id' => $request->event_id,
+            'event_session_id' => $sessionId,
             'member_id' => $member->id,
             'scan_time' => now(),
             'status' => $status,

@@ -21,6 +21,8 @@ class Event extends Model
         'location',
         'address',
         'category',
+        'attendance_type',
+        'total_sessions',
         'expected',
         'image_path',
     ];
@@ -43,5 +45,15 @@ class Event extends Model
     public function attendances()
     {
         return $this->hasMany(Attendance::class);
+    }
+
+    public function sessions()
+    {
+        return $this->hasMany(EventSession::class)->orderBy('session_number');
+    }
+
+    public function participants()
+    {
+        return $this->hasMany(EventParticipant::class);
     }
 }

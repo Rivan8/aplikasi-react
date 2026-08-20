@@ -9,12 +9,21 @@ import { AlertTriangle, Aperture, History, Info, Keyboard, StopCircle, UserCheck
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
+interface EventSession {
+    id: number;
+    session_number: number;
+    title: string;
+    date: string;
+}
+
 interface Event {
     id: number;
     title: string;
     location: string;
     time: string;
     expected: number;
+    attendance_type?: string;
+    sessions?: EventSession[];
 }
 
 interface RecentScan {
@@ -28,21 +37,24 @@ export default function ScanQR({
     events = [],
     recentScans = [],
     totalScanned = 0,
-    filters = { event_id: '' }
+    filters = { event_id: '', event_session_id: '' }
 }: {
     events: Event[];
     recentScans?: RecentScan[];
     totalScanned?: number;
-    filters?: { event_id: string };
+    filters?: { event_id: string; event_session_id?: string };
 }) {
     const { flash } = usePage().props as any;
     const scannerRef = useRef<Html5Qrcode | null>(null);
     const readerElementRef = useRef<HTMLDivElement | null>(null);
     const [isScanning, setIsScanning] = useState(false);
     const [selectedEventId, setSelectedEventId] = useState<string>(filters.event_id || '');
+    const [selectedSessionId, setSelectedSessionId] = useState<string>(filters.event_session_id || '');
     const [processing, setProcessing] = useState(false);
     const isMountedRef = useRef(true);
     const [lastScanResult, setLastScanResult] = useState<{ type: 'success' | 'info' | 'error'; name: string } | null>(null);
+
+    const activeEvent = events.find(e => String(e.id) === selectedEventId);
 
     // Auto-refresh data setiap 5 detik untuk sinkronisasi antar komputer
     useEffect(() => {
@@ -70,13 +82,26 @@ export default function ScanQR({
         if (filters.event_id && filters.event_id !== selectedEventId) {
             setSelectedEventId(filters.event_id);
         }
-    }, [filters.event_id]);
+        if (filters.event_session_id !== undefined && filters.event_session_id !== selectedSessionId) {
+            setSelectedSessionId(filters.event_session_id || '');
+        }
+    }, [filters.event_id, filters.event_session_id]);
 
     // Handle event selection change
     const handleEventChange = (value: string) => {
         setSelectedEventId(value);
-        // Memaksa reload halaman secara menyeluruh untuk memastikan data tersinkronisasi
+        setSelectedSessionId('');
         router.get(`/scan-qr`, { event_id: value }, {
+            preserveState: false,
+            preserveScroll: false,
+            replace: true
+        });
+    };
+
+    const handleSessionChange = (sessionId: string) => {
+        const val = sessionId === 'all' ? '' : sessionId;
+        setSelectedSessionId(val);
+        router.get(`/scan-qr`, { event_id: selectedEventId, event_session_id: val }, {
             preserveState: false,
             preserveScroll: false,
             replace: true
@@ -139,6 +164,7 @@ export default function ScanQR({
 
         router.post('/attendance/scan-member', {
             event_id: selectedEventId,
+            event_session_id: selectedSessionId || null,
             nik: nik
         }, {
             preserveState: true,
@@ -248,8 +274,6 @@ export default function ScanQR({
         setLastScanResult(null);
     }, []);
 
-    const activeEvent = events.find(e => String(e.id) === selectedEventId);
-
     return (
         <>
             <Head title="Scan Kartu Member" />
@@ -265,7 +289,7 @@ export default function ScanQR({
                                 <span className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">Live Scanning</span>
                             </div>
 
-                            <div className="w-full max-w-md pt-2">
+                            <div className="w-full max-w-md pt-2 space-y-3">
                                 <Select value={selectedEventId} onValueChange={handleEventChange} disabled={isScanning}>
                                     <SelectTrigger className="h-12 text-lg font-bold">
                                         <SelectValue placeholder="Pilih Event Aktif..." />
@@ -276,6 +300,22 @@ export default function ScanQR({
                                         ))}
                                     </SelectContent>
                                 </Select>
+
+                                {activeEvent && activeEvent.sessions && activeEvent.sessions.length > 0 && (
+                                    <Select value={selectedSessionId || 'all'} onValueChange={handleSessionChange} disabled={isScanning}>
+                                        <SelectTrigger className="h-10 text-sm font-semibold bg-primary/5 border-primary/20">
+                                            <SelectValue placeholder="Pilih Sesi Kelas (Semua Sesi)..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">Semua Sesi Kelas</SelectItem>
+                                            {activeEvent.sessions.map(s => (
+                                                <SelectItem key={s.id} value={String(s.id)}>
+                                                    {s.title} ({s.date})
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                )}
                             </div>
                             {activeEvent && (
                                 <p className="text-sm text-muted-foreground mt-2">

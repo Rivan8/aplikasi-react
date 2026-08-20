@@ -1,5 +1,6 @@
 import { Link, usePage } from '@inertiajs/react';
 import {
+    CalendarDays,
     HelpCircle,
     History,
     LayoutDashboard,
@@ -45,9 +46,9 @@ const mainNavItems: NavItem[] = [
         roles: ['jemaat', 'admin'],
     },
     {
-        title: 'Event Dashboard',
+        title: 'Management Event',
         href: '/events',
-        icon: LayoutDashboard,
+        icon: CalendarDays,
         roles: ['admin'],
     },
     {

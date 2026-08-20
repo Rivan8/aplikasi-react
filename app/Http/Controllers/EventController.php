@@ -16,7 +16,13 @@ class EventController extends Controller
     public function index()
     {
         return Inertia::render('events/index', [
-            'events' => Event::with(['volunteers.member', 'rundownSegments.items.song.arrangements', 'rundownSegments.items.arrangement'])->orderBy('date', 'desc')->get(),
+            'events' => Event::with([
+                'volunteers.member',
+                'sessions',
+                'participants.member',
+                'rundownSegments.items.song.arrangements',
+                'rundownSegments.items.arrangement'
+            ])->orderBy('date', 'desc')->get(),
             'categories' => Category::with('roles.department')->get(),
             'songs' => Song::with('arrangements')->orderBy('title')->get(),
             'external_members' => ExternalMember::select('idjemaat', 'namalengkap')->get()->map(function($m) {
@@ -41,13 +47,19 @@ class EventController extends Controller
             'location' => 'required|string|max:255',
             'address' => 'required|string|max:255',
             'category' => 'required|string',
+            'attendance_type' => 'nullable|string|in:volunteer,class_participant',
+            'total_sessions' => 'nullable|integer|min:1',
             'expected' => 'required|integer|min:0',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
-            'volunteers' => 'nullable|string', // Changed to string because multipart/form-data often handles arrays differently in some setups, but we'll parse it
+            'volunteers' => 'nullable|string',
             'rundown_segments' => 'nullable|string',
+            'sessions' => 'nullable|string',
+            'participants' => 'nullable|string',
         ]);
 
-        $data = \Illuminate\Support\Arr::except($validated, ['image', 'volunteers', 'rundown_segments']);
+        $data = \Illuminate\Support\Arr::except($validated, ['image', 'volunteers', 'rundown_segments', 'sessions', 'participants']);
+        $data['attendance_type'] = $validated['attendance_type'] ?? 'volunteer';
+        $data['total_sessions'] = $validated['total_sessions'] ?? 1;
 
         if ($request->hasFile('image')) {
             $path = $request->file('image')->store('events', 'public');
@@ -65,6 +77,8 @@ class EventController extends Controller
             }
         }
 
+        $this->syncSessions($event, $request->sessions);
+        $this->syncParticipants($event, $request->participants);
         $this->syncRundown($event, $request->rundown_segments);
 
         return back()->with('success', 'Event berhasil dibuat');
@@ -80,17 +94,20 @@ class EventController extends Controller
             'location' => 'required|string|max:255',
             'address' => 'required|string|max:255',
             'category' => 'required|string',
+            'attendance_type' => 'nullable|string|in:volunteer,class_participant',
+            'total_sessions' => 'nullable|integer|min:1',
             'expected' => 'required|integer|min:0',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
             'volunteers' => 'nullable|string',
             'rundown_segments' => 'nullable|string',
-            '_method' => 'nullable|string', // For spoofing
+            'sessions' => 'nullable|string',
+            'participants' => 'nullable|string',
+            '_method' => 'nullable|string',
         ]);
 
-        $data = \Illuminate\Support\Arr::except($validated, ['image', 'volunteers', 'rundown_segments', '_method']);
+        $data = \Illuminate\Support\Arr::except($validated, ['image', 'volunteers', 'rundown_segments', 'sessions', 'participants', '_method']);
 
         if ($request->hasFile('image')) {
-            // Delete old image if exists
             if ($event->image_path) {
                 $oldPath = str_replace('/storage/', '', $event->image_path);
                 \Illuminate\Support\Facades\Storage::disk('public')->delete($oldPath);
@@ -101,7 +118,6 @@ class EventController extends Controller
 
         $event->update($data);
 
-        // Refresh volunteers
         $event->volunteers()->delete();
         $volunteers = is_string($request->volunteers) ? json_decode($request->volunteers, true) : $request->volunteers;
         if (!empty($volunteers) && is_array($volunteers)) {
@@ -112,9 +128,55 @@ class EventController extends Controller
             }
         }
 
+        $this->syncSessions($event, $request->sessions);
+        $this->syncParticipants($event, $request->participants);
         $this->syncRundown($event, $request->rundown_segments);
 
         return back()->with('success', 'Event berhasil diperbarui');
+    }
+
+    public function enrollParticipant(Request $request, Event $event)
+    {
+        $validated = $request->validate([
+            'member_id' => 'required',
+        ]);
+
+        $exists = $event->participants()->where('member_id', $validated['member_id'])->exists();
+        if ($exists) {
+            return back()->with('error', 'Anggota sudah terdaftar sebagai peserta kelas ini.');
+        }
+
+        $event->participants()->create([
+            'member_id' => $validated['member_id'],
+            'status' => 'registered',
+            'registered_at' => now(),
+        ]);
+
+        return back()->with('success', 'Peserta berhasil didaftarkan ke kelas.');
+    }
+
+    public function removeParticipant(Event $event, \App\Models\EventParticipant $participant)
+    {
+        if ($participant->event_id !== $event->id) {
+            abort(403);
+        }
+
+        $participant->delete();
+        return back()->with('success', 'Peserta berhasil dihapus dari kelas.');
+    }
+
+    public function updateParticipantStatus(Request $request, Event $event, \App\Models\EventParticipant $participant)
+    {
+        if ($participant->event_id !== $event->id) {
+            abort(403);
+        }
+
+        $validated = $request->validate([
+            'status' => 'required|in:registered,active,passed,dropped',
+        ]);
+
+        $participant->update($validated);
+        return back()->with('success', 'Status peserta berhasil diperbarui.');
     }
 
     public function destroy(Event $event)
@@ -123,14 +185,53 @@ class EventController extends Controller
         return back()->with('success', 'Event berhasil dihapus');
     }
 
+    private function syncSessions(Event $event, ?string $payload): void
+    {
+        if ($event->attendance_type !== 'class_participant') {
+            $event->sessions()->delete();
+            return;
+        }
+
+        if ($payload === null) {
+            if ($event->sessions()->count() === 0) {
+                $event->sessions()->create([
+                    'session_number' => 1,
+                    'title' => 'Sesi 1',
+                    'date' => $event->date,
+                    'start_time' => $event->time,
+                ]);
+            }
+            return;
+        }
+
+        $sessions = is_string($payload) ? json_decode($payload, true) : $payload;
+        if (!is_array($sessions)) {
+            return;
+        }
+
+        $event->sessions()->delete();
+
+        foreach (array_values($sessions) as $index => $sess) {
+            $sessionNum = $index + 1;
+            $event->sessions()->create([
+                'session_number' => $sessionNum,
+                'title' => trim((string) ($sess['title'] ?? ('Sesi ' . $sessionNum))),
+                'date' => $sess['date'] ?? $event->date,
+                'start_time' => $sess['start_time'] ?? $event->time,
+                'end_time' => $sess['end_time'] ?? null,
+                'attendance_start_time' => $sess['attendance_start_time'] ?? null,
+            ]);
+        }
+
+        $event->update(['total_sessions' => max(1, count($sessions))]);
+    }
+
     private function syncRundown(Event $event, ?string $payload): void
     {
-        // Hanya superadmin yang bisa seting rundown
         if (!auth()->user()->isSuperAdmin()) {
             return;
         }
 
-        // Jika payload null, jangan hapus rundown yang sudah ada
         if ($payload === null) {
             return;
         }
@@ -175,6 +276,27 @@ class EventController extends Controller
                     'duration_seconds' => max(0, (int) ($item['duration_seconds'] ?? 0)),
                     'sort_order' => $itemIndex,
                 ]);
+            }
+        }
+    }
+
+    private function syncParticipants(Event $event, ?string $payload): void
+    {
+        if ($event->attendance_type !== 'class_participant' || $payload === null) {
+            return;
+        }
+
+        $participants = is_string($payload) ? json_decode($payload, true) : $payload;
+        if (!is_array($participants)) {
+            return;
+        }
+
+        foreach ($participants as $p) {
+            if (!empty($p['member_id'])) {
+                $event->participants()->firstOrCreate(
+                    ['member_id' => $p['member_id']],
+                    ['status' => $p['status'] ?? 'registered', 'registered_at' => now()]
+                );
             }
         }
     }

@@ -378,6 +378,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::resource('departments', DepartmentController::class)->except(['create', 'edit', 'show']);
 
     Route::resource('events', EventController::class)->except(['create', 'edit', 'show']);
+    Route::post('events/{event}/participants', [EventController::class, 'enrollParticipant'])->name('events.participants.enroll');
+    Route::delete('events/{event}/participants/{participant}', [EventController::class, 'removeParticipant'])->name('events.participants.remove');
+    Route::put('events/{event}/participants/{participant}', [EventController::class, 'updateParticipantStatus'])->name('events.participants.update-status');
     Route::get('live-events', [LiveEventController::class, 'index'])->name('live-events.index');
     Route::get('live-events/time-keeper', [LiveEventController::class, 'timeKeeper'])->name('live-events.time-keeper');
     Route::post('live-events/{event}/start', [LiveEventController::class, 'start'])->name('live-events.start');
