@@ -13,9 +13,9 @@ use App\Models\CategoryRole;
 use App\Models\Department;
 use App\Models\Event;
 use App\Models\EventVolunteer;
-use App\Models\ExternalMember;
 use App\Models\MemberDetail;
 use App\Models\MemberStatus;
+use App\Services\MemberApiService;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Route;
@@ -27,6 +27,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', function (Request $request) {
         $today = now();
         $user = $request->user();
+        $memberApi = app(MemberApiService::class);
         $upcomingEvents = Event::with([
             'rundownSegments' => function ($query) {
                 $query->orderBy('sort_order');
@@ -59,14 +60,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         if (! empty($memberIds)) {
             try {
-                $members = ExternalMember::whereIn('idjemaat', $memberIds)
-                    ->get()
+                $members = collect($memberApi->findMany($memberIds))
                     ->mapWithKeys(fn ($member) => [
-                        $member->idjemaat => [
-                            'name' => $member->name,
-                        ],
-                    ])
-                    ->all();
+                        $member['idjemaat'] => ['name' => $member['name']],
+                    ])->all();
             } catch (Exception $e) {
                 $members = [];
             }
@@ -102,7 +99,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         $adminAssignments = collect();
         if ($user->role === 'admin') {
-            $allAssignments = EventVolunteer::with(['event', 'member'])
+            $allAssignments = EventVolunteer::with('event')
                 ->whereHas('event', fn ($query) => $query->whereDate('date', '>=', $today->toDateString()))
                 ->orderBy(
                     Event::select('date')
@@ -111,6 +108,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 )
                 ->get();
 
+            $assignmentMembers = $memberApi->findMany($allAssignments->pluck('member_id'));
             $adminAssignments = $allAssignments->map(fn ($assignment) => [
                 'id' => $assignment->id,
                 'role_category' => $assignment->role_category,
@@ -118,7 +116,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 'response_status' => $assignment->response_status ?? 'pending',
                 'response_reason' => $assignment->response_reason,
                 'member_id' => $assignment->member_id,
-                'member_name' => $assignment->member?->namalengkap ?? 'Member #'.$assignment->member_id,
+                'member_name' => $assignmentMembers[$assignment->member_id]['name'] ?? 'Member #'.$assignment->member_id,
                 'event' => [
                     'id' => $assignment->event?->id,
                     'title' => $assignment->event?->title ?? 'Event Dihapus',
@@ -157,18 +155,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
             $teamMembers = [];
 
             if (! empty($teamMemberIds)) {
-                try {
-                    $teamMembers = ExternalMember::whereIn('idjemaat', $teamMemberIds)
-                        ->get()
-                        ->mapWithKeys(fn ($member) => [
-                            $member->idjemaat => [
-                                'name' => $member->name,
-                            ],
-                        ])
-                        ->all();
-                } catch (Exception $e) {
-                    $teamMembers = [];
-                }
+                $teamMembers = collect($memberApi->findMany($teamMemberIds))
+                    ->mapWithKeys(fn ($member) => [
+                        $member['idjemaat'] => ['name' => $member['name']],
+                    ])->all();
             }
 
             $userAssignments = $assignments->map(fn ($assignment) => [
@@ -260,7 +250,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 ]),
                 'admin_assignments' => $adminAssignments,
                 'user_assignments' => $userAssignments,
-                'external_members' => $user->role === 'admin' ? ExternalMember::select('idjemaat', 'namalengkap')->get()->map(fn($m) => ['id' => $m->idjemaat, 'name' => $m->namalengkap]) : [],
+                'external_members' => [],
             ],
         ]);
     })->name('dashboard');
@@ -310,19 +300,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
         return back()->with('success', 'Volunteer berhasil diganti.');
     })->name('dashboard.volunteer-assignments.replace');
     Route::get('anggota', function (Request $request) {
+        $memberApi = app(MemberApiService::class);
+
         try {
-            $query = ExternalMember::with(['member_detail.status', 'member_detail.department']);
-
-            // Handle Search
             $search = $request->input('search');
-            if (! empty($search)) {
-                $query->where(function ($q) use ($search) {
-                    $q->where('namalengkap', 'like', "%{$search}%")
-                        ->orWhere('idjemaat', 'like', "%{$search}%");
-                });
-            }
-
-            $members = $query->paginate(10)->withQueryString();
+            $member = ! empty($search) ? $memberApi->findByScan($search) : null;
+            $members = new LengthAwarePaginator(
+                $member ? [array_merge($member, ['member_detail' => MemberDetail::with(['status', 'department'])->where('member_id', $member['idjemaat'])->first()])] : [],
+                $member ? 1 : 0,
+                10,
+                1,
+                ['path' => $request->url(), 'query' => $request->query()]
+            );
 
             $statuses = MemberStatus::all();
             $departments = Department::all();
@@ -346,7 +335,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     })->name('anggota');
 
     Route::get('anggota/{id}/edit', function ($id) {
-        $member = ExternalMember::with(['member_detail'])->findOrFail($id);
+        $member = app(MemberApiService::class)->findById($id);
+        abort_unless($member, 404);
+        $member['member_detail'] = MemberDetail::with(['status', 'department'])->where('member_id', $id)->first();
         $statuses = MemberStatus::all();
         $departments = Department::all();
 

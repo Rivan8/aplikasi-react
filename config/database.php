@@ -84,26 +84,6 @@ return [
             ]) : [],
         ],
 
-        'myesc_db' => [
-            'driver' => env('DB_EXT_CONNECTION', 'mariadb'),
-            'url' => env('DB_EXT_URL'),
-            'host' => env('DB_EXT_HOST', '127.0.0.1'),
-            'port' => env('DB_EXT_PORT', '3306'),
-            'database' => env('DB_EXT_DATABASE', 'myey1771_myesc'),
-            'username' => env('DB_EXT_USERNAME', 'root'),
-            'password' => env('DB_EXT_PASSWORD', ''),
-            'unix_socket' => env('DB_EXT_SOCKET', ''),
-            'charset' => env('DB_EXT_CHARSET', 'utf8mb4'),
-            'collation' => env('DB_EXT_COLLATION', 'utf8mb4_unicode_ci'),
-            'prefix' => '',
-            'prefix_indexes' => true,
-            'strict' => true,
-            'engine' => null,
-            'options' => extension_loaded('pdo_mysql') ? array_filter([
-                (PHP_VERSION_ID >= 80500 ? Mysql::ATTR_SSL_CA : PDO::MYSQL_ATTR_SSL_CA) => env('MYSQL_EXT_ATTR_SSL_CA'),
-            ]) : [],
-        ],
-
         'pgsql' => [
             'driver' => 'pgsql',
             'url' => env('DB_URL'),

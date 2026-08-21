@@ -25,8 +25,4 @@ class EventParticipant extends Model
         return $this->belongsTo(Event::class);
     }
 
-    public function member(): BelongsTo
-    {
-        return $this->belongsTo(ExternalMember::class, 'member_id', 'idjemaat');
-    }
 }

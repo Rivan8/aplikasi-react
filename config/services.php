@@ -35,4 +35,15 @@ return [
         ],
     ],
 
+    'myesc' => [
+        'scan_url' => env('MYESC_MEMBER_API_URL', 'https://admin.myesc.id/Api/Api_laravel_pcs/scan'),
+        'api_key' => env('MYESC_MEMBER_API_KEY'),
+        'cache_minutes' => env('MYESC_MEMBER_API_CACHE_MINUTES', 10),
+        'connect_timeout' => env('MYESC_MEMBER_API_CONNECT_TIMEOUT', 5),
+        'timeout' => env('MYESC_MEMBER_API_TIMEOUT', 10),
+        'idjemaat_length' => env('MYESC_IDJEMAAT_LENGTH', 10),
+        'noaj_length' => env('MYESC_NOAJ_LENGTH', 7),
+    ],
+
 ];
+

@@ -151,7 +151,7 @@ export default function ScanQR({
         };
     }, []);
 
-    const processNikScan = useCallback((nik: string) => {
+    const processMemberScan = useCallback((scan: string) => {
         if (processing) return;
 
         setProcessing(true);
@@ -165,7 +165,7 @@ export default function ScanQR({
         router.post('/attendance/scan-member', {
             event_id: selectedEventId,
             event_session_id: selectedSessionId || null,
-            nik: nik
+            scan,
         }, {
             preserveState: true,
             preserveScroll: true,
@@ -242,7 +242,7 @@ export default function ScanQR({
                                 qrbox: { width: 250, height: 250 },
                             },
                             (decodedText) => {
-                                processNikScan(decodedText);
+                                processMemberScan(decodedText);
                             },
                             () => {}
                         );
@@ -256,7 +256,7 @@ export default function ScanQR({
                 }, 300);
             });
         });
-    }, [selectedEventId, processNikScan]);
+    }, [selectedEventId, processMemberScan]);
 
     const stopScanner = useCallback(async () => {
         if (scannerRef.current) {

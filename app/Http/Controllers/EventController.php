@@ -3,8 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Event;
-use App\Models\ExternalMember;
-use App\Models\EventVolunteer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
@@ -12,27 +10,22 @@ use Inertia\Inertia;
 
 use App\Models\Category;
 use App\Models\Song;
+use App\Services\MemberApiService;
 
 class EventController extends Controller
 {
-    public function index()
+    public function index(MemberApiService $memberApi)
     {
         return Inertia::render('events/index', [
             'events' => Event::with([
-                'volunteers.member',
+                'volunteers',
                 'sessions',
-                'participants.member',
                 'rundownSegments.items.song.arrangements',
                 'rundownSegments.items.arrangement'
             ])->orderBy('date', 'desc')->get(),
             'categories' => Category::with('roles.department')->get(),
             'songs' => Song::with('arrangements')->orderBy('title')->get(),
-            'external_members' => ExternalMember::select('idjemaat', 'namalengkap')->get()->map(function($m) {
-                return [
-                    'id' => $m->idjemaat,
-                    'name' => $m->namalengkap
-                ];
-            }),
+            'external_members' => [],
             'breadcrumbs' => [
                 ['title' => 'Event Dashboard', 'href' => '/events'],
             ]

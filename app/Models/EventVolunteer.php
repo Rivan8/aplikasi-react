@@ -32,8 +32,4 @@ class EventVolunteer extends Model
         return $this->belongsTo(Event::class);
     }
 
-    public function member()
-    {
-        return $this->belongsTo(ExternalMember::class, 'member_id', 'idjemaat');
-    }
 }

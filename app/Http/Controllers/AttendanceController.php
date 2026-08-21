@@ -5,14 +5,18 @@ namespace App\Http\Controllers;
 use App\Exports\AttendanceHistoryExport;
 use App\Models\Event;
 use App\Models\Attendance;
-use App\Models\ExternalMember;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Maatwebsite\Excel\Facades\Excel;
+use App\Services\MemberApiService;
 
 class AttendanceController extends Controller
 {
+    public function __construct(private readonly MemberApiService $memberApi)
+    {
+    }
+
     /**
      * Halaman riwayat kehadiran (Attendance History)
      */
@@ -56,12 +60,11 @@ class AttendanceController extends Controller
         $members = [];
         if (!empty($memberIds)) {
             try {
-                $externalMembers = ExternalMember::whereIn('idjemaat', $memberIds)->get();
-                foreach ($externalMembers as $member) {
-                    $members[$member->idjemaat] = [
-                        'id' => $member->idjemaat,
-                        'name' => $member->name,
-                        'nik' => $member->nik,
+                foreach ($this->memberApi->findMany($memberIds) as $member) {
+                    $members[$member['idjemaat']] = [
+                        'id' => $member['idjemaat'],
+                        'name' => $member['name'],
+                        'nik' => $member['nik'],
                     ];
                 }
             } catch (\Exception $e) {
@@ -147,11 +150,10 @@ class AttendanceController extends Controller
 
         if (!empty($memberIds)) {
             try {
-                $externalMembers = ExternalMember::whereIn('idjemaat', $memberIds)->get();
-                foreach ($externalMembers as $member) {
-                    $members[$member->idjemaat] = [
-                        'name' => $member->name,
-                        'nik' => $member->nik,
+                foreach ($this->memberApi->findMany($memberIds) as $member) {
+                    $members[$member['idjemaat']] = [
+                        'name' => $member['name'],
+                        'nik' => $member['nik'],
                     ];
                 }
             } catch (\Exception $e) {
@@ -218,10 +220,9 @@ class AttendanceController extends Controller
 
             if (!empty($memberIds)) {
                 try {
-                    $externalMembers = ExternalMember::whereIn('idjemaat', $memberIds)->get();
-                    foreach ($externalMembers as $member) {
-                        $members[$member->idjemaat] = [
-                            'name' => $member->name,
+                    foreach ($this->memberApi->findMany($memberIds) as $member) {
+                        $members[$member['idjemaat']] = [
+                            'name' => $member['name'],
                         ];
                     }
                 } catch (\Exception $e) {
@@ -309,14 +310,14 @@ class AttendanceController extends Controller
         $request->validate([
             'event_id' => 'required|exists:events,id',
             'event_session_id' => 'nullable|exists:event_sessions,id',
-            'nik' => 'required|string',
+            'scan' => 'required|string',
         ]);
 
-        $nik = trim($request->nik);
-        $member = ExternalMember::byNik($nik)->first();
+        $scan = trim($request->scan);
+        $member = $this->memberApi->findByScan($scan);
 
         if (!$member) {
-            return back()->with('error', 'QR Code tidak dikenali. Pastikan kartu member valid. (Kode: ' . $nik . ')');
+            return back()->with('error', 'QR Code tidak dikenali. Pastikan kartu member valid. (Kode: ' . $scan . ')');
         }
 
         $sessionId = $request->input('event_session_id');
@@ -330,7 +331,7 @@ class AttendanceController extends Controller
         }
 
         $query = Attendance::where('event_id', $request->event_id)
-            ->where('member_id', $member->id);
+            ->where('member_id', $member['idjemaat']);
 
         if ($sessionId) {
             $query->where('event_session_id', $sessionId);
@@ -347,14 +348,14 @@ class AttendanceController extends Controller
         Attendance::create([
             'event_id' => $request->event_id,
             'event_session_id' => $sessionId,
-            'member_id' => $member->id,
+            'member_id' => $member['idjemaat'],
             'scan_time' => now(),
             'status' => $status,
         ]);
 
         $message = $status === 'Late'
-            ? 'Kehadiran ' . $member->name . ' dicatat (Terlambat).'
-            : 'Kehadiran berhasil dicatat untuk ' . $member->name;
+            ? 'Kehadiran ' . $member['name'] . ' dicatat (Terlambat).'
+            : 'Kehadiran berhasil dicatat untuk ' . $member['name'];
 
         return back()->with('success', $message);
     }
