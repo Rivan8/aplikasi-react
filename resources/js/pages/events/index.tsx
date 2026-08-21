@@ -183,6 +183,41 @@ const getEventImageUrl = (path: string | null) => {
         : path;
 };
 
+type EventTiming = 'upcoming' | 'ongoing' | 'past' | 'unknown';
+
+const getEventTiming = (event: Event, now: Date): EventTiming => {
+    if (!event.date) return 'unknown';
+
+    const startTime = event.time || '00:00:00';
+    const start = new Date(`${event.date}T${startTime}`);
+    const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
+
+    if (Number.isNaN(start.getTime())) return 'unknown';
+    if (now < start) return 'upcoming';
+    if (now <= end) return 'ongoing';
+
+    return 'past';
+};
+
+const eventTimingStyles: Record<EventTiming, { label: string; className: string }> = {
+    upcoming: {
+        label: 'Akan datang',
+        className: 'border-emerald-200/70 bg-emerald-500/90 text-white',
+    },
+    ongoing: {
+        label: 'Sedang berlangsung',
+        className: 'border-amber-200/80 bg-amber-400/95 text-amber-950 animate-pulse',
+    },
+    past: {
+        label: 'Sudah lewat',
+        className: 'border-red-200/70 bg-red-500/90 text-white',
+    },
+    unknown: {
+        label: 'Jadwal belum ditentukan',
+        className: 'border-slate-200/70 bg-slate-500/90 text-white',
+    },
+};
+
 function SearchableSelect({
     value,
     onSelect,
@@ -298,6 +333,13 @@ export default function Events({
     const [eventCategory, setEventCategory] = useState('all');
     const [eventStatus, setEventStatus] = useState<'all' | 'upcoming' | 'past'>('all');
     const [eventSort, setEventSort] = useState<'date-asc' | 'date-desc' | 'title'>('date-asc');
+    const [currentTime, setCurrentTime] = useState(() => new Date());
+
+    useEffect(() => {
+        const timer = window.setInterval(() => setCurrentTime(new Date()), 30_000);
+
+        return () => window.clearInterval(timer);
+    }, []);
 
     const { data, setData, post, reset, processing, errors } = useForm({
         title: '',
@@ -653,7 +695,7 @@ export default function Events({
             })
             .sort((firstEvent, secondEvent) => {
                 if (eventSort === 'title') {
-                    return firstEvent.title.localeCompare(secondEvent.title, 'id');
+                    return firstEvent.title.localeCompare(secondEvent.title, 'id') || firstEvent.id - secondEvent.id;
                 }
 
                 const firstDate = firstEvent.date
@@ -667,7 +709,22 @@ export default function Events({
                       ).getTime()
                     : 0;
 
-                return eventSort === 'date-asc' ? firstDate - secondDate : secondDate - firstDate;
+                if (eventSort === 'date-asc') {
+                    const firstIsPast = firstDate < today.getTime();
+                    const secondIsPast = secondDate < today.getTime();
+
+                    if (firstIsPast !== secondIsPast) {
+                        return firstIsPast ? 1 : -1;
+                    }
+
+                    if (firstIsPast) {
+                        return secondDate - firstDate || firstEvent.id - secondEvent.id;
+                    }
+
+                    return firstDate - secondDate || firstEvent.id - secondEvent.id;
+                }
+
+                return secondDate - firstDate || firstEvent.id - secondEvent.id;
             });
     }, [eventCategory, eventSearch, eventSort, eventStatus, events]);
 
@@ -683,6 +740,19 @@ export default function Events({
         setEventStatus('all');
         setEventSort('date-asc');
     };
+
+    const upcomingEventCount = useMemo(() => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        return events.filter((event) => {
+            if (!event.date) return false;
+
+            return new Date(`${event.date}T00:00:00`) >= today;
+        }).length;
+    }, [events]);
+
+    const pastEventCount = events.length - upcomingEventCount;
 
     return (
         <>
@@ -771,27 +841,52 @@ export default function Events({
                                 </Select>
                             </div>
                         </div>
-                        <div className="mt-4 flex flex-col gap-2 border-t border-border/50 pt-4 text-xs sm:flex-row sm:items-center sm:justify-between">
+                        <div className="mt-4 flex flex-col gap-3 border-t border-border/50 pt-4 text-xs sm:flex-row sm:items-center sm:justify-between">
                             <p className="text-muted-foreground">
                                 Menampilkan <span className="font-bold text-foreground">{filteredEvents.length}</span> dari <span className="font-bold text-foreground">{events.length}</span> event
                             </p>
-                            {hasActiveEventFilters && (
-                                <Button type="button" variant="ghost" size="sm" onClick={resetEventFilters} className="h-8 w-fit gap-2 px-2 text-xs text-primary hover:text-primary">
-                                    <RotateCcw className="h-3.5 w-3.5" />
-                                    Reset filter
+                            <div className="flex flex-wrap items-center gap-2">
+                                <Button
+                                    type="button"
+                                    variant={eventStatus === 'upcoming' ? 'secondary' : 'ghost'}
+                                    size="sm"
+                                    onClick={() => setEventStatus('upcoming')}
+                                    className="h-8 gap-1.5 px-2.5 text-xs"
+                                >
+                                    <CalendarDays className="h-3.5 w-3.5" />
+                                    Mendatang ({upcomingEventCount})
                                 </Button>
-                            )}
+                                <Button
+                                    type="button"
+                                    variant={eventStatus === 'past' ? 'secondary' : 'ghost'}
+                                    size="sm"
+                                    onClick={() => setEventStatus('past')}
+                                    className="h-8 gap-1.5 px-2.5 text-xs"
+                                >
+                                    Berlalu ({pastEventCount})
+                                </Button>
+                                {hasActiveEventFilters && (
+                                    <Button type="button" variant="ghost" size="sm" onClick={resetEventFilters} className="h-8 w-fit gap-2 px-2 text-xs text-primary hover:text-primary">
+                                        <RotateCcw className="h-3.5 w-3.5" />
+                                        Reset filter
+                                    </Button>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </section>
 
                 {filteredEvents.length > 0 && (
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
-                    {filteredEvents.map((event) => (
-                        <Card
-                            key={`event-card-${event.id}`}
-                            className="group relative flex flex-col overflow-hidden border-none bg-card/50 backdrop-blur-sm transition-all duration-500 hover:-translate-y-1 hover:bg-card hover:shadow-2xl hover:shadow-primary/10"
-                        >
+                    {filteredEvents.map((event) => {
+                        const eventTiming = getEventTiming(event, currentTime);
+                        const isEventOngoing = eventTiming === 'ongoing';
+
+                        return (
+                            <Card
+                                key={`event-card-${event.id}`}
+                                className="group relative flex flex-col overflow-hidden border-none bg-card/50 backdrop-blur-sm transition-all duration-500 hover:-translate-y-1 hover:bg-card hover:shadow-2xl hover:shadow-primary/10"
+                            >
                             <div className="relative aspect-[16/10] w-full overflow-hidden">
                                 {getEventImageUrl(event.image_path) ? (
                                     <img
@@ -812,7 +907,19 @@ export default function Events({
                                     </Badge>
                                 </div>
 
-                                <div className="absolute top-4 right-4 flex gap-2 translate-y-[-10px] opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
+                                {(() => {
+                                    const timing = getEventTiming(event, currentTime);
+                                    const timingStyle = eventTimingStyles[timing];
+
+                                    return (
+                                        <Badge className={`absolute top-4 right-4 border px-3 py-1 text-[10px] font-bold shadow-xl backdrop-blur-xl ${timingStyle.className}`}>
+                                            <span className={`mr-1.5 h-1.5 w-1.5 rounded-full bg-current ${timing === 'ongoing' ? 'animate-ping' : ''}`} />
+                                            {timingStyle.label}
+                                        </Badge>
+                                    );
+                                })()}
+
+                                <div className="absolute top-16 right-4 flex translate-y-[-10px] gap-2 opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
                                     <Button
                                         variant="secondary"
                                         size="icon"
@@ -907,17 +1014,37 @@ export default function Events({
                                             <QrCode className="h-5 w-5" />
                                         </Button>
                                         <Button
-                                            variant="secondary"
-                                            className="h-10 gap-2 rounded-xl px-5 text-sm font-bold shadow-sm hover:shadow-md transition-all active:scale-95"
-                                            onClick={() => setViewingEvent(event)}
+                                            variant={isEventOngoing ? 'default' : 'secondary'}
+                                            className={`relative h-10 gap-2 overflow-visible rounded-xl px-5 text-sm font-bold shadow-sm transition-all hover:shadow-md active:scale-95 ${
+                                                isEventOngoing
+                                                    ? 'animate-[pulse_2s_ease-in-out_infinite] bg-amber-500 text-white shadow-lg shadow-amber-500/40 hover:bg-amber-600 hover:shadow-amber-500/60'
+                                                    : ''
+                                            }`}
+                                            onClick={() => {
+                                                if (isEventOngoing) {
+                                                    router.get('/live-events', { event_id: event.id });
+                                                    return;
+                                                }
+
+                                                setViewingEvent(event);
+                                            }}
                                         >
-                                            Detail
+                                            {isEventOngoing && (
+                                                <>
+                                                    <span className="pointer-events-none absolute -inset-1 rounded-xl border border-amber-300/90 opacity-80 animate-ping" />
+                                                    <span className="pointer-events-none absolute -inset-1.5 rounded-[14px] border border-amber-200/50 opacity-60 animate-[ping_2s_ease-out_infinite]" />
+                                                </>
+                                            )}
+                                            <span className="relative z-10">
+                                                {isEventOngoing ? 'Kelola Event' : 'Detail'}
+                                            </span>
                                         </Button>
                                     </div>
                                 </div>
                             </CardContent>
-                        </Card>
-                    ))}
+                            </Card>
+                        );
+                    })}
                 </div>
                 )}
 

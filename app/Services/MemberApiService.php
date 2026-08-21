@@ -40,8 +40,14 @@ class MemberApiService
             return null;
         }
 
+        $cacheKey = 'member-api:'.$idjemaat;
+
+        if (! config('services.myesc.enabled', true)) {
+            return Cache::get($cacheKey);
+        }
+
         return Cache::remember(
-            'member-api:'.$idjemaat,
+            $cacheKey,
             now()->addMinutes((int) config('services.myesc.cache_minutes', 10)),
             fn (): ?array => $this->request($idjemaat),
         );

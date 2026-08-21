@@ -2,6 +2,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Head, router, usePage } from '@inertiajs/react';
 import { Html5Qrcode } from 'html5-qrcode';
@@ -46,8 +47,10 @@ export default function ScanQR({
 }) {
     const { flash } = usePage().props as any;
     const scannerRef = useRef<Html5Qrcode | null>(null);
+    const usbInputRef = useRef<HTMLInputElement | null>(null);
     const readerElementRef = useRef<HTMLDivElement | null>(null);
     const [isScanning, setIsScanning] = useState(false);
+    const [scanMode, setScanMode] = useState<'camera' | 'usb'>('camera');
     const [selectedEventId, setSelectedEventId] = useState<string>(filters.event_id || '');
     const [selectedSessionId, setSelectedSessionId] = useState<string>(filters.event_session_id || '');
     const [processing, setProcessing] = useState(false);
@@ -59,17 +62,15 @@ export default function ScanQR({
     // Auto-refresh data setiap 5 detik untuk sinkronisasi antar komputer
     useEffect(() => {
         const interval = setInterval(() => {
-            if (!isScanning && !processing) {
+            if (scanMode === 'camera' && !isScanning && !processing) {
                 router.reload({
-                    only: ['recentScans', 'totalScanned'],
-                    preserveScroll: true,
-                    preserveState: true
+                    only: ['recentScans', 'totalScanned']
                 });
             }
         }, 5000);
 
         return () => clearInterval(interval);
-    }, [isScanning, processing]);
+    }, [isScanning, processing, scanMode]);
 
     useEffect(() => {
         isMountedRef.current = true;
@@ -185,7 +186,7 @@ export default function ScanQR({
                 }
             }
         });
-    }, [processing, selectedEventId]);
+    }, [processing, selectedEventId, selectedSessionId]);
 
     const startScanner = useCallback(async () => {
         if (!selectedEventId) {
@@ -274,6 +275,35 @@ export default function ScanQR({
         setLastScanResult(null);
     }, []);
 
+    const selectScanMode = useCallback(async (mode: 'camera' | 'usb') => {
+        if (mode === 'usb' && isScanning) {
+            await stopScanner();
+        }
+
+        setScanMode(mode);
+        setLastScanResult(null);
+    }, [isScanning, stopScanner]);
+
+    const handleUsbScan = useCallback((event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+
+        if (!selectedEventId || processing) return;
+
+        const scan = usbInputRef.current?.value.trim() || '';
+        if (!scan) return;
+
+        if (usbInputRef.current) {
+            usbInputRef.current.value = '';
+        }
+        processMemberScan(scan);
+    }, [processing, processMemberScan, selectedEventId]);
+
+    useEffect(() => {
+        if (scanMode === 'usb' && selectedEventId && !processing) {
+            usbInputRef.current?.focus();
+        }
+    }, [processing, scanMode, selectedEventId]);
+
     return (
         <>
             <Head title="Scan Kartu Member" />
@@ -349,22 +379,62 @@ export default function ScanQR({
                                 <Aperture className={`h-5 w-5 ${isScanning ? 'text-primary' : 'text-muted-foreground'}`} />
                                 <CardTitle className="text-lg font-semibold text-foreground">Scanner Kartu Jemaat</CardTitle>
                             </div>
-                            <Button variant="outline" size="sm" className="h-9 gap-2 font-medium">
-                                <Keyboard className="h-4 w-4" />
-                                Manual Entry
-                            </Button>
+                            <div className="flex items-center gap-1 rounded-lg border bg-muted p-1">
+                                <Button
+                                    type="button"
+                                    variant={scanMode === 'camera' ? 'default' : 'ghost'}
+                                    size="sm"
+                                    className="h-8 gap-2"
+                                    onClick={() => selectScanMode('camera')}
+                                    disabled={processing}
+                                >
+                                    <Aperture className="h-4 w-4" />
+                                    Kamera
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant={scanMode === 'usb' ? 'default' : 'ghost'}
+                                    size="sm"
+                                    className="h-8 gap-2"
+                                    onClick={() => selectScanMode('usb')}
+                                    disabled={processing}
+                                >
+                                    <Keyboard className="h-4 w-4" />
+                                    Scanner USB
+                                </Button>
+                            </div>
                         </CardHeader>
 
                         <div className="relative flex-1 min-h-[400px] md:min-h-[500px] bg-[#1A1A1F] flex flex-col items-center justify-center p-6 overflow-hidden">
                             <div className="flex flex-col items-center w-full h-full">
-                                <div
-                                    id="admin-reader"
-                                    className={`w-full max-w-md bg-black rounded-lg overflow-hidden transition-opacity duration-300 ${isScanning ? 'opacity-100 z-10 relative' : 'opacity-0 z-0 absolute invisible'}`}
-                                    style={{ minHeight: '300px' }}
-                                    ref={readerElementRef}
-                                />
+                                {scanMode === 'camera' && (
+                                    <div
+                                        id="admin-reader"
+                                        className={`w-full max-w-md bg-black rounded-lg overflow-hidden transition-opacity duration-300 ${isScanning ? 'opacity-100 z-10 relative' : 'opacity-0 z-0 absolute invisible'}`}
+                                        style={{ minHeight: '300px' }}
+                                        ref={readerElementRef}
+                                    />
+                                )}
 
-                                {lastScanResult && isScanning && (
+                                {scanMode === 'usb' && (
+                                    <form onSubmit={handleUsbScan} className="z-20 flex w-full max-w-md flex-col gap-4">
+                                        <div className="rounded-xl border border-primary/30 bg-primary/10 p-5 text-center">
+                                            <Keyboard className="mx-auto mb-3 h-10 w-10 text-primary" />
+                                            <h3 className="text-lg font-bold text-white">Scanner USB siap digunakan</h3>
+                                            <p className="mt-1 text-sm text-white/70">Arahkan scanner ke QR kartu member.</p>
+                                        </div>
+                                        <Input
+                                            ref={usbInputRef}
+                                            autoFocus
+                                            aria-label="Input scanner USB"
+                                            placeholder="Scan QR kartu member..."
+                                            disabled={!selectedEventId || processing}
+                                            className="h-14 bg-white text-center text-lg text-black"
+                                        />
+                                    </form>
+                                )}
+
+                                {lastScanResult && (isScanning || scanMode === 'usb') && (
                                     <div className={`absolute top-10 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl border animate-in fade-in zoom-in slide-in-from-top-4 duration-300 ${
                                         lastScanResult.type === 'success' ? 'bg-emerald-500 text-white border-emerald-400' :
                                         lastScanResult.type === 'info' ? 'bg-amber-500 text-white border-amber-400' :
@@ -383,7 +453,7 @@ export default function ScanQR({
                                     </div>
                                 )}
 
-                                {!isScanning && (
+                                {scanMode === 'camera' && !isScanning && (
                                     <div className="flex flex-col items-center justify-center space-y-4 z-20">
                                         <Button size="lg" onClick={startScanner} className="h-14 px-8 text-lg">
                                             Mulai Scan Kartu
@@ -392,17 +462,18 @@ export default function ScanQR({
                                     </div>
                                 )}
 
-                                {isScanning && (
+                                {scanMode === 'camera' && isScanning && (
                                     <div className="flex flex-col items-center z-20">
                                         <Button variant="destructive" className="mt-6 gap-2" onClick={stopScanner}>
                                             <StopCircle className="w-4 h-4" /> Stop Scanner
                                         </Button>
 
-                                        {processing && (
-                                            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground px-4 py-2 rounded-full font-medium shadow-lg animate-pulse">
-                                                Memproses...
-                                            </div>
-                                        )}
+                                    </div>
+                                )}
+
+                                {processing && (
+                                    <div className="absolute top-4 left-1/2 z-30 -translate-x-1/2 rounded-full bg-primary px-4 py-2 font-medium text-primary-foreground shadow-lg animate-pulse">
+                                        Memproses...
                                     </div>
                                 )}
                             </div>
