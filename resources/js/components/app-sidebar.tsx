@@ -6,6 +6,7 @@ import {
     LayoutDashboard,
     LayoutGrid,
     Music,
+    MonitorPlay,
     QrCode,
     Radio,
     Settings,
@@ -38,6 +39,13 @@ const mainNavItems: NavItem[] = [
         href: '/scan-qr',
         icon: QrCode,
         roles: ['admin'],
+    },
+    {
+        title: 'Monitor Absensi',
+        href: '/attendance-monitor',
+        icon: MonitorPlay,
+        roles: ['admin'],
+        newTab: true,
     },
     {
         title: 'Absensi Mandiri',

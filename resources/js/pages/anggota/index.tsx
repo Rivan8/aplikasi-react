@@ -15,6 +15,7 @@ interface Member {
     status?: string;
     created_at?: string;
     joined?: string;
+    foto_url?: string | null;
     member_detail?: {
         status_id?: number;
         department_id?: number;
@@ -147,8 +148,18 @@ export default function Anggota({
                                             <tr key={user.id} className="hover:bg-muted/20 transition-colors">
                                                 <td className="px-6 py-4">
                                                     <div className="flex items-center gap-3">
-                                                        <div className={`h-9 w-9 rounded-full ${avatarColors[idx % avatarColors.length]} flex items-center justify-center text-white font-bold text-xs`}>
-                                                            {displayName?.charAt(0).toUpperCase() || '?'}
+                                                        <div className={`relative flex h-9 w-9 items-center justify-center overflow-hidden rounded-full ${avatarColors[idx % avatarColors.length]} text-xs font-bold text-white`}>
+                                                            <span>{displayName?.charAt(0).toUpperCase() || '?'}</span>
+                                                            {user.foto_url ? (
+                                                                <img
+                                                                    src={user.foto_url}
+                                                                    alt={displayName}
+                                                                    className="absolute inset-0 h-full w-full object-cover"
+                                                                    onError={(event) => {
+                                                                        event.currentTarget.style.display = 'none';
+                                                                    }}
+                                                                />
+                                                            ) : null}
                                                         </div>
                                                         <div>
                                                             <div className="font-semibold text-foreground">{displayName}</div>

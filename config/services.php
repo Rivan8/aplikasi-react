@@ -38,6 +38,7 @@ return [
     'myesc' => [
         'enabled' => filter_var(env('MYESC_MEMBER_API_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
         'scan_url' => env('MYESC_MEMBER_API_URL', 'https://admin.myesc.id/Api/Api_laravel_pcs/scan'),
+        'list_url' => env('MYESC_MEMBER_LIST_API_URL', 'https://admin.myesc.id/Api/Api_listjemaat'),
         'api_key' => env('MYESC_MEMBER_API_KEY'),
         'cache_minutes' => env('MYESC_MEMBER_API_CACHE_MINUTES', 10),
         'connect_timeout' => env('MYESC_MEMBER_API_CONNECT_TIMEOUT', 5),

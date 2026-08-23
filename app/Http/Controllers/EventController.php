@@ -16,16 +16,30 @@ class EventController extends Controller
 {
     public function index(MemberApiService $memberApi)
     {
+        $externalMembers = $memberApi->listAll();
+        $membersById = collect($externalMembers)->keyBy(fn (array $member) => (string) $member['idjemaat']);
+        $events = Event::with([
+            'volunteers',
+            'participants',
+            'sessions',
+            'rundownSegments.items.song.arrangements',
+            'rundownSegments.items.arrangement'
+        ])->orderBy('date', 'desc')->get();
+
+        $events->each(function (Event $event) use ($membersById): void {
+            $event->volunteers->each(function ($volunteer) use ($membersById): void {
+                $volunteer->setAttribute('member', $membersById->get((string) $volunteer->member_id));
+            });
+            $event->participants->each(function ($participant) use ($membersById): void {
+                $participant->setAttribute('member', $membersById->get((string) $participant->member_id));
+            });
+        });
+
         return Inertia::render('events/index', [
-            'events' => Event::with([
-                'volunteers',
-                'sessions',
-                'rundownSegments.items.song.arrangements',
-                'rundownSegments.items.arrangement'
-            ])->orderBy('date', 'desc')->get(),
+            'events' => $events,
             'categories' => Category::with('roles.department')->get(),
             'songs' => Song::with('arrangements')->orderBy('title')->get(),
-            'external_members' => [],
+            'external_members' => $externalMembers,
             'breadcrumbs' => [
                 ['title' => 'Event Dashboard', 'href' => '/events'],
             ]

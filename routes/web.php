@@ -304,12 +304,54 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         try {
             $search = $request->input('search');
-            $member = ! empty($search) ? $memberApi->findByScan($search) : null;
+            $page = max(1, (int) $request->input('page', 1));
+            $perPage = 10;
+
+            if (! empty($search)) {
+                $needle = mb_strtolower(trim((string) $search));
+                $filteredMembers = collect($memberApi->listAll())
+                    ->filter(function (array $member) use ($needle): bool {
+                        return collect([
+                            $member['idjemaat'] ?? null,
+                            $member['noaj'] ?? null,
+                            $member['namalengkap'] ?? null,
+                            $member['email'] ?? null,
+                        ])->contains(fn ($value): bool => $value !== null
+                            && str_contains(mb_strtolower((string) $value), $needle));
+                    })
+                    ->values();
+
+                $total = $filteredMembers->count();
+                $items = $filteredMembers
+                    ->forPage($page, $perPage)
+                    ->values()
+                    ->all();
+            } else {
+                $result = $memberApi->list($page, $perPage);
+                $items = $result['data'];
+                $pagination = $result['pagination'];
+                $page = (int) ($pagination['current_page'] ?? $page);
+                $perPage = (int) ($pagination['per_page'] ?? $perPage);
+                $total = (int) ($pagination['total_records'] ?? count($items));
+            }
+
+            $memberIds = collect($items)->pluck('idjemaat')->filter()->all();
+            $details = MemberDetail::with(['status', 'department'])
+                ->whereIn('member_id', $memberIds)
+                ->get()
+                ->keyBy(fn ($detail) => (string) $detail->member_id);
+
+            $items = collect($items)->map(function (array $member) use ($details) {
+                $member['member_detail'] = $details->get((string) $member['idjemaat']);
+
+                return $member;
+            })->all();
+
             $members = new LengthAwarePaginator(
-                $member ? [array_merge($member, ['member_detail' => MemberDetail::with(['status', 'department'])->where('member_id', $member['idjemaat'])->first()])] : [],
-                $member ? 1 : 0,
-                10,
-                1,
+                $items,
+                $total,
+                $perPage,
+                $page,
                 ['path' => $request->url(), 'query' => $request->query()]
             );
 
@@ -381,6 +423,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('live-events/{event}/finish', [LiveEventController::class, 'finish'])->name('live-events.finish');
     Route::resource('categories', CategoryController::class)->except(['create', 'edit', 'show']);
     Route::get('scan-qr', [AttendanceController::class, 'showAdminScan'])->name('scan-qr');
+    Route::get('attendance-monitor', [AttendanceController::class, 'showAttendanceMonitor'])->name('attendance-monitor');
     Route::get('attendance-history', [AttendanceController::class, 'history'])->name('attendance-history');
     Route::get('attendance-history/export/pdf', [AttendanceController::class, 'exportPdf'])->name('attendance-history.export.pdf');
     Route::get('attendance-history/export/excel', [AttendanceController::class, 'exportExcel'])->name('attendance-history.export.excel');

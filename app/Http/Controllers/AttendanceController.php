@@ -251,6 +251,50 @@ class AttendanceController extends Controller
         ]);
     }
 
+    public function showAttendanceMonitor(Request $request)
+    {
+        $events = Event::with('sessions')->orderBy('date', 'desc')->get();
+        $selectedEventId = $request->input('event_id', $events->first()?->id);
+        $selectedSessionId = $request->input('event_session_id');
+        $recentScans = collect();
+        $totalScanned = 0;
+
+        if ($selectedEventId) {
+            $query = Attendance::where('event_id', $selectedEventId);
+
+            if ($selectedSessionId) {
+                $query->where('event_session_id', $selectedSessionId);
+            }
+
+            $attendances = (clone $query)->orderBy('scan_time', 'desc')->take(30)->get();
+            $totalScanned = (clone $query)->count();
+            $members = $this->memberApi->findMany($attendances->pluck('member_id')->unique());
+
+            $recentScans = $attendances->map(function (Attendance $attendance) use ($members) {
+                $member = $members[(string) $attendance->member_id] ?? null;
+
+                return [
+                    'id' => $attendance->id,
+                    'member_id' => (string) $attendance->member_id,
+                    'name' => $member['name'] ?? 'Member #'.$attendance->member_id,
+                    'foto_url' => $member['foto_url'] ?? null,
+                    'time' => $attendance->scan_time?->format('H:i:s'),
+                    'status' => $attendance->status,
+                ];
+            })->values();
+        }
+
+        return Inertia::render('attendance-monitor/index', [
+            'events' => $events,
+            'recentScans' => $recentScans,
+            'totalScanned' => $totalScanned,
+            'filters' => [
+                'event_id' => (string) $selectedEventId,
+                'event_session_id' => (string) ($selectedSessionId ?? ''),
+            ],
+        ]);
+    }
+
     public function showEventScan(Event $event)
     {
         $event->load('sessions');

@@ -36,6 +36,8 @@ export function NavMain({ items = [] }: { items: NavItem[] }) {
                             <Link
                                 href={item.href}
                                 prefetch
+                                target={item.newTab ? '_blank' : undefined}
+                                rel={item.newTab ? 'noreferrer' : undefined}
                                 onClick={closeMobileSidebar}
                             >
                                 {item.icon && <item.icon />}

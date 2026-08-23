@@ -68,20 +68,21 @@ import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 interface ExternalMember {
-    idjemaat: number;
+    idjemaat: string | number;
     namalengkap: string;
     id?: number;
     name?: string;
+    foto_url?: string | null;
 }
 
 interface VolunteerMember {
-    idjemaat: number;
+    idjemaat: string | number;
     namalengkap: string;
 }
 
 interface Volunteer {
     id?: number;
-    member_id: number;
+    member_id: string | number;
     role_name: string;
     role_category: string;
     role_id?: number; // Unique identifier for the position
@@ -116,11 +117,11 @@ interface EventSession {
 
 interface EventParticipant {
     id?: number;
-    member_id: number;
+    member_id: string | number;
     status: 'registered' | 'active' | 'passed' | 'dropped';
     registered_at?: string;
     member?: {
-        idjemaat: number;
+        idjemaat: string | number;
         namalengkap: string;
     };
 }
@@ -223,8 +224,8 @@ function SearchableSelect({
     onSelect,
     external_members,
 }: {
-    value: number | null;
-    onSelect: (val: number | null) => void;
+    value: string | number | null;
+    onSelect: (val: string | number | null) => void;
     external_members: ExternalMember[];
 }) {
     const [open, setOpen] = useState(false);
@@ -238,7 +239,7 @@ function SearchableSelect({
             .slice(0, 50);
     }, [search, external_members]);
 
-    const selectedMember = external_members.find((m) => (m.idjemaat ?? m.id) === value);
+    const selectedMember = external_members.find((m) => String(m.idjemaat ?? m.id) === String(value));
 
     return (
         <Popover open={open} onOpenChange={setOpen}>
@@ -250,8 +251,18 @@ function SearchableSelect({
                     className="h-9 w-full justify-between px-3 text-xs font-normal"
                 >
                     {selectedMember ? (
-                        <span className="truncate">
-                            {selectedMember.namalengkap || selectedMember.name}
+                        <span className="flex min-w-0 items-center gap-2 truncate">
+                            {selectedMember.foto_url ? (
+                                <img
+                                    src={selectedMember.foto_url}
+                                    alt=""
+                                    className="h-6 w-6 shrink-0 rounded-full object-cover"
+                                    onError={(event) => {
+                                        event.currentTarget.style.display = 'none';
+                                    }}
+                                />
+                            ) : null}
+                            <span className="truncate">{selectedMember.namalengkap || selectedMember.name}</span>
                         </span>
                     ) : (
                         <span className="text-muted-foreground">
@@ -295,7 +306,19 @@ function SearchableSelect({
                                     setOpen(false);
                                 }}
                             >
-                                {mName}
+                                <span className="flex items-center gap-2 truncate">
+                                    {member.foto_url ? (
+                                        <img
+                                            src={member.foto_url}
+                                            alt=""
+                                            className="h-6 w-6 shrink-0 rounded-full object-cover"
+                                            onError={(event) => {
+                                                event.currentTarget.style.display = 'none';
+                                            }}
+                                        />
+                                    ) : null}
+                                    <span className="truncate">{mName}</span>
+                                </span>
                             </Button>
                         );
                     })}
@@ -328,7 +351,7 @@ export default function Events({
     const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [openCategories, setOpenCategories] = useState<string[]>([]);
     const [activeTab, setActiveTab] = useState<'basic' | 'participants' | 'rundown' | 'volunteers'>('basic');
-    const [selectedMemberToEnroll, setSelectedMemberToEnroll] = useState<number | null>(null);
+    const [selectedMemberToEnroll, setSelectedMemberToEnroll] = useState<string | number | null>(null);
     const [eventSearch, setEventSearch] = useState('');
     const [eventCategory, setEventCategory] = useState('all');
     const [eventStatus, setEventStatus] = useState<'all' | 'upcoming' | 'past'>('all');
@@ -394,7 +417,7 @@ export default function Events({
     const setVolunteerValue = (
         category: string,
         roleName: string,
-        memberId: number | null,
+        memberId: string | number | null,
         roleId: number,
     ) => {
         const otherVolunteers = data.volunteers.filter(
@@ -1169,11 +1192,11 @@ export default function Events({
                                             disabled={!selectedMemberToEnroll}
                                             onClick={() => {
                                                 if (!selectedMemberToEnroll) return;
-                                                if (data.participants.some(p => p.member_id === selectedMemberToEnroll)) {
+                                                if (data.participants.some(p => String(p.member_id) === String(selectedMemberToEnroll))) {
                                                     toast.error('Member ini sudah ada dalam daftar.');
                                                     return;
                                                 }
-                                                const memberObj = external_members.find(m => m.idjemaat === selectedMemberToEnroll);
+                                                const memberObj = external_members.find(m => String(m.idjemaat) === String(selectedMemberToEnroll));
                                                 const updated = [
                                                     ...data.participants,
                                                     {
@@ -1194,7 +1217,7 @@ export default function Events({
 
                                     <div className="divide-y rounded-2xl border bg-background overflow-hidden">
                                         {data.participants.map((p, idx) => {
-                                            const mName = p.member?.namalengkap || external_members.find(m => m.idjemaat === p.member_id)?.namalengkap || `Member #${p.member_id}`;
+                                            const mName = p.member?.namalengkap || external_members.find(m => String(m.idjemaat) === String(p.member_id))?.namalengkap || `Member #${p.member_id}`;
                                             return (
                                                 <div key={idx} className="flex items-center justify-between p-4 text-xs">
                                                     <div className="flex items-center gap-3">

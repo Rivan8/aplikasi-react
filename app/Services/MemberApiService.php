@@ -68,6 +68,65 @@ class MemberApiService
         return $members;
     }
 
+    public function list(int $page = 1, int $perPage = 10): array
+    {
+        $page = max(1, $page);
+        $perPage = min(1000, max(1, $perPage));
+
+        try {
+            $response = $this->listClient()->get('/', [
+                'page' => $page,
+                'limit' => $perPage,
+            ]);
+
+            if (! $response->successful() || (int) $response->json('status') !== 1) {
+                return ['data' => [], 'pagination' => []];
+            }
+
+            return [
+                'data' => collect($response->json('data', []))
+                    ->filter(fn ($member) => is_array($member) && ! empty($member['idjemaat']))
+                    ->map(fn (array $member): array => $this->normalizeMember($member))
+                    ->values()
+                    ->all(),
+                'pagination' => $response->json('pagination', []),
+            ];
+        } catch (\Throwable) {
+            return ['data' => [], 'pagination' => []];
+        }
+    }
+
+    public function listAll(): array
+    {
+        if (! config('services.myesc.enabled', true)) {
+            return [];
+        }
+
+        return Cache::remember(
+            'member-api:list-all',
+            now()->addMinutes((int) config('services.myesc.cache_minutes', 10)),
+            function (): array {
+                $members = [];
+                $page = 1;
+                $perPage = 1000;
+
+                do {
+                    $result = $this->list($page, $perPage);
+
+                    foreach ($result['data'] as $member) {
+                        $members[(string) $member['idjemaat']] = $member;
+                    }
+
+                    $pagination = $result['pagination'];
+                    $nextPage = (int) ($pagination['next_page'] ?? 0);
+                    $page = $nextPage;
+                } while ($page > 0);
+
+                return array_values($members);
+            },
+        );
+    }
+
     private function request(string $scan): ?array
     {
         try {
@@ -83,17 +142,7 @@ class MemberApiService
                 return null;
             }
 
-            return [
-                'idjemaat' => (string) $member['idjemaat'],
-                'name' => $member['namalengkap'] ?? null,
-                'namalengkap' => $member['namalengkap'] ?? null,
-                'noaj' => $member['noaj'] ?? null,
-                'nik' => $member['NIK'] ?? $member['nik'] ?? null,
-                'foto_url' => $member['foto_url'] ?? null,
-                'statusjemaat' => $member['statusjemaat'] ?? null,
-                'jeniskelamin' => $member['jeniskelamin'] ?? null,
-                'volunteer' => $member['volunteer'] ?? [],
-            ];
+            return $this->normalizeMember($member);
         } catch (\Throwable) {
             return null;
         }
@@ -108,5 +157,50 @@ class MemberApiService
             ])
             ->connectTimeout((int) config('services.myesc.connect_timeout', 5))
             ->timeout((int) config('services.myesc.timeout', 10));
+    }
+
+    private function listClient(): PendingRequest
+    {
+        return Http::baseUrl(rtrim((string) config('services.myesc.list_url'), '/'))
+            ->acceptJson()
+            ->withHeaders([
+                'X-API-KEY' => (string) config('services.myesc.api_key'),
+            ])
+            ->connectTimeout((int) config('services.myesc.connect_timeout', 5))
+            ->timeout((int) config('services.myesc.timeout', 10));
+    }
+
+    private function normalizeMember(array $member): array
+    {
+        return [
+            'idjemaat' => (string) $member['idjemaat'],
+            'id' => (string) $member['idjemaat'],
+            'name' => $member['namalengkap'] ?? null,
+            'namalengkap' => $member['namalengkap'] ?? null,
+            'noaj' => $member['noaj'] ?? null,
+            'nik' => $member['NIK'] ?? $member['nik'] ?? null,
+            'foto_url' => $this->photoUrl($member['foto_url'] ?? $member['foto'] ?? null),
+            'statusjemaat' => $member['statusjemaat'] ?? null,
+            'jeniskelamin' => $member['jeniskelamin'] ?? null,
+            'email' => $member['email'] ?? null,
+        ];
+    }
+
+    private function photoUrl(?string $photo): ?string
+    {
+        if ($photo === null || trim($photo) === '') {
+            return null;
+        }
+
+        $photo = trim($photo);
+
+        if (filter_var($photo, FILTER_VALIDATE_URL)) {
+            $photoPath = parse_url($photo, PHP_URL_PATH);
+            $photo = is_string($photoPath) ? basename($photoPath) : $photo;
+        } else {
+            $photo = basename($photo);
+        }
+
+        return 'https://admin.myesc.id/uploads/jemaat/'.rawurlencode($photo);
     }
 }
