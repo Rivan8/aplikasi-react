@@ -16,7 +16,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { useForm } from '@inertiajs/react';
+import { router, useForm } from '@inertiajs/react';
 import { useEffect, useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -31,8 +31,11 @@ interface Category {
 interface CategoryRole {
     id: number;
     role_name: string;
-    department: {
+    department?: {
         id: number;
+        name: string;
+    };
+    category?: {
         name: string;
     };
 }
@@ -41,19 +44,18 @@ interface User {
     id: number;
     name: string;
     email: string;
-    member_detail: {
-        id: number;
-        status_id: number;
-        department_id: number;
-    } | null;
+    role: string;
+    categoryRoles?: CategoryRole[];
 }
 
 export default function RoleManagement({
     categories = [],
     users = [],
+    roles = [],
 }: {
     categories: Category[];
     users: User[];
+    roles: string[];
 }) {
     const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
     const [searchUser, setSearchUser] = useState('');
@@ -94,6 +96,48 @@ export default function RoleManagement({
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
+                    <div className="mb-8 space-y-4">
+                        <div>
+                            <h3 className="text-lg font-semibold">Hak Akses Global</h3>
+                            <p className="text-sm text-muted-foreground">
+                                Hanya super admin yang dapat mengubah level akses akun.
+                            </p>
+                        </div>
+                        <div className="space-y-3">
+                            {users.map((user) => (
+                                <div
+                                    key={user.id}
+                                    className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between"
+                                >
+                                    <div>
+                                        <p className="font-medium">{user.name}</p>
+                                        <p className="text-sm text-muted-foreground">{user.email}</p>
+                                    </div>
+                                    <Select
+                                        value={user.role}
+                                        onValueChange={(role) =>
+                                            router.patch(route('settings.users.role', user.id), { role }, {
+                                                preserveScroll: true,
+                                            })
+                                        }
+                                        disabled={user.role === 'superadmin' && users.filter((item) => item.role === 'superadmin').length === 1}
+                                    >
+                                        <SelectTrigger className="w-full sm:w-44">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {roles.map((role) => (
+                                                <SelectItem key={role} value={role}>
+                                                    {role === 'superadmin' ? 'Super Admin' : role === 'admin' ? 'Admin' : 'User'}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
                     <form onSubmit={handleSubmit} className="space-y-6">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <div className="space-y-2">
@@ -177,7 +221,7 @@ export default function RoleManagement({
                                                         {role.role_name}
                                                     </span>
                                                     <span className="text-xs text-muted-foreground">
-                                                        {role.department.name}
+                                                        {role.department?.name ?? 'Semua departemen'}
                                                     </span>
                                                 </div>
                                             </SelectItem>
@@ -209,7 +253,7 @@ export default function RoleManagement({
                         </h3>
                         <div className="space-y-4">
                             {users
-                                .filter(user => user.member_detail?.categoryRoles?.length > 0)
+                                .filter(user => (user.categoryRoles?.length ?? 0) > 0)
                                 .map((user) => (
                                     <div
                                         key={user.id}
@@ -223,7 +267,7 @@ export default function RoleManagement({
                                                 </p>
                                             </div>
                                             <div className="flex flex-wrap gap-2">
-                                                {user.member_detail?.categoryRoles?.map((role) => (
+                                                {user.categoryRoles?.map((role) => (
                                                     <Badge
                                                         key={role.id}
                                                         variant="secondary"

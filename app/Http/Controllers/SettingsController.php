@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\Category;
 use App\Models\User;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -14,10 +13,31 @@ class SettingsController extends Controller
 {
     public function roles()
     {
-        return Inertia::render('Settings/RoleManagement', [
+        return Inertia::render('settings/RoleManagement', [
             'categories' => Category::with('roles')->get(),
-            'users' => User::with('member_detail.categoryRoles')->get(),
+            'users' => User::with('categoryRoles.category')->orderBy('name')->get(),
+            'roles' => User::ROLES,
         ]);
+    }
+
+    public function updateUserRole(Request $request, User $user)
+    {
+        $validated = $request->validate([
+            'role' => ['required', 'string', 'in:'.implode(',', User::ROLES)],
+        ]);
+
+        if ($user->is($request->user()) && $validated['role'] !== User::ROLE_SUPER_ADMIN) {
+            return back()->withErrors(['role' => 'Anda tidak dapat menurunkan role akun sendiri.']);
+        }
+
+        if ($user->isSuperAdmin() && $validated['role'] !== User::ROLE_SUPER_ADMIN
+            && User::where('role', User::ROLE_SUPER_ADMIN)->count() <= 1) {
+            return back()->withErrors(['role' => 'Minimal harus ada satu super admin.']);
+        }
+
+        $user->update(['role' => $validated['role']]);
+
+        return back()->with('success', 'Role pengguna berhasil diperbarui.');
     }
 
     public function assignRole(Request $request)

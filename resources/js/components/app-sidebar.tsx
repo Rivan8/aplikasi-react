@@ -10,6 +10,7 @@ import {
     QrCode,
     Radio,
     Settings,
+    ShieldCheck,
     Users,
 } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
@@ -32,74 +33,80 @@ const mainNavItems: NavItem[] = [
         title: 'Dashboard',
         href: '/dashboard',
         icon: LayoutDashboard,
-        roles: ['admin', 'jemaat'],
+        roles: ['admin', 'superadmin', 'user', 'jemaat'],
     },
     {
         title: 'Scan QR Member (Admin)',
         href: '/scan-qr',
         icon: QrCode,
-        roles: ['admin'],
+        roles: ['admin', 'superadmin'],
     },
     {
         title: 'Monitor Absensi',
         href: '/attendance-monitor',
         icon: MonitorPlay,
-        roles: ['admin'],
+        roles: ['admin', 'superadmin'],
         newTab: true,
     },
     {
         title: 'Absensi Mandiri',
         href: '/my/scan',
         icon: QrCode,
-        roles: ['jemaat', 'admin'],
+        roles: ['user', 'jemaat', 'admin', 'superadmin'],
     },
     {
         title: 'Management Event',
         href: '/events',
         icon: CalendarDays,
-        roles: ['admin'],
+        roles: ['admin', 'superadmin'],
     },
     {
         title: 'Live Event',
         href: '/live-events',
         icon: Radio,
-        roles: ['admin'],
+        roles: ['admin', 'superadmin'],
     },
     {
         title: 'Kategori Event',
         href: '/categories',
         icon: LayoutGrid,
-        roles: ['admin'],
+        roles: ['admin', 'superadmin'],
     },
     {
         title: 'Song Bank',
         href: '/songs',
         icon: Music,
-        roles: ['admin', 'jemaat'],
+        roles: ['admin', 'superadmin'],
     },
     {
         title: 'Attendance History',
         href: '/attendance-history',
         icon: History,
-        roles: ['admin'],
+        roles: ['admin', 'superadmin'],
     },
     {
         title: 'Member List',
         href: '/anggota',
         icon: Users,
-        roles: ['admin'],
+        roles: ['admin', 'superadmin'],
     },
     {
         title: 'Departemen',
         href: '/departments',
         icon: Settings,
-        roles: ['admin'],
+        roles: ['admin', 'superadmin'],
     },
     {
         title: 'Settings',
         href: '/settings/profile',
         icon: Settings,
-        roles: ['admin', 'jemaat'],
+        roles: ['admin', 'superadmin'],
+    },
+    {
+        title: 'Kelola Hak Akses',
+        href: '/settings/roles',
+        icon: ShieldCheck,
+        roles: ['superadmin'],
     },
 ];
 
@@ -131,7 +138,7 @@ export function AppSidebar() {
                         <SidebarMenuButton size="lg" asChild>
                             <Link
                                 href={
-                                    userRole === 'admin'
+                                    userRole === 'admin' || userRole === 'superadmin'
                                         ? '/events'
                                         : '/my/scan'
                                 }

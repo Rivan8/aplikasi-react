@@ -1910,7 +1910,7 @@ export default function Events({
                 open={!!viewingEvent}
                 onOpenChange={(open) => !open && setViewingEvent(null)}
             >
-                <DialogContent className="max-w-2xl overflow-hidden rounded-2xl p-0">
+                <DialogContent className="flex max-h-[calc(100vh-2rem)] max-w-2xl flex-col overflow-hidden rounded-2xl p-0 sm:max-h-[calc(100vh-3rem)]">
                     {viewingEvent && (
                         <>
                             <DialogHeader className="sr-only">
@@ -1921,7 +1921,7 @@ export default function Events({
                                     volunteer yang bertugas.
                                 </DialogDescription>
                             </DialogHeader>
-                            <div className="relative aspect-video w-full bg-muted">
+                            <div className="relative max-h-[30vh] min-h-[150px] aspect-video w-full shrink-0 bg-muted sm:max-h-[32vh]">
                                 {getEventImageUrl(viewingEvent.image_path) ? (
                                     <img
                                         src={getEventImageUrl(viewingEvent.image_path) ?? undefined}
@@ -1944,7 +1944,7 @@ export default function Events({
                                 </div>
                             </div>
 
-                            <div className="space-y-8 p-8">
+                            <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-5 sm:space-y-8 sm:p-8">
                                 <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
                                     <div className="space-y-1">
                                         <p className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">

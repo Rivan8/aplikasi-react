@@ -103,10 +103,18 @@ class AttendanceController extends Controller
     public function exportPdf(Request $request)
     {
         $rows = $this->buildAttendanceExportRows($request);
+        $presentCount = collect($rows)->where('Status', 'Hadir')->count();
+        $lateCount = collect($rows)->where('Status', 'Terlambat')->count();
+        $eventTitle = $request->filled('event_id') && $request->event_id !== 'all'
+            ? Event::whereKey($request->event_id)->value('title')
+            : null;
 
         $pdf = Pdf::loadView('exports.attendance-history', [
             'rows' => $rows,
-            'title' => 'Riwayat Kehadiran',
+            'title' => $eventTitle ?: 'Riwayat Kehadiran',
+            'presentCount' => $presentCount,
+            'lateCount' => $lateCount,
+            'generatedAt' => now()->format('d M Y, H:i'),
         ])->setPaper('a4', 'landscape');
 
         return $pdf->download('attendance-history.pdf');
@@ -173,7 +181,7 @@ class AttendanceController extends Controller
                 'Lokasi' => $attendance->event?->location ?? '-',
                 'Tanggal Event' => $attendance->event?->date ?? '-',
                 'Waktu Scan' => $attendance->scan_time?->format('d M Y, H:i'),
-                'Status' => $attendance->status,
+                'Status' => $attendance->status === 'Late' ? 'Terlambat' : 'Hadir',
             ];
         })->toArray();
     }
@@ -382,7 +390,7 @@ class AttendanceController extends Controller
         }
 
         if ($query->exists()) {
-            return back()->with('info', $member->name . ' sudah tercatat hadir untuk sesi/event ini.');
+            return back()->with('info', $member['name'] . ' sudah tercatat hadir untuk sesi/event ini.');
         }
 
         $compareTime = $event->attendance_start_time ?? $event->time;

@@ -27,6 +27,7 @@ class CreateNewUser implements CreatesNewUsers
         return User::create([
             'name' => $input['name'],
             'email' => $input['email'],
+            'phone' => isset($input['phone']) ? preg_replace('/\D+/', '', $input['phone']) : null,
             'password' => $input['password'],
         ]);
     }

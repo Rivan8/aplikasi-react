@@ -172,19 +172,19 @@ export default function Login({
                                 <>
                                     <div className="space-y-5">
                                         <div className="space-y-2">
-                                            <Label htmlFor="email">Email</Label>
+                                            <Label htmlFor="login">Email atau nomor HP</Label>
                                             <Input
-                                                id="email"
-                                                type="email"
-                                                name="email"
+                                                id="login"
+                                                type="text"
+                                                name="login"
                                                 required
                                                 autoFocus
                                                 tabIndex={1}
-                                                autoComplete="email"
-                                                placeholder="nama@email.com"
+                                                autoComplete="username"
+                                                placeholder="nama@email.com atau 0812..."
                                                 className="h-11"
                                             />
-                                            <InputError message={errors.email} />
+                                            <InputError message={errors.login || errors.email} />
                                         </div>
 
                                         <div className="space-y-2">

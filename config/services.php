@@ -37,6 +37,7 @@ return [
 
     'myesc' => [
         'enabled' => filter_var(env('MYESC_MEMBER_API_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
+        'auth_url' => env('MYESC_AUTH_API_URL', 'https://admin.myesc.id/Api/Api_authpcs'),
         'scan_url' => env('MYESC_MEMBER_API_URL', 'https://admin.myesc.id/Api/Api_laravel_pcs/scan'),
         'list_url' => env('MYESC_MEMBER_LIST_API_URL', 'https://admin.myesc.id/Api/Api_listjemaat'),
         'api_key' => env('MYESC_MEMBER_API_KEY'),

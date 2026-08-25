@@ -186,16 +186,16 @@ export default function AttendanceMonitor({
                     ) : (
                         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                             {recentScans.map((scan) => (
-                                <article key={scan.id} className="flex items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.06] p-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                                    <div className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-emerald-500 text-lg font-bold text-white">
+                                <article key={scan.id} className={`flex items-center gap-4 rounded-2xl border p-4 animate-in fade-in slide-in-from-bottom-2 duration-500 ${scan.status === 'Late' ? 'border-amber-400/40 bg-amber-400/[0.10]' : 'border-white/10 bg-white/[0.06]'}`}>
+                                    <div className={`relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full text-lg font-bold text-white ${scan.status === 'Late' ? 'bg-amber-500' : 'bg-emerald-500'}`}>
                                         {scan.name.charAt(0).toUpperCase()}
                                         {scan.foto_url && <img src={scan.foto_url} alt="" className="absolute inset-0 h-full w-full object-cover" onError={(event) => { event.currentTarget.style.display = 'none'; }} />}
                                     </div>
                                     <div className="min-w-0 flex-1">
                                         <h3 className="truncate font-semibold">{scan.name}</h3>
-                                        <p className="mt-1 text-xs text-slate-400">{scan.time ?? '-'} · {scan.status === 'Present' ? 'Hadir' : 'Terlambat'}</p>
+                                        <p className={`mt-1 text-xs ${scan.status === 'Late' ? 'text-amber-300' : 'text-slate-400'}`}>{scan.time ?? '-'} · {scan.status === 'Present' ? 'Hadir' : 'Terlambat'}</p>
                                     </div>
-                                    <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-300" />
+                                    <CheckCircle2 className={`h-5 w-5 shrink-0 ${scan.status === 'Late' ? 'text-amber-300' : 'text-emerald-300'}`} />
                                 </article>
                             ))}
                         </div>

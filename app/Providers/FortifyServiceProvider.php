@@ -7,8 +7,10 @@ use App\Actions\Fortify\ResetUserPassword;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
+use App\Services\MemberApiService;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
 use Laravel\Fortify\Fortify;
@@ -42,11 +44,45 @@ class FortifyServiceProvider extends ServiceProvider
         Fortify::createUsersUsing(CreateNewUser::class);
 
         Fortify::authenticateUsing(function (Request $request) {
-            $user = \App\Models\User::where('email', $request->email)->first();
+            $login = trim((string) $request->input('login'));
+            $phone = preg_replace('/\D+/', '', $login);
+            $user = \App\Models\User::where('email', $login)
+                ->orWhere('phone', $phone)
+                ->first();
 
-            if ($user && \Illuminate\Support\Facades\Hash::check($request->password, $user->password)) {
+            if ($user && Hash::check($request->password, $user->password)) {
                 return $user;
             }
+
+            $member = app(MemberApiService::class)->authenticate($login, (string) $request->password);
+
+            if (! $member) {
+                return null;
+            }
+
+            $normalizedPhone = preg_replace('/\D+/', '', (string) ($member['phone'] ?? $phone));
+            $localUser = \App\Models\User::where('member_id', $member['idjemaat'])
+                ->orWhere(fn ($query) => $query
+                    ->whereNotNull('phone')
+                    ->where('phone', $normalizedPhone))
+                ->first();
+
+            if (! $localUser && ! empty($member['email'])) {
+                $localUser = \App\Models\User::where('email', $member['email'])->first();
+            }
+
+            $localUser ??= new \App\Models\User;
+            $localUser->fill([
+                'name' => $member['name'] ?: 'Member '.$member['idjemaat'],
+                'email' => $localUser->email ?: ($member['email'] ?: $member['idjemaat'].'@member.local'),
+                'phone' => $normalizedPhone ?: null,
+                'member_id' => $member['idjemaat'],
+                'password' => $request->password,
+                'email_verified_at' => now(),
+            ]);
+            $localUser->save();
+
+            return $localUser;
 
             return null;
         });

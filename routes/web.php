@@ -98,7 +98,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         $openRoles = $upcomingEvents->sum(fn ($event) => max((int) ($categoryRoleCounts[$event->category] ?? 0) - (int) $event->volunteers_count, 0));
 
         $adminAssignments = collect();
-        if ($user->role === 'admin') {
+        if ($user->isAdmin()) {
             $allAssignments = EventVolunteer::with('event')
                 ->whereHas('event', fn ($query) => $query->whereDate('date', '>=', $today->toDateString()))
                 ->orderBy(
@@ -284,7 +284,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     })->name('dashboard.volunteer-assignments.decline');
 
     Route::post('dashboard/volunteer-assignments/{eventVolunteer}/replace', function (Request $request, EventVolunteer $eventVolunteer) {
-        abort_unless($request->user()->role === 'admin', 403);
+        abort_unless($request->user()->isAdmin(), 403);
 
         $validated = $request->validate([
             'member_id' => 'required',
@@ -298,7 +298,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ]);
 
         return back()->with('success', 'Volunteer berhasil diganti.');
-    })->name('dashboard.volunteer-assignments.replace');
+    })->middleware('role:admin,superadmin')->name('dashboard.volunteer-assignments.replace');
     Route::get('anggota', function (Request $request) {
         $memberApi = app(MemberApiService::class);
 
@@ -374,7 +374,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 ['title' => 'Member List', 'href' => route('anggota')],
             ],
         ]);
-    })->name('anggota');
+    })->middleware('role:admin,superadmin')->name('anggota');
 
     Route::get('anggota/{id}/edit', function ($id) {
         $member = app(MemberApiService::class)->findById($id);
@@ -392,7 +392,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 ['title' => 'Edit Member', 'href' => '#'],
             ],
         ]);
-    })->name('anggota.edit');
+    })->middleware('role:admin,superadmin')->name('anggota.edit');
 
     Route::post('anggota/{id}/update-details', function (Request $request, $id) {
         $request->validate([
@@ -409,38 +409,38 @@ Route::middleware(['auth', 'verified'])->group(function () {
         );
 
         return back()->with('success', 'Detail anggota berhasil diperbarui');
-    })->name('anggota.update-details');
-    Route::resource('departments', DepartmentController::class)->except(['create', 'edit', 'show']);
+    })->middleware('role:admin,superadmin')->name('anggota.update-details');
+    Route::resource('departments', DepartmentController::class)->except(['create', 'edit', 'show'])->middleware('role:admin,superadmin');
 
-    Route::resource('events', EventController::class)->except(['create', 'edit', 'show']);
-    Route::post('events/{event}/participants', [EventController::class, 'enrollParticipant'])->name('events.participants.enroll');
-    Route::delete('events/{event}/participants/{participant}', [EventController::class, 'removeParticipant'])->name('events.participants.remove');
-    Route::put('events/{event}/participants/{participant}', [EventController::class, 'updateParticipantStatus'])->name('events.participants.update-status');
-    Route::get('live-events', [LiveEventController::class, 'index'])->name('live-events.index');
-    Route::get('live-events/time-keeper', [LiveEventController::class, 'timeKeeper'])->name('live-events.time-keeper');
-    Route::post('live-events/{event}/start', [LiveEventController::class, 'start'])->name('live-events.start');
-    Route::post('live-events/{event}/next', [LiveEventController::class, 'next'])->name('live-events.next');
-    Route::post('live-events/{event}/finish', [LiveEventController::class, 'finish'])->name('live-events.finish');
-    Route::resource('categories', CategoryController::class)->except(['create', 'edit', 'show']);
-    Route::get('scan-qr', [AttendanceController::class, 'showAdminScan'])->name('scan-qr');
-    Route::get('attendance-monitor', [AttendanceController::class, 'showAttendanceMonitor'])->name('attendance-monitor');
-    Route::get('attendance-history', [AttendanceController::class, 'history'])->name('attendance-history');
-    Route::get('attendance-history/export/pdf', [AttendanceController::class, 'exportPdf'])->name('attendance-history.export.pdf');
-    Route::get('attendance-history/export/excel', [AttendanceController::class, 'exportExcel'])->name('attendance-history.export.excel');
+    Route::resource('events', EventController::class)->except(['create', 'edit', 'show'])->middleware('role:admin,superadmin');
+    Route::post('events/{event}/participants', [EventController::class, 'enrollParticipant'])->middleware('role:admin,superadmin')->name('events.participants.enroll');
+    Route::delete('events/{event}/participants/{participant}', [EventController::class, 'removeParticipant'])->middleware('role:admin,superadmin')->name('events.participants.remove');
+    Route::put('events/{event}/participants/{participant}', [EventController::class, 'updateParticipantStatus'])->middleware('role:admin,superadmin')->name('events.participants.update-status');
+    Route::get('live-events', [LiveEventController::class, 'index'])->middleware('role:admin,superadmin')->name('live-events.index');
+    Route::get('live-events/time-keeper', [LiveEventController::class, 'timeKeeper'])->middleware('role:admin,superadmin')->name('live-events.time-keeper');
+    Route::post('live-events/{event}/start', [LiveEventController::class, 'start'])->middleware('role:admin,superadmin')->name('live-events.start');
+    Route::post('live-events/{event}/next', [LiveEventController::class, 'next'])->middleware('role:admin,superadmin')->name('live-events.next');
+    Route::post('live-events/{event}/finish', [LiveEventController::class, 'finish'])->middleware('role:admin,superadmin')->name('live-events.finish');
+    Route::resource('categories', CategoryController::class)->except(['create', 'edit', 'show'])->middleware('role:admin,superadmin');
+    Route::get('scan-qr', [AttendanceController::class, 'showAdminScan'])->middleware('role:admin,superadmin')->name('scan-qr');
+    Route::get('attendance-monitor', [AttendanceController::class, 'showAttendanceMonitor'])->middleware('role:admin,superadmin')->name('attendance-monitor');
+    Route::get('attendance-history', [AttendanceController::class, 'history'])->middleware('role:admin,superadmin')->name('attendance-history');
+    Route::get('attendance-history/export/pdf', [AttendanceController::class, 'exportPdf'])->middleware('role:admin,superadmin')->name('attendance-history.export.pdf');
+    Route::get('attendance-history/export/excel', [AttendanceController::class, 'exportExcel'])->middleware('role:admin,superadmin')->name('attendance-history.export.excel');
 
     // Song Bank Routes
-    Route::resource('songs', SongController::class)->except(['create', 'edit', 'show']);
-    Route::post('songs/{song}/arrangements', [SongController::class, 'storeArrangement'])->name('songs.arrangements.store');
-    Route::get('arrangements/{arrangement}/pdf', [SongController::class, 'viewPdf'])->name('arrangements.pdf');
-    Route::post('arrangements/{arrangement}/duplicate', [SongController::class, 'duplicateArrangement'])->name('arrangements.duplicate');
-    Route::put('arrangements/{arrangement}', [SongController::class, 'updateArrangement'])->name('arrangements.update');
-    Route::delete('arrangements/{arrangement}', [SongController::class, 'destroyArrangement'])->name('arrangements.destroy');
+    Route::resource('songs', SongController::class)->except(['create', 'edit', 'show'])->middleware('role:admin,superadmin');
+    Route::post('songs/{song}/arrangements', [SongController::class, 'storeArrangement'])->middleware('role:admin,superadmin')->name('songs.arrangements.store');
+    Route::get('arrangements/{arrangement}/pdf', [SongController::class, 'viewPdf'])->middleware('role:admin,superadmin')->name('arrangements.pdf');
+    Route::post('arrangements/{arrangement}/duplicate', [SongController::class, 'duplicateArrangement'])->middleware('role:admin,superadmin')->name('arrangements.duplicate');
+    Route::put('arrangements/{arrangement}', [SongController::class, 'updateArrangement'])->middleware('role:admin,superadmin')->name('arrangements.update');
+    Route::delete('arrangements/{arrangement}', [SongController::class, 'destroyArrangement'])->middleware('role:admin,superadmin')->name('arrangements.destroy');
 
     // QR Attendance Routes
     Route::get('my/scan', [AttendanceController::class, 'showUserScan'])->name('my.scan');
-    Route::get('attendance/{event}/scan', [AttendanceController::class, 'showEventScan'])->name('attendance.scan');
+    Route::get('attendance/{event}/scan', [AttendanceController::class, 'showEventScan'])->middleware('role:admin,superadmin')->name('attendance.scan');
     Route::post('attendance/{event}/scan-event', [AttendanceController::class, 'scanEventQr'])->name('attendance.scan-event');
-    Route::post('attendance/scan-member', [AttendanceController::class, 'scanMemberQr'])->name('attendance.scan-member');
+    Route::post('attendance/scan-member', [AttendanceController::class, 'scanMemberQr'])->middleware('role:admin,superadmin')->name('attendance.scan-member');
 
     Route::get('event-images/{path}', function (string $path) {
         abort_if(str_contains($path, '..'), 404);
@@ -454,11 +454,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
 // Settings Routes
 Route::get('/settings/roles', [SettingsController::class, 'roles'])
-    ->middleware('category.role:system_management,admin')
+    ->middleware(['auth', 'verified', 'role:superadmin'])
     ->name('settings.roles');
 
 Route::post('/settings/roles/assign', [SettingsController::class, 'assignRole'])
-    ->middleware('category.role:system_management,admin')
+    ->middleware(['auth', 'verified', 'role:superadmin'])
     ->name('settings.roles.assign');
+
+Route::patch('/settings/users/{user}/role', [SettingsController::class, 'updateUserRole'])
+    ->middleware(['auth', 'verified', 'role:superadmin'])
+    ->name('settings.users.role');
 
 require __DIR__.'/settings.php';

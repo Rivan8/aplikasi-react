@@ -8,6 +8,32 @@ use Illuminate\Support\Facades\Http;
 
 class MemberApiService
 {
+    public function authenticate(string $identity, string $password): ?array
+    {
+        if (! config('services.myesc.enabled', true)) {
+            return null;
+        }
+
+        try {
+            $response = $this->authClient()->post('/login', [
+                'identity' => trim($identity),
+                'password' => $password,
+            ]);
+
+            if (! $response->successful() || $response->json('status') !== true) {
+                return null;
+            }
+
+            $member = $response->json('data');
+
+            return is_array($member) && ! empty($member['idjemaat'])
+                ? $this->normalizeMember($member)
+                : null;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
     public function findByScan(string $scan): ?array
     {
         $scan = trim($scan);
@@ -159,6 +185,17 @@ class MemberApiService
             ->timeout((int) config('services.myesc.timeout', 10));
     }
 
+    private function authClient(): PendingRequest
+    {
+        return Http::baseUrl(rtrim((string) config('services.myesc.auth_url'), '/'))
+            ->acceptJson()
+            ->withHeaders([
+                'X-API-KEY' => (string) config('services.myesc.api_key'),
+            ])
+            ->connectTimeout((int) config('services.myesc.connect_timeout', 5))
+            ->timeout((int) config('services.myesc.timeout', 10));
+    }
+
     private function listClient(): PendingRequest
     {
         return Http::baseUrl(rtrim((string) config('services.myesc.list_url'), '/'))
@@ -183,6 +220,7 @@ class MemberApiService
             'statusjemaat' => $member['statusjemaat'] ?? null,
             'jeniskelamin' => $member['jeniskelamin'] ?? null,
             'email' => $member['email'] ?? null,
+            'phone' => $member['nohp'] ?? $member['phone'] ?? null,
         ];
     }
 

@@ -11,10 +11,18 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 
-#[Fillable(['name', 'email', 'password', 'member_id', 'role'])]
+#[Fillable(['name', 'email', 'phone', 'password', 'member_id', 'role'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable
 {
+    public const ROLE_SUPER_ADMIN = 'superadmin';
+
+    public const ROLE_ADMIN = 'admin';
+
+    public const ROLE_USER = 'user';
+
+    public const ROLES = [self::ROLE_SUPER_ADMIN, self::ROLE_ADMIN, self::ROLE_USER];
+
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable, TwoFactorAuthenticatable;
 
@@ -47,12 +55,17 @@ class User extends Authenticatable
         return $this->hasOne(MemberDetail::class, 'member_id', 'member_id');
     }
 
+    public function categoryRoles()
+    {
+        return $this->belongsToMany(CategoryRole::class, 'user_category_roles');
+    }
+
     /**
      * Check if user is superadmin
      */
     public function isSuperAdmin(): bool
     {
-        return $this->role === 'superadmin';
+        return $this->role === self::ROLE_SUPER_ADMIN;
     }
 
     /**
@@ -60,7 +73,7 @@ class User extends Authenticatable
      */
     public function isAdmin(): bool
     {
-        return in_array($this->role, ['admin', 'superadmin']);
+        return in_array($this->role, [self::ROLE_ADMIN, self::ROLE_SUPER_ADMIN], true);
     }
 
     /**
@@ -92,7 +105,7 @@ class User extends Authenticatable
         }
 
         // Cek apakah user memiliki role yang diizinkan di kategori tersebut
-        return $this->member_detail->categoryRoles()
+        return $this->categoryRoles()
             ->where('category_id', $categoryId)
             ->whereIn('role_name', (array) $allowedRoles)
             ->exists();
