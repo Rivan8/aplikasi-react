@@ -874,7 +874,7 @@ export default function Dashboard({
         },
     ];
 
-    if (userRole !== 'admin') {
+    if (!['admin', 'superadmin'].includes(userRole)) {
         return <UserDashboard assignments={userAssignments} />;
     }
 
@@ -882,35 +882,39 @@ export default function Dashboard({
         <>
             <Head title="Dashboard" />
 
-            <div className="flex flex-col gap-6 p-6">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="relative flex min-h-screen flex-col gap-7 overflow-hidden bg-[radial-gradient(circle_at_100%_0%,rgba(13,115,119,0.12),transparent_34%),linear-gradient(135deg,#f4f2ef_0%,#ffffff_48%,#eef7f5_100%)] p-5 sm:p-7 lg:p-10 dark:bg-[radial-gradient(circle_at_100%_0%,rgba(45,212,191,0.12),transparent_32%),linear-gradient(135deg,#141416_0%,#1c1c21_52%,#102525_100%)]">
+                <div className="pointer-events-none absolute -top-32 -right-32 h-80 w-80 rounded-full border border-primary/10 bg-primary/[0.03]" />
+                <div className="pointer-events-none absolute top-1/2 -left-48 h-96 w-96 rounded-full border border-sky-500/10 bg-sky-500/[0.025]" />
+
+                <div className="relative flex flex-col gap-5 overflow-hidden rounded-[28px] border border-slate-800/10 bg-slate-950 px-6 py-7 text-white shadow-2xl shadow-slate-950/10 sm:px-8 lg:flex-row lg:items-center lg:justify-between lg:px-10">
+                    <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(120deg,rgba(13,115,119,0.55),transparent_45%,rgba(56,189,248,0.16))]" />
                     <div>
-                        <div className="mb-2 flex items-center gap-2">
+                        <div className="relative mb-3 flex items-center gap-2">
                             <Badge
                                 variant="outline"
-                                className="gap-1.5 rounded-md px-2 py-1 text-[10px] font-bold tracking-widest uppercase"
+                                className="gap-1.5 rounded-full border-teal-300/30 bg-teal-300/10 px-3 py-1 text-[10px] font-bold tracking-widest text-teal-200 uppercase"
                             >
-                                <Radio className="h-3 w-3 text-emerald-500" />
-                                Service Command Center
+                                <Radio className="h-3 w-3 text-teal-300" />
+                                Pusat Kendali Pelayanan
                             </Badge>
                         </div>
-                        <h1 className="text-[1.75rem] font-bold tracking-tight text-foreground">
+                        <h1 className="relative text-3xl font-black tracking-tight text-white sm:text-4xl">
                             Dashboard
                         </h1>
-                        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+                        <p className="relative mt-2 max-w-2xl text-sm leading-relaxed text-slate-300">
                             Pantau kesiapan event, penugasan volunteer, dan
                             absensi jemaat dari satu tempat.
                         </p>
                     </div>
 
-                    <div className="flex flex-wrap gap-2">
-                        <Button asChild variant="outline" className="gap-2">
+                    <div className="relative flex flex-wrap gap-2">
+                        <Button asChild variant="outline" className="gap-2 border-white/15 bg-white/10 text-white hover:bg-white/20 hover:text-white">
                             <Link href="/categories">
                                 <ClipboardList className="h-4 w-4" />
                                 Template Role
                             </Link>
                         </Button>
-                        <Button asChild className="gap-2">
+                        <Button asChild className="gap-2 bg-teal-300 text-slate-950 hover:bg-teal-200">
                             <Link href="/events">
                                 <CalendarDays className="h-4 w-4" />
                                 Kelola Event
@@ -921,7 +925,7 @@ export default function Dashboard({
 
 
                 {/* Tab Bar Redesign */}
-                <div className="flex gap-1 p-1.5 bg-muted/40 rounded-2xl w-fit border border-border/40 backdrop-blur-md">
+                <div className="relative flex w-full gap-1 overflow-x-auto rounded-2xl border border-border/50 bg-card/70 p-1.5 shadow-sm backdrop-blur-md sm:w-fit">
                     {[
                         { id: 'overview', label: 'Ringkasan', icon: Activity },
                         { id: 'schedules', label: 'Jadwal & Tim', icon: CalendarDays },
@@ -933,7 +937,7 @@ export default function Dashboard({
                             type="button"
                             onClick={() => setActiveTab(tab.id as any)}
                             className={cn(
-                                "flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-bold transition-all duration-300",
+                                "flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-all duration-300 sm:px-6",
                                 activeTab === tab.id
                                     ? "bg-background text-primary shadow-lg shadow-primary/5 border border-primary/10 scale-[1.02]"
                                     : "text-muted-foreground hover:bg-background/50 hover:text-foreground"
@@ -947,14 +951,14 @@ export default function Dashboard({
 
                 {activeTab === 'overview' && (
                     <>
-                        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                        <div className="relative grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                             {serviceStats.map((stat) => {
                                 const Icon = stat.icon;
 
                                 return (
                                     <Card
                                         key={stat.title}
-                                        className="border bg-card shadow-sm"
+                                        className="group border-border/60 bg-card/85 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-primary/30 hover:shadow-xl hover:shadow-primary/5"
                                     >
                                         <CardContent className="p-5">
                                             <div className="flex items-start justify-between gap-4">
@@ -962,12 +966,12 @@ export default function Dashboard({
                                                     <p className="text-sm font-medium text-muted-foreground">
                                                         {stat.title}
                                                     </p>
-                                                    <p className="mt-2 text-3xl font-bold tracking-tight text-foreground">
+                                                    <p className="mt-2 text-3xl font-black tracking-tight text-foreground">
                                                         {stat.value}
                                                     </p>
                                                 </div>
                                                 <div
-                                                    className={`flex h-10 w-10 items-center justify-center rounded-lg border ${stat.tone}`}
+                                                    className={`flex h-11 w-11 items-center justify-center rounded-2xl border transition-transform duration-300 group-hover:scale-110 ${stat.tone}`}
                                                 >
                                                     <Icon className="h-5 w-5" />
                                                 </div>
@@ -981,8 +985,8 @@ export default function Dashboard({
                             })}
                         </div>
 
-                        <div className="grid gap-6 xl:grid-cols-[1.45fr_0.9fr]">
-                            <Card className="border bg-card shadow-sm">
+                        <div className="relative grid gap-6 xl:grid-cols-[1.45fr_0.9fr]">
+                            <Card className="border-border/60 bg-card/85 shadow-sm">
                                 <CardHeader className="border-b px-6 py-5">
                                     <div className="flex items-center justify-between">
                                         <CardTitle className="text-lg">
@@ -1029,7 +1033,7 @@ export default function Dashboard({
                             </Card>
 
                             <div className="grid gap-6">
-                                <Card className="border bg-card shadow-sm">
+                                <Card className="border-border/60 bg-card/85 shadow-sm">
                                     <CardHeader className="border-b px-6 py-5">
                                         <CardTitle className="text-lg">
                                             Quick Actions
@@ -1056,7 +1060,7 @@ export default function Dashboard({
                                     </CardContent>
                                 </Card>
 
-                                <Card className="border bg-card shadow-sm">
+                                <Card className="border-border/60 bg-card/85 shadow-sm">
                                     <CardHeader className="border-b px-6 py-5">
                                         <CardTitle className="text-lg">
                                             Yang Perlu Dicek
