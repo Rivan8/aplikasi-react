@@ -5,6 +5,7 @@ namespace App\Services;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class MemberApiService
 {
@@ -15,12 +16,21 @@ class MemberApiService
         }
 
         try {
+            $apiPassword = config('services.myesc.auth_password_format', 'plain') === 'md5'
+                ? md5($password)
+                : $password;
+
             $response = $this->authClient()->post('/login', [
                 'identity' => trim($identity),
-                'password' => $password,
+                'password' => $apiPassword,
             ]);
 
-            if (! $response->successful() || $response->json('status') !== true) {
+            if (! $response->successful() || ! $this->authenticationSucceeded($response->json('status'))) {
+                Log::warning('Member API authentication rejected', [
+                    'http_status' => $response->status(),
+                    'api_status' => $response->json('status'),
+                ]);
+
                 return null;
             }
 
@@ -29,7 +39,11 @@ class MemberApiService
             return is_array($member) && ! empty($member['idjemaat'])
                 ? $this->normalizeMember($member)
                 : null;
-        } catch (\Throwable) {
+        } catch (\Throwable $exception) {
+            Log::error('Member API authentication request failed', [
+                'message' => $exception->getMessage(),
+            ]);
+
             return null;
         }
     }
@@ -222,6 +236,11 @@ class MemberApiService
             'email' => $member['email'] ?? null,
             'phone' => $member['nohp'] ?? $member['phone'] ?? null,
         ];
+    }
+
+    private function authenticationSucceeded(mixed $status): bool
+    {
+        return in_array($status, [true, 1, '1', 'true', 'success'], true);
     }
 
     private function photoUrl(?string $photo): ?string

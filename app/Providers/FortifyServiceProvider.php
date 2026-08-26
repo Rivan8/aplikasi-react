@@ -77,7 +77,7 @@ class FortifyServiceProvider extends ServiceProvider
                 'email' => $localUser->email ?: ($member['email'] ?: $member['idjemaat'].'@member.local'),
                 'phone' => $normalizedPhone ?: null,
                 'member_id' => $member['idjemaat'],
-                'password' => $request->password,
+                'password' => Hash::make($request->password),
                 'email_verified_at' => now(),
             ]);
             $localUser->save();

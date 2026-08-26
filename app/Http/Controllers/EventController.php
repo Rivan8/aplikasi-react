@@ -22,6 +22,7 @@ class EventController extends Controller
             'volunteers',
             'participants',
             'sessions',
+            'liveSession',
             'rundownSegments.items.song.arrangements',
             'rundownSegments.items.arrangement'
         ])->orderBy('date', 'desc')->get();

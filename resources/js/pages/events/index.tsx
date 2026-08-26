@@ -56,7 +56,6 @@ import {
     Users,
     X,
     Play,
-    Pause,
     RotateCcw,
     CheckCircle2,
     Sparkles,
@@ -86,6 +85,8 @@ interface Volunteer {
     role_name: string;
     role_category: string;
     role_id?: number; // Unique identifier for the position
+    response_status?: 'pending' | 'accepted' | 'declined' | string;
+    response_reason?: string | null;
     member?: VolunteerMember;
 }
 
@@ -143,6 +144,11 @@ interface Event {
     rundown_segments: EventRundownSegment[];
     sessions?: EventSession[];
     participants?: EventParticipant[];
+    live_session?: {
+        status: 'idle' | 'running' | 'completed' | string;
+        started_at?: string | null;
+        item_started_at?: string | null;
+    } | null;
 }
 
 interface CategoryRole {
@@ -646,18 +652,22 @@ export default function Events({
     }, [editingEvent, categories]);
 
     const [rundownEvent, setRundownEvent] = useState<Event | null>(null);
-    const [timerRunning, setTimerRunning] = useState(false);
-    const [elapsedSeconds, setElapsedSeconds] = useState(0);
+    const [rundownNow, setRundownNow] = useState(() => Date.now());
 
     useEffect(() => {
-        let interval: any;
-        if (timerRunning) {
-            interval = setInterval(() => {
-                setElapsedSeconds((prev) => prev + 1);
-            }, 1000);
+        const interval = window.setInterval(() => setRundownNow(Date.now()), 1000);
+
+        return () => window.clearInterval(interval);
+    }, []);
+
+    useEffect(() => {
+        if (!rundownEvent) return;
+
+        const refreshedEvent = events.find((event) => event.id === rundownEvent.id);
+        if (refreshedEvent && refreshedEvent !== rundownEvent) {
+            setRundownEvent(refreshedEvent);
         }
-        return () => clearInterval(interval);
-    }, [timerRunning]);
+    }, [events, rundownEvent]);
 
     const rundownTotalSeconds = useMemo(() => {
         if (!rundownEvent) {
@@ -667,6 +677,9 @@ export default function Events({
         return getRundownTotalSeconds(rundownEvent.rundown_segments);
     }, [rundownEvent]);
 
+    const elapsedSeconds = rundownEvent?.live_session?.started_at && rundownEvent.live_session.status === 'running'
+        ? Math.max(0, Math.floor((rundownNow - new Date(rundownEvent.live_session.started_at).getTime()) / 1000))
+        : 0;
     const overdueSeconds = Math.max(0, elapsedSeconds - rundownTotalSeconds);
 
     const rundownTimerPlan = useMemo(() => {
@@ -2119,28 +2132,60 @@ export default function Events({
                                 {viewingEvent.volunteers &&
                                     viewingEvent.volunteers.length > 0 && (
                                         <div className="space-y-4">
-                                            <h4 className="flex items-center gap-2 text-sm font-bold tracking-widest text-primary uppercase">
-                                                <Users className="h-4 w-4" />
-                                                Volunteer Melayani
-                                            </h4>
+                                            <div className="flex flex-wrap items-center justify-between gap-3">
+                                                <h4 className="flex items-center gap-2 text-sm font-bold tracking-widest text-primary uppercase">
+                                                    <Users className="h-4 w-4" />
+                                                    Volunteer Melayani
+                                                </h4>
+                                                <div className="flex flex-wrap items-center gap-3 text-[10px] font-semibold text-muted-foreground">
+                                                    <span className="flex items-center gap-1.5">
+                                                        <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                                                        Accepted
+                                                    </span>
+                                                    <span className="flex items-center gap-1.5">
+                                                        <span className="h-2 w-2 rounded-full bg-amber-500" />
+                                                        Pending
+                                                    </span>
+                                                    <span className="flex items-center gap-1.5">
+                                                        <span className="h-2 w-2 rounded-full bg-rose-500" />
+                                                        Declined
+                                                    </span>
+                                                </div>
+                                            </div>
                                             <div className="grid grid-cols-1 gap-x-8 gap-y-3 rounded-2xl border border-primary/10 bg-muted/30 p-5 md:grid-cols-2">
                                                 {viewingEvent.volunteers.map(
                                                     (v) => (
                                                         <div
                                                             key={v.id}
-                                                            className="flex items-center justify-between border-b border-muted py-1.5 last:border-0"
+                                                            className="flex items-center justify-between gap-3 border-b border-muted py-2 last:border-0"
                                                         >
-                                                            <span className="text-xs font-medium text-muted-foreground">
-                                                                {
-                                                                    v.role_category
-                                                                }{' '}
-                                                                - {v.role_name}
-                                                            </span>
-                                                            <span className="text-xs font-bold text-foreground">
-                                                                {v.member
-                                                                    ?.namalengkap ||
-                                                                    'Unknown'}
-                                                            </span>
+                                                            <div className="min-w-0">
+                                                                <p className="truncate text-xs font-bold text-foreground">
+                                                                    {v.member
+                                                                        ?.namalengkap ||
+                                                                        'Unknown'}
+                                                                </p>
+                                                                <p className="truncate text-[11px] font-medium text-muted-foreground">
+                                                                    {v.role_category} - {v.role_name}
+                                                                </p>
+                                                            </div>
+                                                            <Badge
+                                                                variant="outline"
+                                                                className={cn(
+                                                                    'shrink-0 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide',
+                                                                    v.response_status === 'accepted'
+                                                                        ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                                                        : v.response_status === 'declined'
+                                                                          ? 'border-rose-200 bg-rose-50 text-rose-700'
+                                                                          : 'border-amber-200 bg-amber-50 text-amber-700',
+                                                                )}
+                                                            >
+                                                                {v.response_status === 'accepted'
+                                                                                                                                        ? 'Accepted'
+                                                                    : v.response_status === 'declined'
+                                                                                                                                            ? 'Declined'
+                                                                                                                                            : 'Pending'}
+                                                            </Badge>
                                                         </div>
                                                     ),
                                                 )}
@@ -2246,26 +2291,42 @@ export default function Events({
                                     <div className="mt-6 flex gap-2">
                                         <Button
                                             className="flex-1 gap-2"
-                                            onClick={() =>
-                                                setTimerRunning(
-                                                    (current) => !current,
-                                                )
-                                            }
+                                            disabled={rundownEvent.live_session?.status === 'running'}
+                                            onClick={() => {
+                                                router.post(
+                                                    `/live-events/${rundownEvent.id}/start`,
+                                                    { from_events: true },
+                                                    { preserveScroll: true },
+                                                );
+                                            }}
                                         >
-                                            {timerRunning ? (
-                                                <Pause className="h-4 w-4" />
-                                            ) : (
-                                                <Play className="h-4 w-4" />
-                                            )}
-                                            {timerRunning ? 'Pause' : 'Start'}
+                                            <Play className="h-4 w-4" />
+                                            {rundownEvent.live_session?.status === 'running' ? 'Sedang berjalan' : 'Start'}
+                                        </Button>
+                                        <Button
+                                            className="flex-1 gap-2"
+                                            disabled={rundownEvent.live_session?.status !== 'running'}
+                                            onClick={() => {
+                                                router.post(
+                                                    `/live-events/${rundownEvent.id}/next`,
+                                                    { from_events: true },
+                                                    { preserveScroll: true },
+                                                );
+                                            }}
+                                        >
+                                            <ChevronUp className="h-4 w-4 rotate-90" />
+                                            Next Item
                                         </Button>
                                         <Button
                                             variant="outline"
                                             size="icon"
                                             onClick={() => {
-                                                setTimerRunning(false);
-                                                setElapsedSeconds(0);
+                                                router.reload({
+                                                    only: ['events'],
+                                                    preserveScroll: true,
+                                                });
                                             }}
+                                            title="Muat ulang status rundown"
                                         >
                                             <RotateCcw className="h-4 w-4" />
                                         </Button>

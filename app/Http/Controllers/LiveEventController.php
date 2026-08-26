@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\Event;
 use App\Models\EventLiveSession;
 use App\Models\EventRundownSegment;
-use App\Models\EventRundownItemRun;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -48,7 +47,7 @@ class LiveEventController extends Controller
         ]);
     }
 
-    public function start(Event $event)
+    public function start(Event $event, Request $request)
     {
         $segments = $event->rundownSegments()->orderBy('sort_order')->get();
 
@@ -73,11 +72,11 @@ class LiveEventController extends Controller
         $session->itemRuns()->delete();
 
         return redirect()
-            ->route('live-events.index', ['event_id' => $event->id])
+            ->route($request->boolean('from_events') ? 'events.index' : 'live-events.index', ['event_id' => $event->id])
             ->with('success', 'Live event dimulai.');
     }
 
-    public function next(Event $event)
+    public function next(Event $event, Request $request)
     {
         $session = $event->liveSession;
 
@@ -112,7 +111,7 @@ class LiveEventController extends Controller
             ]);
 
             return redirect()
-                ->route('live-events.index', ['event_id' => $event->id])
+                ->route($request->boolean('from_events') ? 'events.index' : 'live-events.index', ['event_id' => $event->id])
                 ->with('success', 'Pindah ke item berikutnya.');
         }
 
@@ -130,7 +129,7 @@ class LiveEventController extends Controller
             ]);
 
             return redirect()
-                ->route('live-events.index', ['event_id' => $event->id])
+                ->route($request->boolean('from_events') ? 'events.index' : 'live-events.index', ['event_id' => $event->id])
                 ->with('success', 'Live event selesai.');
         }
 
@@ -142,7 +141,7 @@ class LiveEventController extends Controller
         ]);
 
         return redirect()
-            ->route('live-events.index', ['event_id' => $event->id])
+            ->route($request->boolean('from_events') ? 'events.index' : 'live-events.index', ['event_id' => $event->id])
             ->with('success', 'Pindah ke segment berikutnya.');
     }
 
