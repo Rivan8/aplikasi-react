@@ -64,18 +64,21 @@ export default function MyScan({ event, qr_value }: { event?: any, qr_value?: st
     }, []);
 
     const processQrCode = useCallback((text: string) => {
-        // Asumsi format: https://domain.com/attendance/{id}/scan-event
         try {
             const url = new URL(text);
             const path = url.pathname;
 
-            if (!path.includes('/attendance/') || !path.includes('/scan-event')) {
+            if (!/^\/attendance\/[^/]+\/scan(?:-event)?$/.test(path)) {
                 setScanError("QR Code tidak valid untuk absensi event ini.");
                 return;
             }
 
+            const scanPath = path.endsWith('/scan')
+                ? `${path}-event`
+                : path;
+
             setProcessing(true);
-            router.post(path, {}, {
+            router.post(scanPath, {}, {
                 onFinish: () => setProcessing(false)
             });
 
@@ -84,10 +87,50 @@ export default function MyScan({ event, qr_value }: { event?: any, qr_value?: st
         }
     }, []);
 
+    const getCameraErrorMessage = (error: unknown): string => {
+        const errorName = error instanceof DOMException ? error.name : '';
+
+        if (!window.isSecureContext) {
+            return 'Kamera hanya dapat digunakan melalui HTTPS. Buka aplikasi menggunakan https:// atau gunakan localhost saat pengembangan.';
+        }
+
+        if (errorName === 'NotAllowedError' || errorName === 'PermissionDeniedError') {
+            return 'Izin kamera ditolak. Izinkan kamera untuk situs ini pada pengaturan browser, lalu muat ulang halaman.';
+        }
+
+        if (errorName === 'NotFoundError' || errorName === 'DevicesNotFoundError') {
+            return 'Kamera tidak ditemukan. Pastikan kamera terpasang dan tidak sedang digunakan aplikasi lain.';
+        }
+
+        if (errorName === 'NotReadableError' || errorName === 'TrackStartError') {
+            return 'Kamera sedang digunakan aplikasi lain. Tutup aplikasi tersebut, lalu coba lagi.';
+        }
+
+        return 'Kamera tidak dapat diakses. Periksa izin kamera browser dan pastikan halaman dibuka melalui HTTPS.';
+    };
+
     const startScanner = useCallback(async () => {
         setScanError(null);
         setScanResult(null);
         setIsScanning(true);
+
+        if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+            setIsScanning(false);
+            setScanError(getCameraErrorMessage(null));
+            return;
+        }
+
+        let permissionStream: MediaStream | null = null;
+
+        try {
+            permissionStream = await navigator.mediaDevices.getUserMedia({ video: true });
+        } catch (error) {
+            setIsScanning(false);
+            setScanError(getCameraErrorMessage(error));
+            return;
+        } finally {
+            permissionStream?.getTracks().forEach((track) => track.stop());
+        }
 
         // Bersihkan scanner sebelumnya
         if (scannerRef.current) {
@@ -121,24 +164,37 @@ export default function MyScan({ event, qr_value }: { event?: any, qr_value?: st
                         const scanner = new Html5Qrcode("reader");
                         scannerRef.current = scanner;
 
-                        await scanner.start(
-                            { facingMode: "environment" },
-                            {
-                                fps: 10,
-                                qrbox: { width: 250, height: 250 },
-                            },
-                            (decodedText) => {
-                                // Berhasil scan — stop scanner lalu proses
-                                stopScanner();
-                                processQrCode(decodedText);
-                            },
-                            () => {} // Ignore background scan errors
-                        );
+                        const scannerConfig = {
+                            fps: 10,
+                            qrbox: { width: 250, height: 250 },
+                        };
+                        const onScanSuccess = (decodedText: string) => {
+                            stopScanner();
+                            processQrCode(decodedText);
+                        };
+
+                        try {
+                            await scanner.start(
+                                { facingMode: 'environment' },
+                                scannerConfig,
+                                onScanSuccess,
+                                () => {},
+                            );
+                        } catch (environmentError) {
+                            await scanner.start(
+                                { facingMode: 'user' },
+                                scannerConfig,
+                                onScanSuccess,
+                                () => {},
+                            ).catch(() => {
+                                throw environmentError;
+                            });
+                        }
                     } catch (err: any) {
                         console.error("Error starting scanner:", err);
                         if (isMountedRef.current) {
                             setIsScanning(false);
-                            setScanError("Tidak dapat mengakses kamera. Pastikan Anda telah memberikan izin.");
+                            setScanError(getCameraErrorMessage(err));
                         }
                     }
                 }, 300);

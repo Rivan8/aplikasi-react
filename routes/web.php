@@ -4,6 +4,7 @@ use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\EventController;
+use App\Http\Controllers\EventMessageController;
 use App\Http\Controllers\LiveEventController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\SongController;
@@ -12,6 +13,7 @@ use App\Models\Category;
 use App\Models\CategoryRole;
 use App\Models\Department;
 use App\Models\Event;
+use App\Models\EventMessage;
 use App\Models\EventVolunteer;
 use App\Models\MemberDetail;
 use App\Models\MemberStatus;
@@ -126,6 +128,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         }
 
         $userAssignments = collect();
+        $userMessages = collect();
 
         if ($user?->member_id) {
             $assignments = EventVolunteer::with('event')
@@ -186,6 +189,29 @@ Route::middleware(['auth', 'verified'])->group(function () {
                     ])
                     ->values(),
             ]);
+
+            $userMessages = EventMessage::with([
+                'event:id,title,date,time',
+                'reads' => fn ($query) => $query->where('user_id', $user->id),
+            ])
+                ->whereIn('event_id', $assignments->pluck('event_id')->unique())
+                ->latest()
+                ->get()
+                ->map(function (EventMessage $message) use ($user) {
+                    return [
+                        'id' => $message->id,
+                        'title' => $message->title,
+                        'body' => $message->body,
+                        'created_at' => $message->created_at?->toISOString(),
+                        'is_read' => $message->reads->isNotEmpty(),
+                        'event' => [
+                            'id' => $message->event?->id,
+                            'title' => $message->event?->title ?? 'Event Dihapus',
+                            'date' => $message->event?->date,
+                            'time' => $message->event?->time,
+                        ],
+                    ];
+                });
         }
 
         return inertia('dashboard', [
@@ -250,6 +276,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 ]),
                 'admin_assignments' => $adminAssignments,
                 'user_assignments' => $userAssignments,
+                'user_messages' => $userMessages,
                 'external_members' => [],
             ],
         ]);
@@ -413,6 +440,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::resource('departments', DepartmentController::class)->except(['create', 'edit', 'show'])->middleware('role:admin,superadmin');
 
     Route::resource('events', EventController::class)->except(['create', 'edit', 'show'])->middleware('role:admin,superadmin');
+    Route::post('event-messages', [EventMessageController::class, 'store'])->middleware('role:admin,superadmin')->name('event-messages.store');
+    Route::post('event-messages/{eventMessage}/read', [EventMessageController::class, 'markRead'])->name('event-messages.read');
     Route::post('events/{event}/participants', [EventController::class, 'enrollParticipant'])->middleware('role:admin,superadmin')->name('events.participants.enroll');
     Route::delete('events/{event}/participants/{participant}', [EventController::class, 'removeParticipant'])->middleware('role:admin,superadmin')->name('events.participants.remove');
     Route::put('events/{event}/participants/{participant}', [EventController::class, 'updateParticipantStatus'])->middleware('role:admin,superadmin')->name('events.participants.update-status');

@@ -51,6 +51,8 @@ import {
     FileText,
     Video,
     Info,
+    Bell,
+    MessageSquare,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Activity, Music, Timer } from 'lucide-react';
@@ -127,6 +129,7 @@ interface DashboardData {
     readiness_items: ReadinessItem[];
     live_check_ins: LiveCheckIn[];
     user_assignments?: UserAssignment[];
+    user_messages?: UserMessage[];
     admin_assignments?: AdminAssignment[];
     external_members?: ExternalMember[];
 }
@@ -175,6 +178,20 @@ interface ScheduledTeamMember {
     role_category: string;
     role_name: string;
     response_status: 'pending' | 'accepted' | 'declined' | string;
+}
+
+interface UserMessage {
+    id: number;
+    title: string;
+    body: string;
+    created_at?: string | null;
+    is_read: boolean;
+    event: {
+        id?: number | null;
+        title: string;
+        date?: string | null;
+        time?: string | null;
+    };
 }
 
 const emptyStats: DashboardStats = {
@@ -384,11 +401,27 @@ const SearchableSelect = ({
     );
 };
 
-function UserDashboard({ assignments }: { assignments: UserAssignment[] }) {
+function UserDashboard({ assignments, messages }: { assignments: UserAssignment[]; messages: UserMessage[] }) {
     const [decliningAssignment, setDecliningAssignment] =
         useState<UserAssignment | null>(null);
     const [declineReason, setDeclineReason] = useState('');
     const [processingId, setProcessingId] = useState<number | null>(null);
+    const [activeUserTab, setActiveUserTab] = useState<'schedules' | 'messages'>('schedules');
+    const pendingAssignments = assignments.filter(
+        (assignment) => assignment.response_status === 'pending',
+    ).length;
+    const unreadMessages = messages.filter((message) => !message.is_read).length;
+    const notificationCount = pendingAssignments + unreadMessages;
+
+    const markMessageRead = (message: UserMessage) => {
+        if (message.is_read) {
+            return;
+        }
+
+        router.post(`/event-messages/${message.id}/read`, {}, {
+            preserveScroll: true,
+        });
+    };
 
     const acceptAssignment = (assignment: UserAssignment) => {
         setProcessingId(assignment.id);
@@ -427,7 +460,8 @@ function UserDashboard({ assignments }: { assignments: UserAssignment[] }) {
             <Head title="Dashboard" />
 
             <div className="flex flex-col gap-6 p-6">
-                <div>
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
                     <Badge
                         variant="outline"
                         className="mb-2 gap-1.5 rounded-md px-2 py-1 text-[10px] font-bold tracking-widest uppercase"
@@ -442,9 +476,90 @@ function UserDashboard({ assignments }: { assignments: UserAssignment[] }) {
                         Lihat jadwal pelayananmu, respons penugasan, dan siapa
                         saja tim yang melayani di event yang sama.
                     </p>
+                    </div>
+                    <div className="flex w-fit items-center gap-3 rounded-xl border border-primary/15 bg-primary/5 px-4 py-3">
+                        <div className="relative flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary">
+                            <Bell className="h-5 w-5" />
+                            {notificationCount > 0 && (
+                                <span className="absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">
+                                    {notificationCount > 99 ? '99+' : notificationCount}
+                                </span>
+                            )}
+                        </div>
+                        <div>
+                            <p className="text-xs font-bold text-foreground">Notifikasi</p>
+                            <p className="text-[11px] text-muted-foreground">
+                                {notificationCount > 0
+                                    ? `${pendingAssignments} penjadwalan, ${unreadMessages} pesan belum dibaca`
+                                    : 'Tidak ada notifikasi baru'}
+                            </p>
+                        </div>
+                    </div>
                 </div>
 
-                {assignments.length === 0 ? (
+                <div className="flex w-full gap-1 overflow-x-auto rounded-xl border border-border/50 bg-card/70 p-1 sm:w-fit">
+                    <button
+                        type="button"
+                        onClick={() => setActiveUserTab('schedules')}
+                        className={cn('flex shrink-0 items-center gap-2 rounded-lg px-4 py-2 text-xs font-bold', activeUserTab === 'schedules' ? 'bg-background text-primary shadow-sm' : 'text-muted-foreground')}
+                    >
+                        <CalendarDays className="h-4 w-4" />
+                        Jadwal Saya
+                        {pendingAssignments > 0 && <Badge variant="secondary" className="h-5 min-w-5 px-1 text-[10px]">{pendingAssignments}</Badge>}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setActiveUserTab('messages')}
+                        className={cn('flex shrink-0 items-center gap-2 rounded-lg px-4 py-2 text-xs font-bold', activeUserTab === 'messages' ? 'bg-background text-primary shadow-sm' : 'text-muted-foreground')}
+                    >
+                        <MessageSquare className="h-4 w-4" />
+                        Pesan
+                        {unreadMessages > 0 && <Badge variant="secondary" className="h-5 min-w-5 px-1 text-[10px]">{unreadMessages}</Badge>}
+                    </button>
+                </div>
+
+                {activeUserTab === 'messages' ? (
+                    <div className="grid gap-4">
+                        {messages.length === 0 ? (
+                            <Card className="border bg-card shadow-sm">
+                                <CardContent className="flex min-h-[280px] flex-col items-center justify-center p-8 text-center">
+                                    <MessageSquare className="h-12 w-12 text-muted-foreground/30" />
+                                    <h2 className="mt-4 text-lg font-semibold text-foreground">Belum ada pesan</h2>
+                                    <p className="mt-2 text-sm text-muted-foreground">Pesan dari admin untuk event pelayananmu akan muncul di sini.</p>
+                                </CardContent>
+                            </Card>
+                        ) : (
+                            messages.map((message) => (
+                                <Card
+                                    key={message.id}
+                                    onClick={() => markMessageRead(message)}
+                                    className={cn(
+                                        'cursor-pointer border bg-card shadow-sm transition-colors',
+                                        message.is_read ? 'opacity-70' : 'border-primary/40 bg-primary/5',
+                                    )}
+                                >
+                                    <CardHeader className="border-b px-6 py-5">
+                                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                            <div>
+                                                <CardTitle className="text-lg">{message.title}</CardTitle>
+                                                <p className="mt-1 text-xs font-semibold text-primary">{message.event.title}</p>
+                                            </div>
+                                            <Badge variant={message.is_read ? 'outline' : 'default'} className="w-fit text-[10px]">
+                                                {message.is_read ? 'Sudah dibaca' : 'Belum dibaca'}
+                                            </Badge>
+                                        </div>
+                                        <p className="text-xs text-muted-foreground">
+                                            {message.created_at ? new Date(message.created_at).toLocaleDateString('id-ID') : '-'}
+                                        </p>
+                                    </CardHeader>
+                                    <CardContent className="p-6">
+                                        <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">{message.body}</p>
+                                    </CardContent>
+                                </Card>
+                            ))
+                        )}
+                    </div>
+                ) : assignments.length === 0 ? (
                     <Card className="border bg-card shadow-sm">
                         <CardContent className="flex min-h-[360px] flex-col items-center justify-center p-8 text-center">
                             <CalendarDays className="h-12 w-12 text-muted-foreground/40" />
@@ -789,6 +904,7 @@ export default function Dashboard({
     const readinessItems = dashboard?.readiness_items ?? [];
     const liveCheckIns = dashboard?.live_check_ins ?? [];
     const userAssignments = dashboard?.user_assignments ?? [];
+    const userMessages = dashboard?.user_messages ?? [];
     const planningTasks = buildPlanningTasks(stats);
     const [processingId, setProcessingId] = useState<number | null>(null);
     const [replacingAssignment, setReplacingAssignment] = useState<AdminAssignment | null>(null);
@@ -875,7 +991,7 @@ export default function Dashboard({
     ];
 
     if (!['admin', 'superadmin'].includes(userRole)) {
-        return <UserDashboard assignments={userAssignments} />;
+        return <UserDashboard assignments={userAssignments} messages={userMessages} />;
     }
 
     return (

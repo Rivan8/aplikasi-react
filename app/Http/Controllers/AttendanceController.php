@@ -320,6 +320,24 @@ class AttendanceController extends Controller
             return back()->with('error', 'Akun Anda belum terhubung dengan data jemaat. Silakan hubungi admin.');
         }
 
+        $member = $this->memberApi->findByScan((string) $user->member_id);
+
+        if (!$member) {
+            return back()->with('error', 'Data member akun Anda tidak ditemukan. Silakan hubungi admin.');
+        }
+
+        $memberScan = (string) $member['idjemaat'];
+        if (!empty($member['noaj'])) {
+            $memberScan .= (string) $member['noaj'];
+        }
+
+        $verifiedMember = $this->memberApi->findByScan($memberScan);
+        if (!$verifiedMember) {
+            return back()->with('error', 'Kode member akun Anda tidak valid. Silakan hubungi admin.');
+        }
+
+        $memberId = (string) $verifiedMember['idjemaat'];
+
         $sessionId = $request->input('event_session_id');
 
         // Auto-match session by date if event is class_participant and session not specified
@@ -331,7 +349,7 @@ class AttendanceController extends Controller
         }
 
         $query = Attendance::where('event_id', $event->id)
-            ->where('member_id', $user->member_id);
+            ->where('member_id', $memberId);
 
         if ($sessionId) {
             $query->where('event_session_id', $sessionId);
@@ -348,7 +366,7 @@ class AttendanceController extends Controller
         Attendance::create([
             'event_id' => $event->id,
             'event_session_id' => $sessionId,
-            'member_id' => $user->member_id,
+            'member_id' => $memberId,
             'scan_time' => now(),
             'status' => $status,
         ]);

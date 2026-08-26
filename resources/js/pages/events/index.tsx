@@ -61,6 +61,7 @@ import {
     Sparkles,
     Info,
     Music,
+    MessageSquare,
 } from 'lucide-react';
 import { QRCodeSVG as QRCodeComponent } from 'qrcode.react';
 import { useEffect, useMemo, useState } from 'react';
@@ -363,6 +364,10 @@ export default function Events({
     const [eventStatus, setEventStatus] = useState<'all' | 'upcoming' | 'past'>('all');
     const [eventSort, setEventSort] = useState<'date-asc' | 'date-desc' | 'title'>('date-asc');
     const [currentTime, setCurrentTime] = useState(() => new Date());
+    const [messageEvent, setMessageEvent] = useState<Event | null>(null);
+    const [messageTitle, setMessageTitle] = useState('');
+    const [messageBody, setMessageBody] = useState('');
+    const [messageProcessing, setMessageProcessing] = useState(false);
 
     useEffect(() => {
         const timer = window.setInterval(() => setCurrentTime(new Date()), 30_000);
@@ -989,6 +994,21 @@ export default function Events({
                                     >
                                         <Trash2 className="h-4 w-4" />
                                     </Button>
+                                    <Button
+                                        variant="secondary"
+                                        size="icon"
+                                        aria-label={`Kirim pesan untuk ${event.title}`}
+                                        title="Kirim pesan ke volunteer"
+                                        className="h-9 w-9 rounded-full bg-background/80 text-primary shadow-2xl backdrop-blur-md border border-white/20 hover:bg-primary hover:text-white"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setMessageEvent(event);
+                                            setMessageTitle('');
+                                            setMessageBody('');
+                                        }}
+                                    >
+                                        <MessageSquare className="h-4 w-4" />
+                                    </Button>
                                 </div>
                             </div>
 
@@ -1143,6 +1163,82 @@ export default function Events({
                     </div>
                 )}
             </div>
+
+            {/* Event Message Modal */}
+            <Dialog
+                open={!!messageEvent}
+                onOpenChange={(open) => {
+                    if (!open && !messageProcessing) {
+                        setMessageEvent(null);
+                    }
+                }}
+            >
+                <DialogContent className="max-w-lg rounded-2xl">
+                    <DialogHeader>
+                        <DialogTitle>Kirim Pesan Volunteer</DialogTitle>
+                        <DialogDescription>
+                            Pesan hanya akan diterima volunteer yang dijadwalkan di event ini.
+                        </DialogDescription>
+                    </DialogHeader>
+                    {messageEvent && (
+                        <form
+                            className="space-y-4"
+                            onSubmit={(event) => {
+                                event.preventDefault();
+                                setMessageProcessing(true);
+                                router.post('/event-messages', {
+                                    event_id: messageEvent.id,
+                                    title: messageTitle,
+                                    body: messageBody,
+                                }, {
+                                    preserveScroll: true,
+                                    onSuccess: () => {
+                                        setMessageEvent(null);
+                                        setMessageTitle('');
+                                        setMessageBody('');
+                                    },
+                                    onFinish: () => setMessageProcessing(false),
+                                });
+                            }}
+                        >
+                            <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm font-semibold">
+                                Event: {messageEvent.title}
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="message-title">Judul Pesan</Label>
+                                <Input
+                                    id="message-title"
+                                    value={messageTitle}
+                                    onChange={(event) => setMessageTitle(event.target.value)}
+                                    placeholder="Contoh: Persiapan pelayanan hari Minggu"
+                                    maxLength={255}
+                                    required
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="message-body">Isi Pesan</Label>
+                                <Textarea
+                                    id="message-body"
+                                    value={messageBody}
+                                    onChange={(event) => setMessageBody(event.target.value)}
+                                    placeholder="Tulis informasi untuk volunteer..."
+                                    rows={6}
+                                    maxLength={10000}
+                                    required
+                                />
+                            </div>
+                            <DialogFooter>
+                                <DialogClose asChild>
+                                    <Button type="button" variant="outline" disabled={messageProcessing}>Batal</Button>
+                                </DialogClose>
+                                <Button type="submit" disabled={messageProcessing}>
+                                    {messageProcessing ? 'Mengirim...' : 'Kirim Pesan'}
+                                </Button>
+                            </DialogFooter>
+                        </form>
+                    )}
+                </DialogContent>
+            </Dialog>
 
             {/* Add/Edit Modal */}
             <Dialog
@@ -2345,7 +2441,6 @@ export default function Events({
                                             onClick={() => {
                                                 router.reload({
                                                     only: ['events'],
-                                                    preserveScroll: true,
                                                 });
                                             }}
                                             title="Muat ulang status rundown"
