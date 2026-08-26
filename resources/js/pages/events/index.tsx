@@ -959,6 +959,8 @@ export default function Events({
                                     <Button
                                         variant="secondary"
                                         size="icon"
+                                        aria-label={`Edit ${event.title}`}
+                                        title="Edit event"
                                         className="h-9 w-9 rounded-full bg-background/80 shadow-2xl backdrop-blur-md border border-white/20 hover:bg-primary hover:text-white"
                                         onClick={(e) => {
                                             e.stopPropagation();
@@ -966,6 +968,26 @@ export default function Events({
                                         }}
                                     >
                                         <Pencil className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                        variant="destructive"
+                                        size="icon"
+                                        aria-label={`Hapus ${event.title}`}
+                                        title="Hapus event"
+                                        className="h-9 w-9 rounded-full bg-background/80 text-destructive shadow-2xl backdrop-blur-md border border-white/20 hover:bg-destructive hover:text-white"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+
+                                            if (!window.confirm(`Hapus event "${event.title}"? Data rundown, volunteer, dan absensi terkait juga akan dihapus.`)) {
+                                                return;
+                                            }
+
+                                            router.delete(`/events/${event.id}`, {
+                                                preserveScroll: true,
+                                            });
+                                        }}
+                                    >
+                                        <Trash2 className="h-4 w-4" />
                                     </Button>
                                 </div>
                             </div>
