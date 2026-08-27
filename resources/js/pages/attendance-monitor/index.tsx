@@ -8,6 +8,8 @@ interface EventSession {
     id: number;
     title: string;
     date: string;
+    start_time: string | null;
+    attendance_start_time: string | null;
 }
 
 interface EventItem {
@@ -15,6 +17,7 @@ interface EventItem {
     title: string;
     date: string | null;
     time: string | null;
+    attendance_start_time: string | null;
     expected: number;
     sessions?: EventSession[];
 }
@@ -52,20 +55,27 @@ export default function AttendanceMonitor({
     const completion = selectedEvent?.expected
         ? Math.min(100, Math.round((totalScanned / selectedEvent.expected) * 100))
         : 0;
-    const eventStart = selectedEvent?.date && selectedEvent.time
-        ? new Date(`${selectedEvent.date}T${selectedEvent.time}`)
+    const eventDate = selectedSession?.date ?? selectedEvent?.date;
+    const eventTime = selectedSession?.attendance_start_time
+        ?? selectedSession?.start_time
+        ?? selectedEvent?.attendance_start_time
+        ?? selectedEvent?.time;
+    const eventStart = eventDate && eventTime
+        ? new Date(`${eventDate}T${eventTime}`)
         : null;
     const countdownSeconds = eventStart && !Number.isNaN(eventStart.getTime())
-        ? Math.max(0, Math.floor((eventStart.getTime() - now.getTime()) / 1000))
+        ? Math.floor((eventStart.getTime() - now.getTime()) / 1000)
         : 0;
     const eventStarted = eventStart ? now.getTime() >= eventStart.getTime() : false;
 
     const formatCountdown = (seconds: number) => {
-        const hours = Math.floor(seconds / 3600);
-        const minutes = Math.floor((seconds % 3600) / 60);
-        const remainder = seconds % 60;
+        const absoluteSeconds = Math.abs(seconds);
+        const hours = Math.floor(absoluteSeconds / 3600);
+        const minutes = Math.floor((absoluteSeconds % 3600) / 60);
+        const remainder = absoluteSeconds % 60;
+        const sign = seconds < 0 ? '-' : '';
 
-        return [hours, minutes, remainder].map((value) => String(value).padStart(2, '0')).join(':');
+        return sign + [hours, minutes, remainder].map((value) => String(value).padStart(2, '0')).join(':');
     };
 
     useEffect(() => {
@@ -73,7 +83,6 @@ export default function AttendanceMonitor({
         const interval = window.setInterval(() => {
             router.reload({
                 only: ['recentScans', 'totalScanned', 'filters'],
-                preserveState: true,
             });
             setUpdatedAt(new Date());
         }, 3000);
@@ -167,8 +176,8 @@ export default function AttendanceMonitor({
                         <p className="mt-5 text-base font-semibold text-emerald-100">
                             {eventStarted ? `${selectedEvent?.title ?? 'Event'} sedang dimulai` : `${selectedEvent?.title ?? 'Event'} akan dimulai dalam:`}
                         </p>
-                        <p className="mt-1 font-mono text-5xl font-black tracking-tight text-emerald-300 sm:text-6xl">
-                            {eventStarted ? '00:00:00' : formatCountdown(countdownSeconds)}
+                        <p className={`mt-1 font-mono text-5xl font-black tracking-tight sm:text-6xl ${eventStarted ? 'text-rose-300' : 'text-emerald-300'}`}>
+                            {formatCountdown(countdownSeconds)}
                         </p>
                     </div>
                 </section>

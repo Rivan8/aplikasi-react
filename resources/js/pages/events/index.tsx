@@ -62,6 +62,8 @@ import {
     Info,
     Music,
     MessageSquare,
+    Paperclip,
+    Download,
 } from 'lucide-react';
 import { QRCodeSVG as QRCodeComponent } from 'qrcode.react';
 import { useEffect, useMemo, useState } from 'react';
@@ -128,6 +130,16 @@ interface EventParticipant {
     };
 }
 
+interface EventMessage {
+    id: number;
+    title: string;
+    body: string;
+    created_at: string;
+    attachment_path?: string | null;
+    attachment_name?: string | null;
+    attachment_size?: number | null;
+}
+
 interface Event {
     id: number;
     title: string;
@@ -145,8 +157,11 @@ interface Event {
     rundown_segments: EventRundownSegment[];
     sessions?: EventSession[];
     participants?: EventParticipant[];
+    messages?: EventMessage[];
     live_session?: {
         status: 'idle' | 'running' | 'completed' | string;
+        current_segment_index: number;
+        current_item_index: number;
         started_at?: string | null;
         item_started_at?: string | null;
     } | null;
@@ -173,13 +188,13 @@ interface SongArrangement {
     duration: string | null;
     bpm: string | null;
     time_signature: string | null;
+    keys: string | null;
     song_flow: string | null;
 }
 
 interface Song {
     id: number;
     title: string;
-    keys: string | null;
     arrangements: SongArrangement[];
 }
 
@@ -367,6 +382,7 @@ export default function Events({
     const [messageEvent, setMessageEvent] = useState<Event | null>(null);
     const [messageTitle, setMessageTitle] = useState('');
     const [messageBody, setMessageBody] = useState('');
+    const [messageAttachment, setMessageAttachment] = useState<File | null>(null);
     const [messageProcessing, setMessageProcessing] = useState(false);
 
     useEffect(() => {
@@ -682,10 +698,16 @@ export default function Events({
         return getRundownTotalSeconds(rundownEvent.rundown_segments);
     }, [rundownEvent]);
 
-    const elapsedSeconds = rundownEvent?.live_session?.started_at && rundownEvent.live_session.status === 'running'
-        ? Math.max(0, Math.floor((rundownNow - new Date(rundownEvent.live_session.started_at).getTime()) / 1000))
+    const liveSession = rundownEvent?.live_session;
+    const currentSegmentIndex = liveSession?.current_segment_index ?? 0;
+    const currentItemIndex = liveSession?.current_item_index ?? 0;
+    const activeSegment = rundownEvent?.rundown_segments[currentSegmentIndex];
+    const activeItem = activeSegment?.items[currentItemIndex];
+    const activeItemDuration = activeItem?.duration_seconds ?? 0;
+    const elapsedSeconds = liveSession?.item_started_at && liveSession.status === 'running'
+        ? Math.max(0, Math.floor((rundownNow - new Date(liveSession.item_started_at).getTime()) / 1000))
         : 0;
-    const overdueSeconds = Math.max(0, elapsedSeconds - rundownTotalSeconds);
+    const overdueSeconds = Math.max(0, elapsedSeconds - activeItemDuration);
 
     const rundownTimerPlan = useMemo(() => {
         if (!rundownEvent) {
@@ -768,6 +790,27 @@ export default function Events({
                 return secondDate - firstDate || firstEvent.id - secondEvent.id;
             });
     }, [eventCategory, eventSearch, eventSort, eventStatus, events]);
+
+    const groupedEvents = useMemo(() => {
+        const groups = new Map<string, Event[]>();
+
+        filteredEvents.forEach((event) => {
+            const category = event.category || 'Tanpa kategori';
+            const categoryEvents = groups.get(category) ?? [];
+            categoryEvents.push(event);
+            groups.set(category, categoryEvents);
+        });
+
+        categories.forEach((category) => {
+            if (!groups.has(category.name)) {
+                groups.set(category.name, []);
+            }
+        });
+
+        return Array.from(groups.entries()).sort(([firstCategory], [secondCategory]) =>
+            firstCategory.localeCompare(secondCategory, 'id'),
+        );
+    }, [categories, filteredEvents]);
 
     const hasActiveEventFilters =
         Boolean(eventSearch.trim()) ||
@@ -917,18 +960,66 @@ export default function Events({
                     </div>
                 </section>
 
-                {filteredEvents.length > 0 && (
-                <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
-                    {filteredEvents.map((event) => {
+                {groupedEvents.length > 0 && (
+                <div className="space-y-8">
+                    {groupedEvents.map(([category, categoryEvents]) => {
+                        const isCategoryOpen = openCategories.length === 0 || openCategories.includes(category);
+
+                        return (
+                        <Collapsible
+                            key={`event-category-${category}`}
+                            open={isCategoryOpen}
+                            onOpenChange={(open) => {
+                                if (openCategories.length === 0) {
+                                    setOpenCategories(open ? [] : groupedEvents.map(([name]) => name).filter((name) => name !== category));
+                                    return;
+                                }
+
+                                setOpenCategories((current) => open
+                                    ? [...current, category]
+                                    : current.filter((name) => name !== category));
+                            }}
+                            className="-mx-1 space-y-3 rounded-2xl border border-border/60 bg-card/70 p-3 shadow-md shadow-black/5 transition-shadow hover:shadow-lg hover:shadow-primary/10 sm:p-4"
+                        >
+                            <div className="flex items-center justify-between gap-4 border-b border-border/60 pb-2">
+                                <CollapsibleTrigger asChild>
+                                    <Button variant="ghost" className="h-auto min-w-0 gap-3 px-0 text-left hover:bg-transparent">
+                                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                                            <CalendarDays className="h-3.5 w-3.5" />
+                                        </span>
+                                        <span className="min-w-0">
+                                            <span className="block truncate text-base font-bold text-foreground sm:text-lg">{category}</span>
+                                            <span className="block text-xs font-medium text-muted-foreground">
+                                                {categoryEvents.length === 0 ? 'Belum ada event' : `${categoryEvents.length} event tersedia`}
+                                            </span>
+                                        </span>
+                                        <ChevronDown className={`h-4 w-4 shrink-0 text-primary transition-transform ${isCategoryOpen ? '' : '-rotate-90'}`} />
+                                    </Button>
+                                </CollapsibleTrigger>
+                                <Badge variant="outline" className="shrink-0 rounded-lg border-primary/20 bg-primary/5 px-3 py-1 font-bold text-primary">
+                                    {categoryEvents.length}
+                                </Badge>
+                            </div>
+                            <CollapsibleContent className="border-t border-border/40 pt-3">
+                                {categoryEvents.length === 0 ? (
+                                    <div className="flex min-h-24 items-center justify-center rounded-xl border border-dashed border-border/70 bg-muted/20 px-6 py-6 text-center">
+                                        <div>
+                                            <p className="text-sm font-semibold text-foreground/70">Belum ada event di kategori ini</p>
+                                            <p className="mt-1 text-xs text-muted-foreground">Event baru dengan kategori ini akan tampil di sini.</p>
+                                        </div>
+                                    </div>
+                                ) : (
+                                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {categoryEvents.map((event) => {
                         const eventTiming = getEventTiming(event, currentTime);
                         const isEventOngoing = eventTiming === 'ongoing';
 
                         return (
                             <Card
                                 key={`event-card-${event.id}`}
-                                className="group relative flex flex-col overflow-hidden border-none bg-card/50 backdrop-blur-sm transition-all duration-500 hover:-translate-y-1 hover:bg-card hover:shadow-2xl hover:shadow-primary/10"
+                                className="group relative flex min-h-[300px] flex-col overflow-hidden rounded-2xl border border-white/10 bg-slate-950 text-white shadow-lg transition-all duration-500 hover:-translate-y-1 hover:shadow-2xl hover:shadow-primary/20"
                             >
-                            <div className="relative aspect-[16/10] w-full overflow-hidden">
+                            <div className="absolute inset-0 overflow-hidden">
                                 {getEventImageUrl(event.image_path) ? (
                                     <img
                                         src={getEventImageUrl(event.image_path) ?? undefined}
@@ -936,14 +1027,14 @@ export default function Events({
                                         className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
                                     />
                                 ) : (
-                                    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary/10 via-background to-primary/5 text-primary/20">
+                                    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary/40 via-slate-900 to-slate-950 text-white/20">
                                         <ImageIcon className="h-16 w-16" />
                                     </div>
                                 )}
-                                <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/55 to-black/20" />
 
                                 <div className="absolute top-4 left-4">
-                                    <Badge className="bg-background/40 text-foreground border-white/20 shadow-xl backdrop-blur-xl px-3 py-1 text-[10px] font-bold uppercase tracking-wider">
+                                    <Badge className="border-white/20 bg-black/35 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white shadow-xl backdrop-blur-xl">
                                         {event.category}
                                     </Badge>
                                 </div>
@@ -960,7 +1051,7 @@ export default function Events({
                                     );
                                 })()}
 
-                                <div className="absolute top-16 right-4 flex translate-y-[-10px] gap-2 opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
+                                <div className="pointer-events-auto absolute top-16 right-4 z-30 flex gap-2 opacity-100 transition-all duration-300 md:translate-y-[-10px] md:opacity-0 md:group-hover:translate-y-0 md:group-hover:opacity-100">
                                     <Button
                                         variant="secondary"
                                         size="icon"
@@ -1005,6 +1096,7 @@ export default function Events({
                                             setMessageEvent(event);
                                             setMessageTitle('');
                                             setMessageBody('');
+                                            setMessageAttachment(null);
                                         }}
                                     >
                                         <MessageSquare className="h-4 w-4" />
@@ -1012,24 +1104,24 @@ export default function Events({
                                 </div>
                             </div>
 
-                            <CardHeader className="space-y-3 p-6">
+                            <CardHeader className="relative z-10 flex flex-1 flex-col justify-end space-y-3 p-5 pt-20">
                                 <div className="flex items-start justify-between gap-4">
-                                    <CardTitle className="line-clamp-1 text-xl font-bold tracking-tight text-foreground/90">
+                                    <CardTitle className="line-clamp-2 text-xl font-bold tracking-tight text-white drop-shadow-md">
                                         {event.title}
                                     </CardTitle>
                                     <Button
                                         variant="ghost"
                                         size="icon"
-                                        className="h-9 w-9 shrink-0 rounded-full hover:bg-primary/5"
+                                        className="h-9 w-9 shrink-0 rounded-full text-white hover:bg-white/15 hover:text-white"
                                         onClick={() => setViewingEvent(event)}
                                     >
                                         <MoreHorizontal className="h-5 w-5" />
                                     </Button>
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground bg-muted/30 px-3 py-2 rounded-lg">
-                                        <CalendarDays className="h-4 w-4 text-primary/60" />
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs font-medium text-white/80 backdrop-blur-sm">
+                                        <CalendarDays className="h-4 w-4 shrink-0 text-white/80" />
                                         {event.date
                                             ? format(
                                                   new Date(event.date),
@@ -1038,22 +1130,22 @@ export default function Events({
                                               )
                                             : '-'}
                                     </div>
-                                    <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground bg-muted/30 px-3 py-2 rounded-lg">
-                                        <Clock className="h-4 w-4 text-primary/60" />
+                                    <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs font-medium text-white/80 backdrop-blur-sm">
+                                        <Clock className="h-4 w-4 shrink-0 text-white/80" />
                                         {event.time}
                                     </div>
                                 </div>
 
                                 {event.location && (
-                                    <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground bg-muted/30 px-3 py-2 rounded-lg">
-                                        <MapPin className="h-4 w-4 text-primary/60" />
+                                    <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs font-medium text-white/80 backdrop-blur-sm">
+                                        <MapPin className="h-4 w-4 shrink-0 text-white/80" />
                                         <span className="truncate">{event.location}</span>
                                     </div>
                                 )}
                             </CardHeader>
 
-                            <CardContent className="mt-auto p-6 pt-0">
-                                <div className="flex items-center justify-between border-t border-border/50 pt-5">
+                            <CardContent className="relative z-10 mt-auto p-5 pt-0">
+                                <div className="flex items-center justify-between border-t border-white/15 pt-4">
                                     <div className="flex items-center gap-3">
                                         <div className="flex -space-x-3 overflow-hidden">
                                             {event.volunteers
@@ -1061,7 +1153,7 @@ export default function Events({
                                                 .map((v, i) => (
                                                     <div
                                                         key={v.id ?? i}
-                                                        className="inline-flex h-9 w-9 items-center justify-center rounded-full border-2 border-background bg-gradient-to-br from-primary/20 to-primary/5 text-[11px] font-bold text-primary shadow-lg"
+                                                        className="inline-flex h-9 w-9 items-center justify-center rounded-full border-2 border-white/40 bg-primary/80 text-[11px] font-bold text-white shadow-lg"
                                                         title={v.member?.namalengkap ?? 'Volunteer'}
                                                     >
                                                         {v.member?.namalengkap
@@ -1070,15 +1162,15 @@ export default function Events({
                                                     </div>
                                                 ))}
                                             {event.volunteers.length > 4 && (
-                                                <div className="inline-flex h-9 w-9 items-center justify-center rounded-full border-2 border-background bg-muted text-[11px] font-bold text-muted-foreground shadow-lg">
+                                                    <div className="inline-flex h-9 w-9 items-center justify-center rounded-full border-2 border-white/40 bg-black/50 text-[11px] font-bold text-white shadow-lg">
                                                     +{event.volunteers.length - 4}
                                                 </div>
                                             )}
                                         </div>
                                         {event.volunteers.length > 0 && (
                                             <div className="flex flex-col">
-                                                <span className="text-[10px] font-bold text-primary/70 uppercase tracking-tighter">Volunteer</span>
-                                                <span className="text-xs font-semibold leading-none">{event.volunteers.length} Personel</span>
+                                                <span className="text-[10px] font-bold uppercase tracking-tighter text-white/60">Volunteer</span>
+                                                <span className="text-xs font-semibold leading-none text-white">{event.volunteers.length} Personel</span>
                                             </div>
                                         )}
                                     </div>
@@ -1086,7 +1178,7 @@ export default function Events({
                                         <Button
                                             variant="outline"
                                             size="icon"
-                                            className="h-10 w-10 rounded-xl border-border/50 hover:bg-primary/5 hover:text-primary transition-colors"
+                                            className="h-10 w-10 rounded-xl border-white/20 bg-black/30 text-white hover:bg-white/20 hover:text-white"
                                             onClick={() => setQrEvent(event)}
                                         >
                                             <QrCode className="h-5 w-5" />
@@ -1096,7 +1188,7 @@ export default function Events({
                                             className={`relative h-10 gap-2 overflow-visible rounded-xl px-5 text-sm font-bold shadow-sm transition-all hover:shadow-md active:scale-95 ${
                                                 isEventOngoing
                                                     ? 'animate-[pulse_2s_ease-in-out_infinite] bg-amber-500 text-white shadow-lg shadow-amber-500/40 hover:bg-amber-600 hover:shadow-amber-500/60'
-                                                    : ''
+                                                    : 'border-white/20 bg-black/35 text-white hover:bg-white/20 hover:text-white'
                                             }`}
                                             onClick={() => {
                                                 if (isEventOngoing) {
@@ -1121,6 +1213,12 @@ export default function Events({
                                 </div>
                             </CardContent>
                             </Card>
+                        );
+                    })}
+                                </div>
+                                )}
+                            </CollapsibleContent>
+                        </Collapsible>
                         );
                     })}
                 </div>
@@ -1173,68 +1271,54 @@ export default function Events({
                     }
                 }}
             >
-                <DialogContent className="max-w-lg rounded-2xl">
-                    <DialogHeader>
-                        <DialogTitle>Kirim Pesan Volunteer</DialogTitle>
-                        <DialogDescription>
-                            Pesan hanya akan diterima volunteer yang dijadwalkan di event ini.
-                        </DialogDescription>
+                <DialogContent className="max-h-[90vh] max-w-4xl overflow-hidden rounded-2xl p-0">
+                    <DialogHeader className="border-b bg-muted/20 p-6">
+                        <DialogTitle className="flex items-center gap-2"><MessageSquare className="h-5 w-5 text-primary" />Kirim Pesan Volunteer</DialogTitle>
+                        <DialogDescription>Pesan hanya akan diterima volunteer yang dijadwalkan di event ini.</DialogDescription>
                     </DialogHeader>
                     {messageEvent && (
                         <form
-                            className="space-y-4"
+                            className="flex max-h-[calc(90vh-110px)] flex-col"
                             onSubmit={(event) => {
                                 event.preventDefault();
                                 setMessageProcessing(true);
-                                router.post('/event-messages', {
-                                    event_id: messageEvent.id,
-                                    title: messageTitle,
-                                    body: messageBody,
-                                }, {
+                                const formData = new FormData();
+                                formData.append('event_id', String(messageEvent.id));
+                                formData.append('title', messageTitle);
+                                formData.append('body', messageBody);
+                                if (messageAttachment) formData.append('attachment', messageAttachment);
+
+                                router.post('/event-messages', formData, {
                                     preserveScroll: true,
                                     onSuccess: () => {
                                         setMessageEvent(null);
                                         setMessageTitle('');
                                         setMessageBody('');
+                                        setMessageAttachment(null);
                                     },
                                     onFinish: () => setMessageProcessing(false),
                                 });
                             }}
                         >
-                            <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm font-semibold">
-                                Event: {messageEvent.title}
+                            <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-2 lg:overflow-hidden">
+                                <div className="space-y-4 border-b p-6 lg:border-r lg:border-b-0">
+                                    <div className="rounded-xl border border-primary/15 bg-primary/5 px-4 py-3 text-sm font-semibold text-primary">Event: {messageEvent.title}</div>
+                                    <div className="space-y-2"><Label htmlFor="message-title">Judul Pesan</Label><Input id="message-title" value={messageTitle} onChange={(event) => setMessageTitle(event.target.value)} placeholder="Contoh: Persiapan pelayanan hari Minggu" maxLength={255} required /></div>
+                                    <div className="space-y-2"><Label htmlFor="message-body">Isi Pesan</Label><Textarea id="message-body" value={messageBody} onChange={(event) => setMessageBody(event.target.value)} placeholder="Tulis informasi untuk volunteer..." rows={5} maxLength={10000} required /></div>
+                                    <div className="space-y-2"><Label htmlFor="message-attachment">Lampiran</Label><label htmlFor="message-attachment" className="flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-primary/30 bg-primary/5 px-4 py-3 text-sm font-medium text-primary hover:bg-primary/10"><Paperclip className="h-4 w-4" /><span className="min-w-0 truncate">{messageAttachment ? messageAttachment.name : 'Pilih file untuk dilampirkan'}</span><input id="message-attachment" type="file" className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.jpg,.jpeg,.png,.webp,.zip" onChange={(event) => setMessageAttachment(event.target.files?.[0] ?? null)} /></label>{messageAttachment && <button type="button" className="text-xs text-destructive hover:underline" onClick={() => setMessageAttachment(null)}>Hapus lampiran</button>}<p className="text-[11px] text-muted-foreground">Maksimal 10 MB. PDF, dokumen, gambar, atau ZIP.</p></div>
+                                </div>
+                                <div className="min-h-0 space-y-3 bg-muted/10 p-6 lg:overflow-y-auto">
+                                    <div className="flex items-center justify-between"><div><h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Pesan sebelumnya</h3><p className="mt-1 text-xs text-muted-foreground">Riwayat komunikasi event ini.</p></div><Badge variant="secondary">{messageEvent.messages?.length ?? 0}</Badge></div>
+                                    {(messageEvent.messages?.length ?? 0) > 0 ? <div className="space-y-2">{messageEvent.messages?.map((message) => (
+                                        <div key={message.id} className="rounded-xl border bg-background p-4 shadow-sm">
+                                            <div className="flex items-start justify-between gap-3"><p className="font-semibold">{message.title}</p><time className="shrink-0 text-[10px] text-muted-foreground">{new Date(message.created_at).toLocaleString('id-ID')}</time></div>
+                                            <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">{message.body}</p>
+                                            {message.attachment_path && message.attachment_name && <a className="mt-3 flex items-center gap-2 text-xs font-semibold text-primary hover:underline" href={`/storage/${message.attachment_path}`} target="_blank" rel="noreferrer"><Download className="h-3.5 w-3.5" />{message.attachment_name}</a>}
+                                        </div>
+                                    ))}</div> : <div className="flex min-h-40 items-center justify-center rounded-xl border border-dashed border-border bg-background/60 px-5 text-center"><div><MessageSquare className="mx-auto h-8 w-8 text-muted-foreground/30" /><p className="mt-3 text-sm font-semibold text-muted-foreground">Belum ada pesan</p><p className="mt-1 text-xs text-muted-foreground">Pesan yang dikirim akan tersimpan di sini.</p></div></div>}
+                                </div>
                             </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="message-title">Judul Pesan</Label>
-                                <Input
-                                    id="message-title"
-                                    value={messageTitle}
-                                    onChange={(event) => setMessageTitle(event.target.value)}
-                                    placeholder="Contoh: Persiapan pelayanan hari Minggu"
-                                    maxLength={255}
-                                    required
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="message-body">Isi Pesan</Label>
-                                <Textarea
-                                    id="message-body"
-                                    value={messageBody}
-                                    onChange={(event) => setMessageBody(event.target.value)}
-                                    placeholder="Tulis informasi untuk volunteer..."
-                                    rows={6}
-                                    maxLength={10000}
-                                    required
-                                />
-                            </div>
-                            <DialogFooter>
-                                <DialogClose asChild>
-                                    <Button type="button" variant="outline" disabled={messageProcessing}>Batal</Button>
-                                </DialogClose>
-                                <Button type="submit" disabled={messageProcessing}>
-                                    {messageProcessing ? 'Mengirim...' : 'Kirim Pesan'}
-                                </Button>
-                            </DialogFooter>
+                            <DialogFooter className="border-t bg-muted/10 p-6"><DialogClose asChild><Button type="button" variant="outline" disabled={messageProcessing}>Batal</Button></DialogClose><Button type="submit" disabled={messageProcessing}>{messageProcessing ? 'Mengirim...' : 'Kirim Pesan'}</Button></DialogFooter>
                         </form>
                     )}
                 </DialogContent>
@@ -1799,7 +1883,7 @@ export default function Events({
                                                                                     )}
                                                                                 >
                                                                                     {item.song ? (
-                                                                                        <><Sparkles className="h-3 w-3 mr-1.5" /> {item.song.title}</>
+                                                                                        <><Sparkles className="h-3 w-3 mr-1.5" /> {item.song.title}{(item.arrangement?.keys || item.song.arrangements?.[0]?.keys) ? <span className="ml-1.5 rounded-md border border-amber-300 bg-amber-400 px-2 py-0.5 text-[10px] font-black text-amber-950 shadow-sm">KEY: {item.arrangement?.keys || item.song.arrangements?.[0]?.keys}</span> : null}</>
                                                                                     ) : (
                                                                                         <><Plus className="h-3 w-3 mr-1.5" /> Lampirkan Lagu</>
                                                                                     )}
@@ -1839,7 +1923,7 @@ export default function Events({
                                                                                                     }}
                                                                                                 >
                                                                                                     <span>{song.title}</span>
-                                                                                                    {song.keys && <Badge variant="outline" className="text-[9px] font-black">{song.keys}</Badge>}
+                                                                                                    {song.arrangements?.[0]?.keys && <Badge className="border border-amber-300 bg-amber-400 text-[10px] font-black text-amber-950 shadow-sm hover:bg-amber-300">KEY: {song.arrangements[0].keys}</Badge>}
                                                                                                 </Button>
                                                                                             </DialogClose>
                                                                                         ))}
@@ -2221,6 +2305,7 @@ export default function Events({
                                                                                         <p className="text-[10px] text-primary font-medium flex items-center gap-1">
                                                                                             <Music className="h-2.5 w-2.5" />
                                                                                             {item.song.title}
+                                                                                            <span className="rounded-md border border-amber-300 bg-amber-400 px-2 py-0.5 text-[10px] font-black text-amber-950 shadow-sm">KEY: {item.arrangement?.keys || item.song.arrangements?.[0]?.keys || '-'}</span>
                                                                                         </p>
                                                                                         {(item.arrangement?.song_flow || item.song.arrangements?.[0]?.song_flow) && (
                                                                                             <p className="text-[9px] text-emerald-600 font-bold uppercase tracking-tight ml-3.5">
@@ -2384,12 +2469,10 @@ export default function Events({
                                     <div className="mt-4 grid grid-cols-2 gap-3">
                                         <div className="rounded-lg border bg-background/80 p-3">
                                             <p className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
-                                                Target
+                                                Target Item
                                             </p>
                                             <p className="mt-1 font-mono text-lg font-semibold">
-                                                {formatDuration(
-                                                    rundownTotalSeconds,
-                                                )}
+                                                {formatDuration(activeItemDuration)}
                                             </p>
                                         </div>
                                         <div
@@ -2453,16 +2536,9 @@ export default function Events({
                                 <div className="max-h-[70vh] overflow-y-auto p-6">
                                     <div className="space-y-3">
                                         {rundownTimerPlan.map((segment) => {
-                                            const isActive =
-                                                elapsedSeconds >=
-                                                    segment.startsAt &&
-                                                elapsedSeconds < segment.endsAt;
-                                            const isDone =
-                                                elapsedSeconds >=
-                                                segment.endsAt;
-                                            const isLate =
-                                                isActive &&
-                                                elapsedSeconds > segment.endsAt;
+                                            const isActive = segment.index === currentSegmentIndex && liveSession?.status === 'running';
+                                            const isDone = segment.index < currentSegmentIndex;
+                                            const isLate = isActive && overdueSeconds > 0;
 
                                             return (
                                                 <div
@@ -2535,7 +2611,7 @@ export default function Events({
                                                                             </span>
                                                                             {item.song && (
                                                                                 <Badge variant="secondary" className="h-4 px-1 text-[9px] font-bold">
-                                                                                    {item.song.keys}
+                                                                                    {item.arrangement?.keys || item.song.arrangements?.[0]?.keys || '-'}
                                                                                 </Badge>
                                                                             )}
                                                                         </div>

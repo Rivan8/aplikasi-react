@@ -56,4 +56,9 @@ class Event extends Model
     {
         return $this->hasMany(EventParticipant::class);
     }
+
+    public function messages()
+    {
+        return $this->hasMany(EventMessage::class)->latest();
+    }
 }

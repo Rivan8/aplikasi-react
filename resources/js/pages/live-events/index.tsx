@@ -244,10 +244,10 @@ export default function LiveEvents({
         currentSegment?.items[session?.current_item_index ?? 0] ?? null;
 
     const currentPlannedSeconds = currentItem?.duration_seconds || 0;
-    
+
     // Countdown logic
     const countdownSeconds = currentPlannedSeconds - itemElapsedSeconds;
-    
+
     const isOverrun = countdownSeconds < 0;
 
     const completedSeconds =
@@ -489,9 +489,9 @@ export default function LiveEvents({
                                                         : ''}
                                                 </p>
                                                 {currentItem?.song && (
-                                                    <Button 
-                                                        variant="ghost" 
-                                                        size="icon" 
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
                                                         className="h-6 w-6 text-primary hover:bg-primary/10"
                                                         onClick={() => setSelectedSongItem(currentItem)}
                                                     >
@@ -934,7 +934,12 @@ export default function LiveEvents({
                                     <span className="text-xs font-black tracking-[0.3em] uppercase">Song Details</span>
                                 </div>
                                 <SheetTitle className="text-3xl font-bold tracking-tight">
-                                    {selectedSongItem.song.title}
+                                    <span className="flex flex-wrap items-center gap-3">
+                                        {selectedSongItem.song.title}
+                                        <span className="rounded-lg bg-primary/10 px-2.5 py-1 text-sm font-black text-primary">
+                                            Key: {selectedSongItem.song.keys || '-'}
+                                        </span>
+                                    </span>
                                 </SheetTitle>
                                 <SheetDescription className="text-lg">
                                     {selectedSongItem.song.artist || 'Unknown Artist'}
@@ -989,8 +994,8 @@ export default function LiveEvents({
                             )}
 
                             {selectedSongItem.song.video_url && (
-                                <Button 
-                                    variant="outline" 
+                                <Button
+                                    variant="outline"
                                     className="w-full gap-2 border-red-200 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-900 dark:bg-red-950/30 dark:text-red-400"
                                     onClick={() => window.open(selectedSongItem.song?.video_url, '_blank')}
                                 >

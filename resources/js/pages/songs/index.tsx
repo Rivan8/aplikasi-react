@@ -22,15 +22,15 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { cn } from '@/lib/utils';
 import { Head, router, useForm } from '@inertiajs/react';
-import { 
-    Music, 
-    Search, 
-    Plus, 
-    Pencil, 
-    Trash2, 
-    FileText, 
-    LayoutList, 
-    Video, 
+import {
+    Music,
+    Search,
+    Plus,
+    Pencil,
+    Trash2,
+    FileText,
+    LayoutList,
+    Video,
     FileIcon,
     Youtube,
     ExternalLink,
@@ -96,21 +96,20 @@ interface Props {
     breadcrumbs: BreadcrumbItem[];
 }
 
-const MUSICAL_KEYS = ['A', 'A#', 'B', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#'];
 const TIME_SIGNATURES = ['4/4', '3/4', '2/4', '6/8', '12/8', '2/2'];
 
 export default function SongsIndex({ songs, filters, breadcrumbs }: Props) {
     const [search, setSearch] = useState(filters.search || '');
     const [selectedSongId, setSelectedSongId] = useState<number | null>(songs.data[0]?.id || null);
     const [selectedArrangementId, setSelectedArrangementId] = useState<number | null>(null);
-    
+
     // Modal states
     const [isSongModalOpen, setIsSongModalOpen] = useState(false);
     const [isArrangementModalOpen, setIsArrangementModalOpen] = useState(false);
     const [editingSong, setEditingSong] = useState<Song | null>(null);
     const [editingArrangement, setEditingArrangement] = useState<SongArrangement | null>(null);
-    
-    const selectedSong = useMemo(() => 
+
+    const selectedSong = useMemo(() =>
         songs.data.find(s => s.id === selectedSongId) || null
     , [selectedSongId, songs.data]);
 
@@ -231,7 +230,7 @@ export default function SongsIndex({ songs, filters, breadcrumbs }: Props) {
     const handleArrangementSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         const lyricsText = lyricSections.map(s => `${s.heading.trim()}\n${s.body.trim()}`).join('\n\n\n');
-        
+
         if (editingArrangement) {
             arrangementForm.transform(data => ({ ...data, lyrics: lyricsText }));
             arrangementForm.post(`/arrangements/${editingArrangement.id}`, {
@@ -304,8 +303,8 @@ export default function SongsIndex({ songs, filters, breadcrumbs }: Props) {
                         </div>
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                            <Input 
-                                placeholder="Search songs..." 
+                            <Input
+                                placeholder="Search songs..."
                                 className="pl-9 h-9 bg-slate-50 border-none text-sm"
                                 value={search}
                                 onChange={e => setSearch(e.target.value)}
@@ -392,7 +391,7 @@ export default function SongsIndex({ songs, filters, breadcrumbs }: Props) {
                                                 {arr.name}
                                             </button>
                                         ))}
-                                        <button 
+                                        <button
                                             onClick={openAddArrangement}
                                             className="w-full text-left px-6 py-3 text-xs font-bold text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors flex items-center gap-2"
                                         >
@@ -419,7 +418,7 @@ export default function SongsIndex({ songs, filters, breadcrumbs }: Props) {
                                                         <Trash2 className="h-4 w-4" />
                                                     </Button>
                                                 </div>
-                                                
+
                                                 <div className="flex gap-8 text-sm">
                                                     <div className="space-y-1">
                                                         <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Length</p>
@@ -486,9 +485,9 @@ export default function SongsIndex({ songs, filters, breadcrumbs }: Props) {
                                                                     </div>
                                                                     <div className="flex-1">
                                                                         <p className="text-sm font-bold">YouTube Reference</p>
-                                                                        <a 
-                                                                            href={activeArrangement.video_url} 
-                                                                            target="_blank" 
+                                                                        <a
+                                                                            href={activeArrangement.video_url}
+                                                                            target="_blank"
                                                                             className="text-xs text-blue-600 hover:underline flex items-center gap-1 mt-1"
                                                                         >
                                                                             {activeArrangement.video_url} <ExternalLink className="h-3 w-3" />
@@ -577,7 +576,7 @@ export default function SongsIndex({ songs, filters, breadcrumbs }: Props) {
                         </DialogTitle>
                         <p className="text-emerald-100 text-xs font-medium uppercase tracking-widest mt-1 opacity-80">General Information</p>
                     </DialogHeader>
-                    
+
                     <form onSubmit={handleSongSubmit} className="p-8 space-y-6">
                         <div className="space-y-4">
                             <div className="space-y-2">
@@ -602,10 +601,8 @@ export default function SongsIndex({ songs, filters, breadcrumbs }: Props) {
                                     <div className="grid grid-cols-4 gap-4">
                                         <div className="space-y-2">
                                             <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Key</Label>
-                                            <Select value={songForm.data.keys} onValueChange={v => songForm.setData('keys', v)}>
-                                                <SelectTrigger><SelectValue /></SelectTrigger>
-                                                <SelectContent>{MUSICAL_KEYS.map(k => <SelectItem key={k} value={k}>{k}</SelectItem>)}</SelectContent>
-                                            </Select>
+                                            <Input value={songForm.data.keys} onChange={e => songForm.setData('keys', e.target.value.toUpperCase())} placeholder="C atau C-D" maxLength={50} className="border-amber-300 bg-amber-50 font-black text-amber-950" />
+                                            <p className="text-[10px] font-medium text-amber-700">Bisa satu atau dua key, contoh: C-D</p>
                                         </div>
                                         <div className="space-y-2">
                                             <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Length</Label>
@@ -652,10 +649,15 @@ export default function SongsIndex({ songs, filters, breadcrumbs }: Props) {
                     <form onSubmit={handleArrangementSubmit} className="flex-1 overflow-hidden flex flex-col">
                         <div className="flex-1 overflow-y-auto p-8 space-y-8">
                             {/* Technical Specs Row */}
-                            <div className="grid grid-cols-4 gap-6">
+                            <div className="grid grid-cols-2 gap-6 md:grid-cols-5">
                                 <div className="space-y-2">
                                     <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Name</Label>
                                     <Input value={arrangementForm.data.name} onChange={e => arrangementForm.setData('name', e.target.value)} required placeholder="e.g. Elsa Version" />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Key</Label>
+                                    <Input value={arrangementForm.data.keys} onChange={e => arrangementForm.setData('keys', e.target.value.toUpperCase())} placeholder="C atau C-D" maxLength={50} className="border-amber-300 bg-amber-50 font-black text-amber-950" />
+                                    <p className="text-[10px] font-medium text-amber-700">Bisa satu atau dua key, contoh: C-D</p>
                                 </div>
                                 <div className="space-y-2">
                                     <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Length</Label>
@@ -678,9 +680,9 @@ export default function SongsIndex({ songs, filters, breadcrumbs }: Props) {
                                 <div className="space-y-6">
                                     <div className="space-y-2">
                                         <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Song Flow (Sequence)</Label>
-                                        <Textarea 
-                                            value={arrangementForm.data.song_flow} 
-                                            onChange={e => arrangementForm.setData('song_flow', e.target.value)} 
+                                        <Textarea
+                                            value={arrangementForm.data.song_flow}
+                                            onChange={e => arrangementForm.setData('song_flow', e.target.value)}
                                             placeholder="Intro, V1, V2, C, Bridge, C, Outro"
                                             className="h-20 resize-none font-medium text-sm"
                                         />

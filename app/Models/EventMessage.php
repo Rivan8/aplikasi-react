@@ -10,6 +10,10 @@ class EventMessage extends Model
         'event_id',
         'title',
         'body',
+        'attachment_path',
+        'attachment_name',
+        'attachment_mime',
+        'attachment_size',
     ];
 
     public function event()

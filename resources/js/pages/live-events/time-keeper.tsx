@@ -7,7 +7,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Head, router } from '@inertiajs/react';
-import { CheckCircle2, Clock, Maximize2, Minimize2 } from 'lucide-react';
+import { CheckCircle2, Clock, Maximize2, Minimize2, Music } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
 
@@ -18,6 +18,7 @@ interface RundownItem {
     song?: {
         id: number;
         title: string;
+        keys?: string;
         song_flow?: string;
     } | null;
 }
@@ -131,18 +132,18 @@ export default function TimeKeeper({
 
     const currentSegment = selected_event?.rundown_segments[session?.current_segment_index ?? 0] ?? null;
     const activeItem = currentSegment?.items[session?.current_item_index ?? 0] ?? null;
-    
+
     const currentPlannedSeconds = activeItem?.duration_seconds || 0;
-    
+
     // Countdown calculation (Counting Down)
     const countdownSeconds = currentPlannedSeconds - itemElapsedSeconds;
-    
+
     const isOverrun = countdownSeconds < 0;
     const isWarning = countdownSeconds <= 30 && countdownSeconds >= 0 && isRunning;
 
     // Progress calculation
     const progressPercent = Math.min(100, Math.max(0, (itemElapsedSeconds / currentPlannedSeconds) * 100));
-    
+
     const selectEvent = (eventId: string) => {
         router.get('/live-events/time-keeper', { event_id: eventId }, { preserveScroll: true, preserveState: true });
     };
@@ -244,6 +245,16 @@ export default function TimeKeeper({
                         {activeItem?.title || currentSegment?.title || 'Silakan Pilih Event'}
                     </h2>
 
+                    {activeItem?.song && (
+                        <div className="mt-3 flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm font-bold text-white/70 backdrop-blur-md">
+                            <Music className="h-4 w-4 text-emerald-400" />
+                            <span>{activeItem.song.title}</span>
+                            <span className="rounded bg-emerald-400/15 px-2 py-0.5 text-xs font-black text-emerald-300">
+                                Key: {activeItem.song.keys || '-'}
+                            </span>
+                        </div>
+                    )}
+
                     {/* Song Flow Display - Aesthetic Sequence */}
                     {activeItem?.song?.song_flow && (
                         <div className="mt-12 flex flex-wrap justify-center items-center gap-4 animate-in fade-in zoom-in duration-1000">
@@ -251,8 +262,8 @@ export default function TimeKeeper({
                                 <div key={index} className="flex items-center gap-4">
                                     <div className={cn(
                                         "px-8 py-4 rounded-2xl backdrop-blur-3xl border transition-all duration-500 flex flex-col items-center group",
-                                        index === 0 
-                                            ? "bg-emerald-500/20 border-emerald-500/30 shadow-[0_0_40px_rgba(16,185,129,0.15)]" 
+                                        index === 0
+                                            ? "bg-emerald-500/20 border-emerald-500/30 shadow-[0_0_40px_rgba(16,185,129,0.15)]"
                                             : "bg-white/5 border-white/10"
                                     )}>
                                         <span className={cn(
@@ -268,7 +279,7 @@ export default function TimeKeeper({
                                             {part.trim()}
                                         </span>
                                     </div>
-                                    
+
                                     {index < array.length - 1 && (
                                         <div className="h-px w-6 bg-gradient-to-r from-white/20 to-transparent" />
                                     )}

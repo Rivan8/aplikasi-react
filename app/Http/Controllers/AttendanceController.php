@@ -3,9 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Exports\AttendanceHistoryExport;
-use App\Models\Event;
 use App\Models\Attendance;
+use App\Models\Event;
+use App\Models\EventSession;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Carbon\Carbon;
+use Carbon\CarbonInterface;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Maatwebsite\Excel\Facades\Excel;
@@ -15,6 +18,27 @@ class AttendanceController extends Controller
 {
     public function __construct(private readonly MemberApiService $memberApi)
     {
+    }
+
+    private function attendanceStatus(?Event $event, ?EventSession $session, CarbonInterface $scanTime): string
+    {
+        if (!$event) {
+            return 'Present';
+        }
+
+        $date = $session?->date ?? $event->date;
+        $time = $session?->attendance_start_time
+            ?? $session?->start_time
+            ?? $event->attendance_start_time
+            ?? $event->time;
+
+        if (!$date || !$time) {
+            return 'Present';
+        }
+
+        $attendanceStart = Carbon::parse($date . ' ' . $time);
+
+        return $scanTime->greaterThan($attendanceStart) ? 'Late' : 'Present';
     }
 
     /**
@@ -274,12 +298,14 @@ class AttendanceController extends Controller
                 $query->where('event_session_id', $selectedSessionId);
             }
 
-            $attendances = (clone $query)->orderBy('scan_time', 'desc')->take(30)->get();
+            $attendances = (clone $query)->orderBy('scan_time', 'desc')->get();
             $totalScanned = (clone $query)->count();
             $members = $this->memberApi->findMany($attendances->pluck('member_id')->unique());
+            $selectedEvent = $events->firstWhere('id', $selectedEventId);
 
-            $recentScans = $attendances->map(function (Attendance $attendance) use ($members) {
+            $recentScans = $attendances->map(function (Attendance $attendance) use ($members, $selectedEvent) {
                 $member = $members[(string) $attendance->member_id] ?? null;
+                $session = $selectedEvent?->sessions->firstWhere('id', $attendance->event_session_id);
 
                 return [
                     'id' => $attendance->id,
@@ -287,7 +313,7 @@ class AttendanceController extends Controller
                     'name' => $member['name'] ?? 'Member #'.$attendance->member_id,
                     'foto_url' => $member['foto_url'] ?? null,
                     'time' => $attendance->scan_time?->format('H:i:s'),
-                    'status' => $attendance->status,
+                    'status' => $this->attendanceStatus($selectedEvent, $session, $attendance->scan_time),
                 ];
             })->values();
         }
@@ -359,15 +385,15 @@ class AttendanceController extends Controller
             return back()->with('info', 'Anda sudah melakukan absensi untuk sesi ini.');
         }
 
-        $compareTime = $event->attendance_start_time ?? $event->time;
-        $eventDateTime = \Carbon\Carbon::parse($event->date . ' ' . $compareTime)->addMinute();
-        $status = now()->greaterThan($eventDateTime) ? 'Late' : 'Present';
+        $session = $sessionId ? $event->sessions()->find($sessionId) : null;
+        $scanTime = now();
+        $status = $this->attendanceStatus($event, $session, $scanTime);
 
         Attendance::create([
             'event_id' => $event->id,
             'event_session_id' => $sessionId,
             'member_id' => $memberId,
-            'scan_time' => now(),
+            'scan_time' => $scanTime,
             'status' => $status,
         ]);
 
@@ -411,15 +437,15 @@ class AttendanceController extends Controller
             return back()->with('info', $member['name'] . ' sudah tercatat hadir untuk sesi/event ini.');
         }
 
-        $compareTime = $event->attendance_start_time ?? $event->time;
-        $eventDateTime = \Carbon\Carbon::parse($event->date . ' ' . $compareTime)->addMinute();
-        $status = now()->greaterThan($eventDateTime) ? 'Late' : 'Present';
+        $session = $sessionId ? $event->sessions()->find($sessionId) : null;
+        $scanTime = now();
+        $status = $this->attendanceStatus($event, $session, $scanTime);
 
         Attendance::create([
             'event_id' => $request->event_id,
             'event_session_id' => $sessionId,
             'member_id' => $member['idjemaat'],
-            'scan_time' => now(),
+            'scan_time' => $scanTime,
             'status' => $status,
         ]);
 

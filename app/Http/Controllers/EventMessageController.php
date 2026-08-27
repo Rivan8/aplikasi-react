@@ -15,7 +15,18 @@ class EventMessageController extends Controller
             'event_id' => ['required', 'integer', 'exists:events,id'],
             'title' => ['required', 'string', 'max:255'],
             'body' => ['required', 'string', 'max:10000'],
+            'attachment' => ['nullable', 'file', 'max:10240', 'mimes:pdf,doc,docx,xls,xlsx,ppt,pptx,txt,jpg,jpeg,png,webp,zip'],
         ]);
+
+        $attachment = $request->file('attachment');
+        unset($validated['attachment']);
+
+        if ($attachment) {
+            $validated['attachment_path'] = $attachment->store('event-message-attachments', 'public');
+            $validated['attachment_name'] = $attachment->getClientOriginalName();
+            $validated['attachment_mime'] = $attachment->getClientMimeType();
+            $validated['attachment_size'] = $attachment->getSize();
+        }
 
         EventMessage::create($validated);
 
