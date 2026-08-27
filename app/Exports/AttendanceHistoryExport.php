@@ -24,7 +24,7 @@ class AttendanceHistoryExport implements FromCollection, WithHeadings, ShouldAut
     public function headings(): array
     {
         if (empty($this->rows)) {
-            return ['ID', 'Nama Jemaat', 'NIK', 'Event', 'Lokasi', 'Tanggal Event', 'Waktu Scan', 'Status'];
+            return ['ID', 'Nama Jemaat', 'NIK', 'Event', 'Lokasi', 'Tanggal Event', 'Waktu Scan', 'Waktu Check-out', 'Status'];
         }
 
         return array_keys($this->rows[0]);

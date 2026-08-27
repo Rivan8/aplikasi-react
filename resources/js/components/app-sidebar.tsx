@@ -40,6 +40,7 @@ const mainNavItems: NavItem[] = [
         href: '/scan-qr',
         icon: QrCode,
         roles: ['admin', 'superadmin'],
+        newTab: true,
     },
     {
         title: 'Monitor Absensi',

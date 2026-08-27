@@ -18,11 +18,13 @@ class Attendance extends Model
         'event_session_id',
         'member_id',
         'scan_time',
+        'check_out_time',
         'status',
     ];
 
     protected $casts = [
         'scan_time' => 'datetime',
+        'check_out_time' => 'datetime',
     ];
 
     public function event()

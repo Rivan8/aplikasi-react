@@ -121,7 +121,8 @@
                 <th>Event</th>
                 <th>Lokasi</th>
                 <th>Tanggal Event</th>
-                <th>Waktu Scan</th>
+                <th>Check-in</th>
+                <th>Check-out</th>
                 <th>Status</th>
             </tr>
         </thead>
@@ -135,10 +136,11 @@
                     <td>{{ $row['Lokasi'] }}</td>
                     <td>{{ $row['Tanggal Event'] }}</td>
                     <td>{{ $row['Waktu Scan'] }}</td>
+                    <td>{{ $row['Waktu Check-out'] }}</td>
                     <td><span class="status {{ $row['Status'] === 'Terlambat' ? 'status-late' : 'status-present' }}">{{ $row['Status'] }}</span></td>
                 </tr>
             @empty
-                <tr><td colspan="8" class="empty">Belum ada data kehadiran untuk ditampilkan.</td></tr>
+                <tr><td colspan="9" class="empty">Belum ada data kehadiran untuk ditampilkan.</td></tr>
             @endforelse
         </tbody>
     </table>

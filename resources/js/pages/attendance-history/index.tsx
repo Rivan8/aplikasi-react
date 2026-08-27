@@ -28,6 +28,7 @@ interface AttendanceLog {
     event_date: string | null;
     scan_time: string;
     scan_time_raw: string;
+    check_out_time: string | null;
     status: 'Present' | 'Late';
 }
 
@@ -326,14 +327,15 @@ export default function AttendanceHistory({ attendances, events, filters }: Prop
                                 <tr>
                                     <th className="px-6 py-4">Nama Jemaat</th>
                                     <th className="px-6 py-4">Detail Event</th>
-                                    <th className="px-6 py-4">Waktu Scan</th>
+                                    <th className="px-6 py-4">Check-in</th>
+                                    <th className="px-6 py-4">Check-out</th>
                                     <th className="px-6 py-4">Status</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-border/50">
                                 {attendances.data.length === 0 ? (
                                     <tr>
-                                        <td colSpan={4} className="px-6 py-20 text-center">
+                                        <td colSpan={5} className="px-6 py-20 text-center">
                                             <div className="flex flex-col items-center text-muted-foreground">
                                                 <Users className="h-12 w-12 mb-4 opacity-20" />
                                                 <p className="font-medium">Belum ada data kehadiran</p>
@@ -377,6 +379,12 @@ export default function AttendanceHistory({ attendances, events, filters }: Prop
                                                 <div className="flex items-center gap-2 text-foreground/70">
                                                     <Clock className="h-4 w-4 text-muted-foreground" />
                                                     <span className="font-medium">{log.scan_time}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-2 text-foreground/70">
+                                                    <Clock className="h-4 w-4 text-muted-foreground" />
+                                                    <span className="font-medium">{log.check_out_time || 'Belum check-out'}</span>
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4">

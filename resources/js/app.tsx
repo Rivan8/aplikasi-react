@@ -15,6 +15,7 @@ createInertiaApp({
             case name === 'welcome':
             case name === 'live-events/time-keeper':
             case name === 'attendance-monitor/index':
+            case name === 'scan-qr/index':
             case name === 'auth/login':
                 return null;
             case name.startsWith('auth/'):

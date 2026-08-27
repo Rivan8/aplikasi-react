@@ -1,6 +1,6 @@
 import { Head, router, usePage } from '@inertiajs/react';
 import { Html5Qrcode } from 'html5-qrcode';
-import { Camera, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
+import { Camera, CheckCircle2, AlertCircle, LogIn, LogOut, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,7 @@ export default function MyScan({ event, qr_value }: { event?: any, qr_value?: st
     const [scanResult, setScanResult] = useState<string | null>(null);
     const [scanError, setScanError] = useState<string | null>(null);
     const [processing, setProcessing] = useState(false);
+    const [scanType, setScanType] = useState<'check_in' | 'check_out'>('check_in');
     const isMountedRef = useRef(true);
 
     useEffect(() => {
@@ -42,7 +43,7 @@ export default function MyScan({ event, qr_value }: { event?: any, qr_value?: st
     useEffect(() => {
         if (qr_value) {
             setProcessing(true);
-            router.post(qr_value, {}, {
+            router.post(qr_value, { scan_type: scanType }, {
                 onFinish: () => setProcessing(false)
             });
         }
@@ -61,7 +62,7 @@ export default function MyScan({ event, qr_value }: { event?: any, qr_value?: st
             scannerRef.current = null;
         }
         setIsScanning(false);
-    }, []);
+    }, [scanType]);
 
     const processQrCode = useCallback((text: string) => {
         try {
@@ -78,7 +79,7 @@ export default function MyScan({ event, qr_value }: { event?: any, qr_value?: st
                 : path;
 
             setProcessing(true);
-            router.post(scanPath, {}, {
+            router.post(scanPath, { scan_type: scanType }, {
                 onFinish: () => setProcessing(false)
             });
 
@@ -256,6 +257,28 @@ export default function MyScan({ event, qr_value }: { event?: any, qr_value?: st
                 </header>
 
                 <main className="flex-1 p-6 flex flex-col items-center">
+                    <div className="mb-4 flex w-full max-w-md items-center gap-2 rounded-xl border bg-card p-1">
+                        <Button
+                            type="button"
+                            variant={scanType === 'check_in' ? 'default' : 'ghost'}
+                            className="flex-1 gap-2"
+                            onClick={() => setScanType('check_in')}
+                            disabled={processing || isScanning}
+                        >
+                            <LogIn className="h-4 w-4" />
+                            Check-in
+                        </Button>
+                        <Button
+                            type="button"
+                            variant={scanType === 'check_out' ? 'default' : 'ghost'}
+                            className="flex-1 gap-2"
+                            onClick={() => setScanType('check_out')}
+                            disabled={processing || isScanning}
+                        >
+                            <LogOut className="h-4 w-4" />
+                            Check-out
+                        </Button>
+                    </div>
                     <Card className="w-full max-w-md overflow-hidden border-0 shadow-lg mt-4">
                         <CardHeader className="text-center bg-card border-b">
                             <CardTitle>

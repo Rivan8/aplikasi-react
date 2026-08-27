@@ -110,6 +110,7 @@ class AttendanceController extends Controller
                 'event_date' => $attendance->event?->date ?? null,
                 'scan_time' => $attendance->scan_time?->format('d M Y, H:i'),
                 'scan_time_raw' => $attendance->scan_time?->toISOString(),
+                'check_out_time' => $attendance->check_out_time?->format('d M Y, H:i'),
                 'status' => $attendance->status,
             ];
         });
@@ -205,6 +206,7 @@ class AttendanceController extends Controller
                 'Lokasi' => $attendance->event?->location ?? '-',
                 'Tanggal Event' => $attendance->event?->date ?? '-',
                 'Waktu Scan' => $attendance->scan_time?->format('d M Y, H:i'),
+                'Waktu Check-out' => $attendance->check_out_time?->format('d M Y, H:i') ?? '-',
                 'Status' => $attendance->status === 'Late' ? 'Terlambat' : 'Hadir',
             ];
         })->toArray();
@@ -267,6 +269,7 @@ class AttendanceController extends Controller
                     'id' => $att->id,
                     'name' => $members[$att->member_id]['name'] ?? 'Member #' . $att->member_id,
                     'time' => $att->scan_time->diffForHumans(),
+                    'check_out_time' => $att->check_out_time?->format('H:i:s'),
                     'status' => $att->status,
                 ];
             });
@@ -313,6 +316,7 @@ class AttendanceController extends Controller
                     'name' => $member['name'] ?? 'Member #'.$attendance->member_id,
                     'foto_url' => $member['foto_url'] ?? null,
                     'time' => $attendance->scan_time?->format('H:i:s'),
+                    'check_out_time' => $attendance->check_out_time?->format('H:i:s'),
                     'status' => $this->attendanceStatus($selectedEvent, $session, $attendance->scan_time),
                 ];
             })->values();
@@ -340,6 +344,10 @@ class AttendanceController extends Controller
 
     public function scanEventQr(Request $request, Event $event)
     {
+        $request->validate([
+            'scan_type' => 'nullable|in:check_in,check_out',
+        ]);
+
         $user = $request->user();
 
         if (!$user->member_id) {
@@ -381,8 +389,25 @@ class AttendanceController extends Controller
             $query->where('event_session_id', $sessionId);
         }
 
-        if ($query->exists()) {
-            return back()->with('info', 'Anda sudah melakukan absensi untuk sesi ini.');
+        $attendance = $query->first();
+        $scanType = $request->input('scan_type', 'check_in');
+
+        if ($scanType === 'check_out') {
+            if (!$attendance) {
+                return back()->with('error', 'Check-in belum tercatat untuk event/sesi ini.');
+            }
+
+            if ($attendance->check_out_time) {
+                return back()->with('info', 'Anda sudah melakukan check-out untuk sesi ini.');
+            }
+
+            $attendance->update(['check_out_time' => now()]);
+
+            return back()->with('success', 'Check-out berhasil dicatat.');
+        }
+
+        if ($attendance) {
+            return back()->with('info', 'Anda sudah melakukan check-in untuk sesi ini.');
         }
 
         $session = $sessionId ? $event->sessions()->find($sessionId) : null;
@@ -407,6 +432,7 @@ class AttendanceController extends Controller
             'event_id' => 'required|exists:events,id',
             'event_session_id' => 'nullable|exists:event_sessions,id',
             'scan' => 'required|string',
+            'scan_type' => 'nullable|in:check_in,check_out',
         ]);
 
         $scan = trim($request->scan);
@@ -433,8 +459,25 @@ class AttendanceController extends Controller
             $query->where('event_session_id', $sessionId);
         }
 
-        if ($query->exists()) {
-            return back()->with('info', $member['name'] . ' sudah tercatat hadir untuk sesi/event ini.');
+        $attendance = $query->first();
+        $scanType = $request->input('scan_type', 'check_in');
+
+        if ($scanType === 'check_out') {
+            if (!$attendance) {
+                return back()->with('error', $member['name'] . ' belum tercatat check-in untuk sesi/event ini.');
+            }
+
+            if ($attendance->check_out_time) {
+                return back()->with('info', $member['name'] . ' sudah tercatat check-out untuk sesi/event ini.');
+            }
+
+            $attendance->update(['check_out_time' => now()]);
+
+            return back()->with('success', 'Check-out berhasil dicatat untuk ' . $member['name']);
+        }
+
+        if ($attendance) {
+            return back()->with('info', $member['name'] . ' sudah tercatat check-in untuk sesi/event ini.');
         }
 
         $session = $sessionId ? $event->sessions()->find($sessionId) : null;

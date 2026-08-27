@@ -28,6 +28,7 @@ interface RecentScan {
     name: string;
     foto_url?: string | null;
     time: string | null;
+    check_out_time?: string | null;
     status: string;
 }
 
@@ -203,6 +204,7 @@ export default function AttendanceMonitor({
                                     <div className="min-w-0 flex-1">
                                         <h3 className="truncate font-semibold">{scan.name}</h3>
                                         <p className={`mt-1 text-xs ${scan.status === 'Late' ? 'text-amber-300' : 'text-slate-400'}`}>{scan.time ?? '-'} · {scan.status === 'Present' ? 'Hadir' : 'Terlambat'}</p>
+                                        <p className="mt-1 text-xs text-slate-500">{scan.check_out_time ? `Pulang ${scan.check_out_time}` : 'Belum check-out'}</p>
                                     </div>
                                     <CheckCircle2 className={`h-5 w-5 shrink-0 ${scan.status === 'Late' ? 'text-amber-300' : 'text-emerald-300'}`} />
                                 </article>

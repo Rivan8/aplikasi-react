@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Head, router, usePage } from '@inertiajs/react';
 import { Html5Qrcode } from 'html5-qrcode';
-import { AlertTriangle, Aperture, History, Info, Keyboard, StopCircle, UserCheck } from 'lucide-react';
+import { AlertTriangle, Aperture, History, Info, Keyboard, LogIn, LogOut, StopCircle, UserCheck } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -31,6 +31,7 @@ interface RecentScan {
     id: number;
     name: string;
     time: string;
+    check_out_time?: string | null;
     status: string;
 }
 
@@ -53,6 +54,7 @@ export default function ScanQR({
     const [scanMode, setScanMode] = useState<'camera' | 'usb'>('camera');
     const [selectedEventId, setSelectedEventId] = useState<string>(filters.event_id || '');
     const [selectedSessionId, setSelectedSessionId] = useState<string>(filters.event_session_id || '');
+    const [scanType, setScanType] = useState<'check_in' | 'check_out'>('check_in');
     const [processing, setProcessing] = useState(false);
     const isMountedRef = useRef(true);
     const [lastScanResult, setLastScanResult] = useState<{ type: 'success' | 'info' | 'error'; name: string } | null>(null);
@@ -167,6 +169,7 @@ export default function ScanQR({
         router.post('/attendance/scan-member', {
             event_id: selectedEventId,
             event_session_id: selectedSessionId || null,
+            scan_type: scanType,
             scan,
         }, {
             preserveState: true,
@@ -187,7 +190,7 @@ export default function ScanQR({
                 }
             }
         });
-    }, [processing, selectedEventId, selectedSessionId]);
+    }, [processing, scanType, selectedEventId, selectedSessionId]);
 
     const startScanner = useCallback(async () => {
         if (!selectedEventId) {
@@ -236,12 +239,13 @@ export default function ScanQR({
                     try {
                         const scanner = new Html5Qrcode(elementId);
                         scannerRef.current = scanner;
+                        const scanAreaSize = Math.min(560, Math.max(300, Math.floor(domElement.clientWidth * 0.78)));
 
                         await scanner.start(
                             { facingMode: "environment" },
                             {
                                 fps: 10,
-                                qrbox: { width: 250, height: 250 },
+                                qrbox: { width: scanAreaSize, height: scanAreaSize },
                             },
                             (decodedText) => {
                                 processMemberScan(decodedText);
@@ -308,21 +312,22 @@ export default function ScanQR({
     return (
         <>
             <Head title="Scan Kartu Member" />
-            <div className="flex flex-col gap-6 p-6 max-w-7xl mx-auto w-full">
+            <div className="min-h-screen bg-slate-950 p-4 text-white sm:p-6 lg:p-8">
+            <div className="mx-auto flex max-w-[1600px] flex-col gap-6">
                 {/* Header Event Card */}
-                <Card className="border bg-card shadow-sm">
-                    <CardContent className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+                <Card className="border-white/10 bg-white/[0.06] text-white shadow-2xl shadow-black/20">
+                    <CardContent className="flex flex-col justify-between gap-5 p-5 sm:flex-row sm:items-center lg:p-6">
                         <div className="space-y-2 flex-1">
                             <div className="flex items-center gap-2">
                                 <div className="flex items-center justify-center h-5 w-5 rounded-full bg-destructive/10">
                                     <div className="h-2 w-2 rounded-full bg-destructive animate-pulse" />
                                 </div>
-                                <span className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">Live Scanning</span>
+                                <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-emerald-300">Admin Live Scanner</span>
                             </div>
 
                             <div className="w-full max-w-md pt-2 space-y-3">
                                 <Select value={selectedEventId} onValueChange={handleEventChange} disabled={isScanning}>
-                                    <SelectTrigger className="h-12 text-lg font-bold">
+                                    <SelectTrigger className="h-12 border-white/15 bg-white/10 text-lg font-bold text-white">
                                         <SelectValue placeholder="Pilih Event Aktif..." />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -334,7 +339,7 @@ export default function ScanQR({
 
                                 {activeEvent && activeEvent.sessions && activeEvent.sessions.length > 0 && (
                                     <Select value={selectedSessionId || 'all'} onValueChange={handleSessionChange} disabled={isScanning}>
-                                        <SelectTrigger className="h-10 text-sm font-semibold bg-primary/5 border-primary/20">
+                                        <SelectTrigger className="h-10 border-emerald-300/20 bg-emerald-300/10 text-sm font-semibold text-white">
                                             <SelectValue placeholder="Pilih Sesi Kelas (Semua Sesi)..." />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -349,22 +354,22 @@ export default function ScanQR({
                                 )}
                             </div>
                             {activeEvent && (
-                                <p className="text-sm text-muted-foreground mt-2">
+                                <p className="mt-2 text-sm text-white/50">
                                     {activeEvent.location} • {activeEvent.time}
                                 </p>
                             )}
                         </div>
                         <div className="flex shrink-0">
-                            <div className="flex items-center divide-x divide-border rounded-xl border bg-muted/50 py-3 px-6">
+                            <div className="flex items-center divide-x divide-white/10 rounded-xl border border-white/10 bg-black/20 px-6 py-3">
                                 <div className="flex flex-col items-center pr-6">
-                                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Scanned Today</span>
-                                    <span className="text-2xl font-bold text-primary leading-none">
-                                        {totalScanned} <span className="text-sm text-muted-foreground font-normal">/ {activeEvent?.expected || 0}</span>
+                                    <span className="mb-1 text-[10px] font-bold uppercase tracking-widest text-white/45">Total Scan</span>
+                                    <span className="text-2xl font-bold leading-none text-emerald-300">
+                                        {totalScanned} <span className="text-sm font-normal text-white/45">/ {activeEvent?.expected || 0}</span>
                                     </span>
                                 </div>
                                 <div className="flex flex-col items-center pl-6">
-                                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Expected</span>
-                                    <span className="text-2xl font-bold text-foreground leading-none">{activeEvent?.expected || 0}</span>
+                                    <span className="mb-1 text-[10px] font-bold uppercase tracking-widest text-white/45">Target</span>
+                                    <span className="text-2xl font-bold leading-none text-white">{activeEvent?.expected || 0}</span>
                                 </div>
                             </div>
                         </div>
@@ -372,15 +377,39 @@ export default function ScanQR({
                 </Card>
 
                 {/* Main Content Layout */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="grid min-h-[calc(100vh-230px)] grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
                     {/* Scanner Section */}
-                    <Card className="lg:col-span-2 overflow-hidden border shadow-sm flex flex-col">
-                        <CardHeader className="border-b px-6 py-4 flex flex-row items-center justify-between bg-card">
+                    <Card className="overflow-hidden border-white/10 bg-white/[0.06] shadow-2xl shadow-black/20 lg:min-h-[680px]">
+                        <CardHeader className="flex flex-row items-center justify-between border-b border-white/10 bg-black/10 px-5 py-4 lg:px-7">
                             <div className="flex items-center gap-2">
                                 <Aperture className={`h-5 w-5 ${isScanning ? 'text-primary' : 'text-muted-foreground'}`} />
-                                <CardTitle className="text-lg font-semibold text-foreground">Scanner Kartu Jemaat</CardTitle>
+                                <CardTitle className="text-lg font-semibold text-white">Scan Kartu Jemaat</CardTitle>
                             </div>
-                            <div className="flex items-center gap-1 rounded-lg border bg-muted p-1">
+                                    <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-black/20 p-1">
+                                        <Button
+                                            type="button"
+                                            variant={scanType === 'check_in' ? 'default' : 'ghost'}
+                                            size="sm"
+                                            className="h-8 gap-2"
+                                            onClick={() => setScanType('check_in')}
+                                            disabled={processing || isScanning}
+                                        >
+                                            <LogIn className="h-4 w-4" />
+                                            Masuk
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            variant={scanType === 'check_out' ? 'default' : 'ghost'}
+                                            size="sm"
+                                            className="h-8 gap-2"
+                                            onClick={() => setScanType('check_out')}
+                                            disabled={processing || isScanning}
+                                        >
+                                            <LogOut className="h-4 w-4" />
+                                            Pulang
+                                        </Button>
+                                    </div>
+                                    <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-black/20 p-1">
                                 <Button
                                     type="button"
                                     variant={scanMode === 'camera' ? 'default' : 'ghost'}
@@ -406,13 +435,13 @@ export default function ScanQR({
                             </div>
                         </CardHeader>
 
-                        <div className="relative flex-1 min-h-[400px] md:min-h-[500px] bg-[#1A1A1F] flex flex-col items-center justify-center p-6 overflow-hidden">
-                            <div className="flex flex-col items-center w-full h-full">
+                        <div className="relative flex min-h-[620px] flex-1 flex-col items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_center,_rgba(16,185,129,0.14),_transparent_45%),#080b12] p-4 sm:min-h-[680px] lg:p-8">
+                            <div className="relative h-full min-h-full w-full">
                                 {scanMode === 'camera' && (
                                     <div
                                         id="admin-reader"
-                                        className={`w-full max-w-md bg-black rounded-lg overflow-hidden transition-opacity duration-300 ${isScanning ? 'opacity-100 z-10 relative' : 'opacity-0 z-0 absolute invisible'}`}
-                                        style={{ minHeight: '300px' }}
+                                        className={`relative z-10 w-full max-w-5xl overflow-hidden rounded-2xl border-2 border-emerald-300/40 bg-black shadow-[0_0_80px_rgba(16,185,129,0.18)] transition-opacity duration-300 ${isScanning ? 'opacity-100' : 'invisible absolute z-0 opacity-0'}`}
+                                        style={{ minHeight: '600px' }}
                                         ref={readerElementRef}
                                     />
                                 )}
@@ -455,11 +484,13 @@ export default function ScanQR({
                                 )}
 
                                 {scanMode === 'camera' && !isScanning && (
-                                    <div className="flex flex-col items-center justify-center space-y-4 z-20">
-                                        <Button size="lg" onClick={startScanner} className="h-14 px-8 text-lg">
+                                    <div className="absolute top-6 left-1/2 z-20 flex w-full -translate-x-1/2 flex-col items-center justify-start space-y-3 px-4 text-center sm:top-8 lg:top-10">
+                                        <div className="mb-2 flex h-20 w-20 items-center justify-center rounded-3xl border border-emerald-300/25 bg-emerald-300/10 text-emerald-300 shadow-[0_0_40px_rgba(16,185,129,0.15)] sm:h-24 sm:w-24"><Aperture className="h-10 w-10 sm:h-12 sm:w-12" /></div>
+                                        <h2 className="text-2xl font-bold text-white">Siap memindai kartu</h2>
+                                        <Button size="lg" onClick={startScanner} className="h-14 rounded-xl px-10 text-lg shadow-lg shadow-primary/20">
                                             Mulai Scan Kartu
                                         </Button>
-                                        <p className="text-muted-foreground text-sm">Pilih event terlebih dahulu sebelum mulai.</p>
+                                        <p className="text-sm text-white/50">Pilih event, lalu arahkan kartu ke kamera.</p>
                                     </div>
                                 )}
 
@@ -482,37 +513,43 @@ export default function ScanQR({
                     </Card>
 
                     {/* Recent Scans Section */}
-                    <Card className="border shadow-sm bg-card flex flex-col">
-                        <CardHeader className="border-b px-6 py-5 flex flex-row items-center justify-between">
-                            <CardTitle className="text-lg font-semibold text-foreground">Recent Scans</CardTitle>
-                            <History className="h-5 w-5 text-muted-foreground" />
+                    <Card className="flex flex-col border-white/10 bg-white/[0.06] text-white shadow-2xl shadow-black/20 lg:min-h-[680px]">
+                        <CardHeader className="flex flex-row items-center justify-between border-b border-white/10 px-5 py-5">
+                            <div><CardTitle className="text-lg font-semibold text-white">Scan Terbaru</CardTitle><p className="mt-1 text-xs text-white/45">Hasil scan tampil real-time</p></div>
+                            <History className="h-5 w-5 text-emerald-300" />
                         </CardHeader>
-                        <CardContent className="p-0 flex-1 overflow-y-auto min-h-[400px]">
+                        <CardContent className="min-h-[400px] flex-1 overflow-y-auto p-0">
                             {recentScans.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground/50 py-20">
                                     <History className="w-12 h-12 mb-4 opacity-20" />
                                     <p>Belum ada scan.</p>
                                 </div>
                             ) : (
-                                <div className="flex flex-col divide-y divide-border/50">
+                                <div className="space-y-2 p-3">
                                     {recentScans.map((scan) => (
-                                        <div key={scan.id} className="flex items-center justify-between p-4 hover:bg-muted/30 transition-colors">
+                                        <div
+                                            key={scan.id}
+                                            className={`flex items-center justify-between gap-3 rounded-xl border p-3 transition-all hover:-translate-y-0.5 ${scan.status === 'Present' ? 'border-emerald-300/20 bg-emerald-400/10 hover:bg-emerald-400/20' : 'border-amber-300/25 bg-amber-400/10 hover:bg-amber-400/20'}`}
+                                        >
                                             <div className="flex items-center gap-3.5">
-                                                <Avatar className="h-10 w-10 border border-border">
-                                                    <AvatarFallback className="bg-primary/10 text-primary font-bold text-xs uppercase">
+                                                <Avatar className={`h-10 w-10 shrink-0 border ${scan.status === 'Present' ? 'border-emerald-300/40' : 'border-amber-300/40'}`}>
+                                                    <AvatarFallback className={`font-bold text-xs uppercase ${scan.status === 'Present' ? 'bg-emerald-300/20 text-emerald-200' : 'bg-amber-300/20 text-amber-200'}`}>
                                                         {scan.name.substring(0, 2)}
                                                     </AvatarFallback>
                                                 </Avatar>
-                                                <div className="flex flex-col">
-                                                    <span className="text-sm font-semibold text-foreground leading-snug">{scan.name}</span>
+                                                <div className="min-w-0 flex flex-col">
+                                                    <span className="break-words text-sm font-bold leading-snug text-white">{scan.name}</span>
+                                                    <span className="mt-1 text-[10px] font-medium text-white/55">
+                                                        {scan.check_out_time ? `Pulang ${scan.check_out_time}` : 'Belum check-out'}
+                                                    </span>
                                                 </div>
                                             </div>
                                             <div className="flex flex-col items-end gap-1.5">
-                                                <span className="text-[10px] font-medium text-muted-foreground">{scan.time}</span>
+                                                <span className="whitespace-nowrap text-[10px] font-semibold text-white/65">{scan.time}</span>
                                                 <Badge
                                                     variant="outline"
-                                                    className={`px-2 py-0 h-5 text-[10px] uppercase font-bold rounded-full ${
-                                                        scan.status === 'Present' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'
+                                                    className={`h-5 rounded-full px-2 text-[10px] font-bold uppercase ${
+                                                        scan.status === 'Present' ? 'border-emerald-300/40 bg-emerald-300/20 text-emerald-200' : 'border-amber-300/40 bg-amber-300/20 text-amber-200'
                                                     }`}
                                                 >
                                                     {scan.status === 'Present' ? 'Hadir' : 'Terlambat'}
@@ -526,15 +563,9 @@ export default function ScanQR({
                     </Card>
                 </div>
             </div>
+            </div>
         </>
     );
 }
 
-ScanQR.layout = {
-    breadcrumbs: [
-        {
-            title: 'Scan QR Member',
-            href: '/scan-qr',
-        },
-    ],
-};
+ScanQR.layout = (page: any) => page;
