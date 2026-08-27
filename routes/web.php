@@ -451,6 +451,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('live-events/{event}/next', [LiveEventController::class, 'next'])->middleware('role:admin,superadmin')->name('live-events.next');
     Route::post('live-events/{event}/finish', [LiveEventController::class, 'finish'])->middleware('role:admin,superadmin')->name('live-events.finish');
     Route::resource('categories', CategoryController::class)->except(['create', 'edit', 'show'])->middleware('role:admin,superadmin');
+    Route::post('categories/{category}/duplicate', [CategoryController::class, 'duplicate'])->middleware('role:admin,superadmin')->name('categories.duplicate');
+    Route::post('event-groups', [CategoryController::class, 'storeGroup'])->middleware('role:admin,superadmin')->name('event-groups.store');
+    Route::delete('event-groups/{eventGroup}', [CategoryController::class, 'destroyGroup'])->middleware('role:admin,superadmin')->name('event-groups.destroy');
     Route::get('scan-qr', [AttendanceController::class, 'showAdminScan'])->middleware('role:admin,superadmin')->name('scan-qr');
     Route::get('attendance-monitor', [AttendanceController::class, 'showAttendanceMonitor'])->middleware('role:admin,superadmin')->name('attendance-monitor');
     Route::get('attendance-history', [AttendanceController::class, 'history'])->middleware('role:admin,superadmin')->name('attendance-history');

@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Head, useForm } from '@inertiajs/react';
-import { Edit2, Plus, Trash2, Users } from 'lucide-react';
+import { Copy, Edit2, Plus, Trash2, Users } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
@@ -30,8 +30,14 @@ interface CategoryRole {
 interface Category {
     id: number;
     name: string;
+    group_name: string;
     description: string;
     roles: CategoryRole[];
+}
+
+interface EventGroup {
+    id: number;
+    name: string;
 }
 
 interface Department {
@@ -39,15 +45,19 @@ interface Department {
     name: string;
 }
 
-export default function CategoryIndex({ categories, departments }: { categories: Category[], departments: Department[] }) {
+export default function CategoryIndex({ categories, departments, groups }: { categories: Category[], departments: Department[], groups: EventGroup[] }) {
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+    const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
+    const [groupName, setGroupName] = useState('');
 
     const { data, setData, post, put, delete: destroy, processing, reset, errors } = useForm({
         name: '',
+        group_name: '',
         description: '',
         roles: [{ department_id: '', role_name: '' }]
     });
+    const groupForm = useForm({ name: '' });
 
     const openCreateModal = () => {
         reset();
@@ -59,6 +69,7 @@ export default function CategoryIndex({ categories, departments }: { categories:
         setEditingCategory(category);
         setData({
             name: category.name,
+            group_name: category.group_name || '',
             description: category.description || '',
             roles: category.roles.map(r => ({
                 department_id: String(r.department_id),
@@ -136,6 +147,15 @@ export default function CategoryIndex({ categories, departments }: { categories:
         }
     };
 
+    const duplicateCategory = (category: Category) => {
+        if (confirm(`Salin kategori ${category.name} beserta template volunteernya?`)) {
+            post(`/categories/${category.id}/duplicate`, {
+                preserveScroll: true,
+                onSuccess: () => toast.success('Kategori berhasil disalin'),
+            });
+        }
+    };
+
     return (
         <div className="p-6 max-w-7xl mx-auto space-y-6">
             <Head title="Kategori Event & Volunteer" />
@@ -148,6 +168,9 @@ export default function CategoryIndex({ categories, departments }: { categories:
                 <Button onClick={openCreateModal} className="gap-2">
                     <Plus className="w-4 h-4" /> Tambah Kategori
                 </Button>
+                <Button variant="outline" onClick={() => setIsGroupModalOpen(true)} className="gap-2">
+                    <Plus className="w-4 h-4" /> Kelola Group
+                </Button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -157,9 +180,13 @@ export default function CategoryIndex({ categories, departments }: { categories:
                             <div className="flex justify-between items-start">
                                 <div className="space-y-1">
                                     <CardTitle>{category.name}</CardTitle>
+                                    <p className="text-xs font-semibold uppercase tracking-wider text-primary/70">{category.group_name || 'Umum'}</p>
                                     <CardDescription>{category.description || 'Tidak ada deskripsi'}</CardDescription>
                                 </div>
                                 <div className="flex gap-2">
+                                    <Button variant="ghost" size="icon" title="Salin kategori" onClick={() => duplicateCategory(category)}>
+                                        <Copy className="w-4 h-4" />
+                                    </Button>
                                     <Button variant="ghost" size="icon" onClick={() => openEditModal(category)}>
                                         <Edit2 className="w-4 h-4" />
                                     </Button>
@@ -224,6 +251,14 @@ export default function CategoryIndex({ categories, departments }: { categories:
                                     onChange={e => setData('description', e.target.value)}
                                     placeholder="Keterangan singkat kategori"
                                 />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="group_name">Group Kategori</Label>
+                                <Select value={data.group_name} onValueChange={value => setData('group_name', value)}>
+                                    <SelectTrigger id="group_name"><SelectValue placeholder="Pilih group yang sudah dibuat" /></SelectTrigger>
+                                    <SelectContent>{groups.map(group => <SelectItem key={group.id} value={group.name}>{group.name}</SelectItem>)}</SelectContent>
+                                </Select>
+                                {errors.group_name && <p className="text-xs text-destructive">{errors.group_name}</p>}
                             </div>
                         </div>
 
@@ -298,6 +333,20 @@ export default function CategoryIndex({ categories, departments }: { categories:
                             <Button type="button" variant="outline" onClick={() => setIsCreateModalOpen(false)}>Batal</Button>
                             <Button type="submit" disabled={processing}>{editingCategory ? 'Simpan Perubahan' : 'Buat Kategori'}</Button>
                         </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={isGroupModalOpen} onOpenChange={setIsGroupModalOpen}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Kelola Group Event</DialogTitle>
+                        <DialogDescription>Buat group terlebih dahulu, lalu pilih group saat membuat kategori.</DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={event => { event.preventDefault(); groupForm.post('/event-groups', { onSuccess: () => { groupForm.reset(); setIsGroupModalOpen(false); } }); }} className="space-y-4">
+                        <div className="space-y-2"><Label htmlFor="new-group-name">Nama Group</Label><Input id="new-group-name" value={groupForm.data.name} onChange={event => groupForm.setData('name', event.target.value)} placeholder="Contoh: Ibadah Mingguan" required />{groupForm.errors.name && <p className="text-xs text-destructive">{groupForm.errors.name}</p>}</div>
+                        <div className="space-y-2"><p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Group tersedia</p>{groups.length > 0 ? groups.map(group => <div key={group.id} className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm"><span>{group.name}</span><Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => { if (confirm(`Hapus group ${group.name}?`)) destroy(`/event-groups/${group.id}`); }}><Trash2 className="h-3.5 w-3.5" /></Button></div>) : <p className="text-sm text-muted-foreground">Belum ada group.</p>}</div>
+                        <DialogFooter><Button type="button" variant="outline" onClick={() => setIsGroupModalOpen(false)}>Tutup</Button><Button type="submit" disabled={groupForm.processing}>Buat Group</Button></DialogFooter>
                     </form>
                 </DialogContent>
             </Dialog>

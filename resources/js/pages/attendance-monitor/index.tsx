@@ -64,7 +64,7 @@ export default function AttendanceMonitor({
         ? new Date(`${eventDate}T${eventTime}`)
         : null;
     const countdownSeconds = eventStart && !Number.isNaN(eventStart.getTime())
-        ? Math.floor((eventStart.getTime() - now.getTime()) / 1000)
+        ? Math.max(-5 * 60 * 60, Math.floor((eventStart.getTime() - now.getTime()) / 1000))
         : 0;
     const eventStarted = eventStart ? now.getTime() >= eventStart.getTime() : false;
 

@@ -112,8 +112,9 @@ export default function ScanQR({
     // Handle flash messages dari backend
     useEffect(() => {
         if (flash?.success) {
-            const match = flash.success.match(/untuk (.+)$/);
-            const name = match ? match[1] : 'Member';
+            const nameMatch = flash.success.match(/untuk (.+?)(?:\s+\(Terlambat\))?\.?$/)
+                ?? flash.success.match(/^Kehadiran (.+?) dicatat/);
+            const name = nameMatch ? nameMatch[1] : 'Member';
             toast.success(flash.success, { duration: 3000 });
             setLastScanResult({ type: 'success', name });
         }

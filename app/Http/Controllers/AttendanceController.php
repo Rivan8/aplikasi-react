@@ -450,7 +450,7 @@ class AttendanceController extends Controller
         ]);
 
         $message = $status === 'Late'
-            ? 'Kehadiran ' . $member['name'] . ' dicatat (Terlambat).'
+            ? 'Absensi berhasil dicatat untuk ' . $member['name'] . ' (Terlambat).'
             : 'Kehadiran berhasil dicatat untuk ' . $member['name'];
 
         return back()->with('success', $message);

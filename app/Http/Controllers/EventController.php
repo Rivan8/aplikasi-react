@@ -9,6 +9,7 @@ use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 use App\Models\Category;
+use App\Models\EventGroup;
 use App\Models\Song;
 use App\Services\MemberApiService;
 
@@ -40,6 +41,7 @@ class EventController extends Controller
         return Inertia::render('events/index', [
             'events' => $events,
             'categories' => Category::with('roles.department')->get(),
+            'groups' => EventGroup::orderBy('name')->get(),
             'songs' => Song::with('arrangements')->orderBy('title')->get(),
             'external_members' => $externalMembers,
             'breadcrumbs' => [

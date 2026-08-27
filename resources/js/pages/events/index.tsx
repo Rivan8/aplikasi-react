@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
     Collapsible,
     CollapsibleContent,
-    CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import {
     Dialog,
@@ -32,6 +31,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { Head, router, useForm } from '@inertiajs/react';
 import { format } from 'date-fns';
@@ -179,7 +179,13 @@ interface CategoryRole {
 interface Category {
     id: number;
     name: string;
+    group_name: string;
     roles: CategoryRole[];
+}
+
+interface EventGroup {
+    id: number;
+    name: string;
 }
 
 interface SongArrangement {
@@ -359,11 +365,13 @@ export default function Events({
     events = [],
     external_members = [],
     categories = [],
+    groups = [],
     songs = [],
 }: {
     events: Event[];
     external_members: ExternalMember[];
     categories: Category[];
+    groups: EventGroup[];
     songs: Song[];
 }) {
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -371,11 +379,16 @@ export default function Events({
     const [viewingEvent, setViewingEvent] = useState<Event | null>(null);
     const [qrEvent, setQrEvent] = useState<Event | null>(null);
     const [imagePreview, setImagePreview] = useState<string | null>(null);
-    const [openCategories, setOpenCategories] = useState<string[]>([]);
+    const [openCategories, setOpenCategories] = useState<string[]>(() =>
+        categories
+            .filter((category) => !events.some((event) => event.category === category.name))
+            .map((category) => category.name),
+    );
     const [activeTab, setActiveTab] = useState<'basic' | 'participants' | 'rundown' | 'volunteers'>('basic');
     const [selectedMemberToEnroll, setSelectedMemberToEnroll] = useState<string | number | null>(null);
     const [eventSearch, setEventSearch] = useState('');
     const [eventCategory, setEventCategory] = useState('all');
+    const [eventGroup, setEventGroup] = useState('all');
     const [eventStatus, setEventStatus] = useState<'all' | 'upcoming' | 'past'>('all');
     const [eventSort, setEventSort] = useState<'date-asc' | 'date-desc' | 'title'>('date-asc');
     const [currentTime, setCurrentTime] = useState(() => new Date());
@@ -744,6 +757,9 @@ export default function Events({
                     );
                 const matchesCategory =
                     eventCategory === 'all' || event.category === eventCategory;
+                const eventCategoryRecord = categories.find((category) => category.name === event.category);
+                const matchesGroup =
+                    eventGroup === 'all' || eventCategoryRecord?.group_name === eventGroup;
                 const eventDate = event.date ? new Date(`${event.date}T00:00:00`) : null;
                 const matchesStatus =
                     eventStatus === 'all' ||
@@ -754,7 +770,7 @@ export default function Events({
                         eventDate !== null &&
                         eventDate < today);
 
-                return matchesSearch && matchesCategory && matchesStatus;
+                return matchesSearch && matchesCategory && matchesGroup && matchesStatus;
             })
             .sort((firstEvent, secondEvent) => {
                 if (eventSort === 'title') {
@@ -789,7 +805,7 @@ export default function Events({
 
                 return secondDate - firstDate || firstEvent.id - secondEvent.id;
             });
-    }, [eventCategory, eventSearch, eventSort, eventStatus, events]);
+    }, [categories, eventCategory, eventGroup, eventSearch, eventSort, eventStatus, events]);
 
     const groupedEvents = useMemo(() => {
         const groups = new Map<string, Event[]>();
@@ -801,19 +817,31 @@ export default function Events({
             groups.set(category, categoryEvents);
         });
 
-        categories.forEach((category) => {
+        categories
+            .filter((category) => eventGroup === 'all' || category.group_name === eventGroup)
+            .forEach((category) => {
             if (!groups.has(category.name)) {
                 groups.set(category.name, []);
             }
-        });
+            });
 
         return Array.from(groups.entries()).sort(([firstCategory], [secondCategory]) =>
             firstCategory.localeCompare(secondCategory, 'id'),
         );
-    }, [categories, filteredEvents]);
+    }, [categories, eventGroup, filteredEvents]);
+
+    const eventGroups = useMemo(() => {
+        return Array.from(new Set([
+            ...groups.map((group) => group.name),
+            ...categories.map((category) => category.group_name || 'Umum'),
+        ])).sort((first, second) =>
+            first.localeCompare(second, 'id'),
+        );
+    }, [categories, groups]);
 
     const hasActiveEventFilters =
         Boolean(eventSearch.trim()) ||
+        eventGroup !== 'all' ||
         eventCategory !== 'all' ||
         eventStatus !== 'all' ||
         eventSort !== 'date-asc';
@@ -821,8 +849,20 @@ export default function Events({
     const resetEventFilters = () => {
         setEventSearch('');
         setEventCategory('all');
+        setEventGroup('all');
         setEventStatus('all');
         setEventSort('date-asc');
+    };
+
+    const openAddEventForCategory = (categoryName?: string) => {
+        setEditingEvent(null);
+        reset();
+        setImagePreview(null);
+        setActiveTab('basic');
+        if (categoryName) {
+            setData('category', categoryName);
+        }
+        setIsAddModalOpen(true);
     };
 
     const upcomingEventCount = useMemo(() => {
@@ -853,12 +893,7 @@ export default function Events({
                         </p>
                     </div>
                     <Button
-                        onClick={() => {
-                            setEditingEvent(null);
-                            reset();
-                            setImagePreview(null);
-                            setIsAddModalOpen(true);
-                        }}
+                        onClick={() => openAddEventForCategory()}
                         className="h-11 gap-2 px-6 shadow-lg shadow-primary/20 hover:shadow-primary/40 transition-all duration-300 active:scale-95"
                     >
                         <Plus className="h-5 w-5" />
@@ -892,13 +927,22 @@ export default function Events({
                                 )}
                             </div>
                             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 xl:w-[560px]">
+                                <Select value={eventGroup} onValueChange={(value) => { setEventGroup(value); setEventCategory('all'); }}>
+                                    <SelectTrigger className="h-11 w-full rounded-xl bg-background">
+                                        <SelectValue placeholder="Semua group" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">Semua group</SelectItem>
+                                        {eventGroups.map((group) => <SelectItem key={group} value={group}>{group}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
                                 <Select value={eventCategory} onValueChange={setEventCategory}>
                                     <SelectTrigger className="h-11 w-full rounded-xl bg-background">
                                         <SelectValue placeholder="Semua kategori" />
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="all">Semua kategori</SelectItem>
-                                        {categories.map((category) => (
+                                        {categories.filter((category) => eventGroup === 'all' || category.group_name === eventGroup).map((category) => (
                                             <SelectItem key={category.id} value={category.name}>{category.name}</SelectItem>
                                         ))}
                                     </SelectContent>
@@ -963,39 +1007,43 @@ export default function Events({
                 {groupedEvents.length > 0 && (
                 <div className="space-y-8">
                     {groupedEvents.map(([category, categoryEvents]) => {
-                        const isCategoryOpen = openCategories.length === 0 || openCategories.includes(category);
+                        const isCategoryOpen = openCategories.includes(category);
 
                         return (
                         <Collapsible
                             key={`event-category-${category}`}
                             open={isCategoryOpen}
-                            onOpenChange={(open) => {
-                                if (openCategories.length === 0) {
-                                    setOpenCategories(open ? [] : groupedEvents.map(([name]) => name).filter((name) => name !== category));
-                                    return;
-                                }
-
-                                setOpenCategories((current) => open
-                                    ? [...current, category]
-                                    : current.filter((name) => name !== category));
-                            }}
                             className="-mx-1 space-y-3 rounded-2xl border border-border/60 bg-card/70 p-3 shadow-md shadow-black/5 transition-shadow hover:shadow-lg hover:shadow-primary/10 sm:p-4"
                         >
-                            <div className="flex items-center justify-between gap-4 border-b border-border/60 pb-2">
-                                <CollapsibleTrigger asChild>
-                                    <Button variant="ghost" className="h-auto min-w-0 gap-3 px-0 text-left hover:bg-transparent">
-                                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                                            <CalendarDays className="h-3.5 w-3.5" />
+                            <div
+                                className="flex cursor-pointer items-center justify-between gap-4 border-b border-border/60 pb-2"
+                                role="button"
+                                tabIndex={0}
+                                aria-expanded={isCategoryOpen}
+                                onClick={() => {
+                                    setOpenCategories((current) => current.includes(category)
+                                        ? current.filter((name) => name !== category)
+                                        : [...current, category]);
+                                }}
+                                onKeyDown={(event) => {
+                                    if (event.key === 'Enter' || event.key === ' ') {
+                                        event.preventDefault();
+                                        event.currentTarget.click();
+                                    }
+                                }}
+                            >
+                                <div className="flex min-w-0 items-center gap-3">
+                                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                                        <CalendarDays className="h-3.5 w-3.5" />
+                                    </span>
+                                    <span className="min-w-0">
+                                        <span className="block truncate text-base font-bold text-foreground sm:text-lg">{category}</span>
+                                        <span className="block text-xs font-medium text-muted-foreground">
+                                            {categoryEvents.length === 0 ? 'Belum ada event' : `${categoryEvents.length} event tersedia`}
                                         </span>
-                                        <span className="min-w-0">
-                                            <span className="block truncate text-base font-bold text-foreground sm:text-lg">{category}</span>
-                                            <span className="block text-xs font-medium text-muted-foreground">
-                                                {categoryEvents.length === 0 ? 'Belum ada event' : `${categoryEvents.length} event tersedia`}
-                                            </span>
-                                        </span>
-                                        <ChevronDown className={`h-4 w-4 shrink-0 text-primary transition-transform ${isCategoryOpen ? '' : '-rotate-90'}`} />
-                                    </Button>
-                                </CollapsibleTrigger>
+                                    </span>
+                                    <ChevronDown className={`h-4 w-4 shrink-0 text-primary transition-transform ${isCategoryOpen ? '' : '-rotate-90'}`} />
+                                </div>
                                 <Badge variant="outline" className="shrink-0 rounded-lg border-primary/20 bg-primary/5 px-3 py-1 font-bold text-primary">
                                     {categoryEvents.length}
                                 </Badge>
@@ -1006,6 +1054,26 @@ export default function Events({
                                         <div>
                                             <p className="text-sm font-semibold text-foreground/70">Belum ada event di kategori ini</p>
                                             <p className="mt-1 text-xs text-muted-foreground">Event baru dengan kategori ini akan tampil di sini.</p>
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <Button
+                                                        type="button"
+                                                        size="icon"
+                                                        aria-label={`Tambah event untuk kategori ${category}`}
+                                                        title={`Tambah event untuk kategori ${category}`}
+                                                        className="mx-auto mt-4 h-9 w-9 rounded-lg shadow-sm"
+                                                        onClick={(event) => {
+                                                            event.stopPropagation();
+                                                            openAddEventForCategory(category);
+                                                        }}
+                                                    >
+                                                        <Plus className="h-4 w-4" />
+                                                    </Button>
+                                                </TooltipTrigger>
+                                                <TooltipContent>
+                                                    <p>Tambah event</p>
+                                                </TooltipContent>
+                                            </Tooltip>
                                         </div>
                                     </div>
                                 ) : (
