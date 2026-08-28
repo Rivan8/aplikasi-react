@@ -397,6 +397,7 @@ export default function Events({
     const [messageBody, setMessageBody] = useState('');
     const [messageAttachment, setMessageAttachment] = useState<File | null>(null);
     const [messageProcessing, setMessageProcessing] = useState(false);
+    const [clientErrors, setClientErrors] = useState<Record<string, string>>({});
 
     useEffect(() => {
         const timer = window.setInterval(() => setCurrentTime(new Date()), 30_000);
@@ -421,6 +422,18 @@ export default function Events({
         sessions: [] as EventSession[],
         participants: [] as EventParticipant[],
     });
+
+    const fieldError = (field: string) => clientErrors[field] || errors[field as keyof typeof errors];
+
+    const clearFieldError = (field: string) => {
+        if (clientErrors[field]) {
+            setClientErrors((current) => {
+                const next = { ...current };
+                delete next[field];
+                return next;
+            });
+        }
+    };
 
     const volunteerGroups = useMemo(() => {
         const selectedCategory = categories.find((c) => c.name === data.category);
@@ -577,6 +590,24 @@ export default function Events({
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+
+        const requiredErrors: Record<string, string> = {};
+        if (!data.title.trim()) requiredErrors.title = 'Nama event wajib diisi.';
+        if (!data.category) requiredErrors.category = 'Kategori wajib dipilih.';
+        if (!data.date) requiredErrors.date = 'Tanggal wajib dipilih.';
+        if (!data.time) requiredErrors.time = 'Waktu mulai wajib diisi.';
+        if (!data.location.trim()) requiredErrors.location = 'Lokasi wajib diisi.';
+        if (!data.address.trim()) requiredErrors.address = 'Alamat lengkap wajib diisi.';
+        if (data.expected === undefined || data.expected === null || Number.isNaN(data.expected)) {
+            requiredErrors.expected = 'Target peserta wajib diisi.';
+        }
+
+        setClientErrors(requiredErrors);
+        if (Object.keys(requiredErrors).length > 0) {
+            toast.error('Lengkapi semua field wajib sebelum membuat event.');
+            return;
+        }
+
         const url = editingEvent ? `/events/${editingEvent.id}` : '/events';
 
         const formData = new FormData();
@@ -608,12 +639,14 @@ export default function Events({
 
         router.post(url, formData, {
             onSuccess: () => {
+                setClientErrors({});
                 setIsAddModalOpen(false);
                 setEditingEvent(null);
                 setImagePreview(null);
                 reset();
             },
             onError: (formErrors) => {
+                setClientErrors(formErrors as Record<string, string>);
                 const imageError = formErrors.image;
                 if (imageError) {
                     toast.error(imageError);
@@ -1404,8 +1437,8 @@ export default function Events({
                     }
                 }}
             >
-                <DialogContent className="max-w-5xl overflow-hidden rounded-[32px] p-0 border-none shadow-2xl">
-                    <DialogHeader className="bg-gradient-to-br from-primary/10 via-background to-background p-8 pb-6 border-b border-primary/5">
+                <DialogContent className="flex max-h-[calc(100vh-2rem)] max-w-5xl flex-col overflow-hidden rounded-[32px] border-none p-0 shadow-2xl">
+                    <DialogHeader className="shrink-0 border-b border-primary/5 bg-gradient-to-br from-primary/10 via-background to-background p-6 pb-5 sm:p-8 sm:pb-6">
                         <div className="flex items-center justify-between">
                             <div className="space-y-1">
                                 <DialogTitle className="text-3xl font-black tracking-tight text-foreground/90">
@@ -1449,9 +1482,15 @@ export default function Events({
 
                     <form
                         onSubmit={handleSubmit}
-                        className="flex flex-col overflow-hidden"
+                        className="flex min-h-0 flex-1 flex-col overflow-hidden"
                     >
-                        <div className="overflow-y-auto max-h-[65vh] scrollbar-hide">
+                        <div className="min-h-0 flex-1 overflow-y-auto scrollbar-hide">
+                            {(Object.keys(clientErrors).length > 0 || Object.keys(errors).length > 0) && (
+                                <div className="mx-6 mt-6 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive sm:mx-8" role="alert">
+                                    <p className="font-bold">Form belum lengkap</p>
+                                    <p className="mt-1">Lengkapi {Object.keys({ ...errors, ...clientErrors }).length} field yang ditandai sebelum {editingEvent ? 'menyimpan perubahan' : 'membuat event'}.</p>
+                                </div>
+                            )}
                             {/* Tab Peserta Kelas */}
                             {activeTab === 'participants' && (
                                 <div className="p-8 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -1701,20 +1740,21 @@ export default function Events({
                                                 </div>
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                     <div className="space-y-2.5">
-                                                        <Label htmlFor="title" className="text-xs font-bold text-foreground/70 ml-1">Nama Event</Label>
+                                                        <Label htmlFor="title" className="text-xs font-bold text-foreground/70 ml-1">Nama Event <span className="text-destructive">Wajib</span></Label>
                                                         <Input
                                                             id="title"
                                                             value={data.title}
-                                                            onChange={(e) => setData('title', e.target.value)}
+                                                            onChange={(e) => { clearFieldError('title'); setData('title', e.target.value); }}
+                                                            aria-invalid={!!fieldError('title')}
                                                             placeholder="Sunday Service"
-                                                            className="h-12 bg-muted/20 border-border/40 focus:bg-background transition-all rounded-xl px-4"
+                                                            className={cn("h-12 bg-muted/20 border-border/40 focus:bg-background transition-all rounded-xl px-4", fieldError('title') && 'border-destructive focus-visible:ring-destructive')}
                                                         />
-                                                        {errors.title && <p className="text-[10px] font-bold text-destructive px-1">{errors.title}</p>}
+                                                        {fieldError('title') && <p className="text-[10px] font-bold text-destructive px-1">{fieldError('title')}</p>}
                                                     </div>
                                                     <div className="space-y-2.5">
-                                                        <Label htmlFor="category" className="text-xs font-bold text-foreground/70 ml-1">Kategori</Label>
-                                                        <Select value={data.category} onValueChange={(val) => setData('category', val)}>
-                                                            <SelectTrigger className="h-12 bg-muted/20 border-border/40 focus:bg-background transition-all rounded-xl px-4">
+                                                        <Label htmlFor="category" className="text-xs font-bold text-foreground/70 ml-1">Kategori <span className="text-destructive">Wajib</span></Label>
+                                                        <Select value={data.category} onValueChange={(val) => { clearFieldError('category'); setData('category', val); }}>
+                                                            <SelectTrigger aria-invalid={!!fieldError('category')} className={cn("h-12 bg-muted/20 border-border/40 focus:bg-background transition-all rounded-xl px-4", fieldError('category') && 'border-destructive focus:ring-destructive')}>
                                                                 <SelectValue placeholder="Pilih Kategori" />
                                                             </SelectTrigger>
                                                             <SelectContent className="rounded-xl border-border/40 shadow-2xl">
@@ -1723,7 +1763,7 @@ export default function Events({
                                                                 ))}
                                                             </SelectContent>
                                                         </Select>
-                                                        {errors.category && <p className="text-[10px] font-bold text-destructive px-1">{errors.category}</p>}
+                                                        {fieldError('category') && <p className="text-[10px] font-bold text-destructive px-1">{fieldError('category')}</p>}
                                                     </div>
                                                 </div>
                                             </section>
@@ -1735,7 +1775,7 @@ export default function Events({
                                                 </div>
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                     <div className="space-y-2.5">
-                                                        <Label className="text-xs font-bold text-foreground/70 ml-1">Tanggal</Label>
+                                                        <Label className="text-xs font-bold text-foreground/70 ml-1">Tanggal <span className="text-destructive">Wajib</span></Label>
                                                         <Popover>
                                                             <PopoverTrigger asChild>
                                                                 <Button
@@ -1743,6 +1783,7 @@ export default function Events({
                                                                     className={cn(
                                                                         'h-12 w-full justify-start text-left font-medium rounded-xl bg-muted/20 border-border/40 px-4 transition-all hover:bg-background',
                                                                         !data.date && 'text-muted-foreground',
+                                                                        fieldError('date') && 'border-destructive text-destructive',
                                                                     )}
                                                                 >
                                                                     <CalendarIcon className="mr-2 h-4 w-4 opacity-50" />
@@ -1753,22 +1794,25 @@ export default function Events({
                                                                 <Calendar
                                                                     mode="single"
                                                                     selected={data.date}
-                                                                    onSelect={(date: Date | undefined) => setData('date', date)}
+                                                                    onSelect={(date: Date | undefined) => { clearFieldError('date'); setData('date', date); }}
                                                                     initialFocus
                                                                 />
                                                             </PopoverContent>
                                                         </Popover>
+                                                        {fieldError('date') && <p className="text-[10px] font-bold text-destructive px-1">{fieldError('date')}</p>}
                                                     </div>
                                                     <div className="grid grid-cols-2 gap-4">
                                                         <div className="space-y-2.5">
-                                                            <Label htmlFor="time" className="text-xs font-bold text-foreground/70 ml-1">Mulai</Label>
+                                                            <Label htmlFor="time" className="text-xs font-bold text-foreground/70 ml-1">Mulai <span className="text-destructive">Wajib</span></Label>
                                                             <Input
                                                                 id="time"
                                                                 type="time"
                                                                 value={data.time}
-                                                                onChange={(e) => setData('time', e.target.value)}
-                                                                className="h-12 bg-muted/20 border-border/40 focus:bg-background transition-all rounded-xl"
+                                                                onChange={(e) => { clearFieldError('time'); setData('time', e.target.value); }}
+                                                                aria-invalid={!!fieldError('time')}
+                                                                className={cn("h-12 bg-muted/20 border-border/40 focus:bg-background transition-all rounded-xl", fieldError('time') && 'border-destructive focus-visible:ring-destructive')}
                                                             />
+                                                            {fieldError('time') && <p className="text-[10px] font-bold text-destructive px-1">{fieldError('time')}</p>}
                                                         </div>
                                                         <div className="space-y-2.5">
                                                             <Label htmlFor="attendance_start_time" className="text-xs font-bold text-foreground/70 ml-1">Absen</Label>
@@ -1784,41 +1828,47 @@ export default function Events({
                                                 </div>
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                     <div className="space-y-2.5">
-                                                        <Label htmlFor="expected" className="text-xs font-bold text-foreground/70 ml-1">Target Peserta</Label>
+                                                        <Label htmlFor="expected" className="text-xs font-bold text-foreground/70 ml-1">Target Peserta <span className="text-destructive">Wajib</span></Label>
                                                         <div className="relative">
                                                             <Users className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40" />
                                                             <Input
                                                                 id="expected"
                                                                 type="number"
                                                                 value={data.expected}
-                                                                onChange={(e) => setData('expected', parseInt(e.target.value))}
-                                                                className="h-12 bg-muted/20 border-border/40 focus:bg-background transition-all rounded-xl pl-11"
+                                                                onChange={(e) => { clearFieldError('expected'); setData('expected', e.target.value === '' ? 0 : parseInt(e.target.value)); }}
+                                                                aria-invalid={!!fieldError('expected')}
+                                                                className={cn("h-12 bg-muted/20 border-border/40 focus:bg-background transition-all rounded-xl pl-11", fieldError('expected') && 'border-destructive focus-visible:ring-destructive')}
                                                             />
                                                         </div>
+                                                        {fieldError('expected') && <p className="text-[10px] font-bold text-destructive px-1">{fieldError('expected')}</p>}
                                                     </div>
                                                     <div className="space-y-2.5">
-                                                        <Label htmlFor="location" className="text-xs font-bold text-foreground/70 ml-1">Lokasi</Label>
+                                                        <Label htmlFor="location" className="text-xs font-bold text-foreground/70 ml-1">Lokasi <span className="text-destructive">Wajib</span></Label>
                                                         <div className="relative">
                                                             <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40" />
                                                             <Input
                                                                 id="location"
                                                                 value={data.location}
-                                                                onChange={(e) => setData('location', e.target.value)}
+                                                                onChange={(e) => { clearFieldError('location'); setData('location', e.target.value); }}
+                                                                aria-invalid={!!fieldError('location')}
                                                                 placeholder="Gereja ESC"
-                                                                className="h-12 bg-muted/20 border-border/40 focus:bg-background transition-all rounded-xl pl-11"
+                                                                className={cn("h-12 bg-muted/20 border-border/40 focus:bg-background transition-all rounded-xl pl-11", fieldError('location') && 'border-destructive focus-visible:ring-destructive')}
                                                             />
                                                         </div>
+                                                        {fieldError('location') && <p className="text-[10px] font-bold text-destructive px-1">{fieldError('location')}</p>}
                                                     </div>
                                                 </div>
                                                 <div className="space-y-2.5">
-                                                    <Label htmlFor="address" className="text-xs font-bold text-foreground/70 ml-1">Alamat Lengkap</Label>
+                                                    <Label htmlFor="address" className="text-xs font-bold text-foreground/70 ml-1">Alamat Lengkap <span className="text-destructive">Wajib</span></Label>
                                                     <Textarea
                                                         id="address"
                                                         value={data.address}
-                                                        onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setData('address', e.target.value)}
+                                                        onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => { clearFieldError('address'); setData('address', e.target.value); }}
+                                                        aria-invalid={!!fieldError('address')}
                                                         placeholder="Jl. Raya..."
-                                                        className="min-h-[100px] bg-muted/20 border-border/40 focus:bg-background transition-all rounded-xl p-4"
+                                                        className={cn("min-h-[100px] bg-muted/20 border-border/40 focus:bg-background transition-all rounded-xl p-4", fieldError('address') && 'border-destructive focus-visible:ring-destructive')}
                                                     />
+                                                    {fieldError('address') && <p className="text-[10px] font-bold text-destructive px-1">{fieldError('address')}</p>}
                                                 </div>
                                             </section>
                                         </div>
@@ -1973,28 +2023,59 @@ export default function Events({
                                                                                         }} />
                                                                                     </div>
                                                                                     <div className="max-h-[300px] overflow-y-auto space-y-1 pr-2 custom-scrollbar">
-                                                                                        {songs.map((song) => (
-                                                                                            <DialogClose key={song.id} asChild>
-                                                                                                <Button
-                                                                                                    variant="ghost"
-                                                                                                    className="song-item-row w-full justify-between h-11 px-4 rounded-xl text-xs font-semibold hover:bg-primary/5 hover:text-primary transition-all"
-                                                                                                    data-title={song.title}
-                                                                                                    onClick={() => {
-                                                                                                        const defaultArr = song.arrangements?.[0] || null;
-                                                                                                        updateRundownItem(segmentIndex, itemIndex, {
-                                                                                                            song_id: song.id,
-                                                                                                            song,
-                                                                                                            title: song.title,
-                                                                                                            song_arrangement_id: defaultArr?.id || null,
-                                                                                                            arrangement: defaultArr
-                                                                                                        });
-                                                                                                    }}
-                                                                                                >
-                                                                                                    <span>{song.title}</span>
-                                                                                                    {song.arrangements?.[0]?.keys && <Badge className="border border-amber-300 bg-amber-400 text-[10px] font-black text-amber-950 shadow-sm hover:bg-amber-300">KEY: {song.arrangements[0].keys}</Badge>}
-                                                                                                </Button>
-                                                                                            </DialogClose>
-                                                                                        ))}
+                                                                                        {songs.map((song) => {
+                                                                                            const arrangements = song.arrangements ?? [];
+                                                                                            const selectSong = (arrangement: SongArrangement | null) => {
+                                                                                                updateRundownItem(segmentIndex, itemIndex, {
+                                                                                                    song_id: song.id,
+                                                                                                    song,
+                                                                                                    title: song.title,
+                                                                                                    song_arrangement_id: arrangement?.id || null,
+                                                                                                    arrangement,
+                                                                                                });
+                                                                                            };
+
+                                                                                            return (
+                                                                                                <div key={song.id} className="song-item-row space-y-1 rounded-xl border border-border/40 p-2" data-title={song.title}>
+                                                                                                    {arrangements.length === 0 ? (
+                                                                                                        <DialogClose asChild>
+                                                                                                            <Button
+                                                                                                                variant="ghost"
+                                                                                                                className="w-full justify-between px-3 py-2 text-left text-xs font-semibold hover:bg-primary/5 hover:text-primary"
+                                                                                                                onClick={() => selectSong(null)}
+                                                                                                            >
+                                                                                                                <span>{song.title}</span>
+                                                                                                                <span className="text-[10px] font-normal text-muted-foreground">Tanpa arrangement</span>
+                                                                                                            </Button>
+                                                                                                        </DialogClose>
+                                                                                                    ) : (
+                                                                                                        <>
+                                                                                                            <div className="flex items-center justify-between gap-3 px-3 py-2">
+                                                                                                                <span className="text-xs font-bold text-foreground">{song.title}</span>
+                                                                                                                <Badge variant="outline" className="text-[9px]">{arrangements.length} arrangement</Badge>
+                                                                                                            </div>
+                                                                                                            <div className="grid gap-1 sm:grid-cols-2">
+                                                                                                                {arrangements.map((arrangement) => (
+                                                                                                                    <DialogClose key={arrangement.id} asChild>
+                                                                                                                        <Button
+                                                                                                                            variant="ghost"
+                                                                                                                            className="h-auto min-h-10 justify-between gap-2 rounded-lg border border-transparent px-3 py-2 text-left text-[11px] hover:border-primary/20 hover:bg-primary/5 hover:text-primary"
+                                                                                                                            onClick={() => selectSong(arrangement)}
+                                                                                                                        >
+                                                                                                                            <span className="min-w-0 truncate font-semibold">{arrangement.name}</span>
+                                                                                                                            <span className="flex shrink-0 items-center gap-1">
+                                                                                                                                {arrangement.keys && <Badge className="border border-amber-300 bg-amber-400 px-1.5 py-0 text-[9px] font-black text-amber-950 hover:bg-amber-300">{arrangement.keys}</Badge>}
+                                                                                                                                {arrangement.bpm && <span className="text-[9px] text-muted-foreground">{arrangement.bpm} BPM</span>}
+                                                                                                                            </span>
+                                                                                                                        </Button>
+                                                                                                                    </DialogClose>
+                                                                                                                ))}
+                                                                                                            </div>
+                                                                                                        </>
+                                                                                                    )}
+                                                                                                </div>
+                                                                                            );
+                                                                                        })}
                                                                                     </div>
                                                                                 </div>
                                                                             </DialogContent>
@@ -2160,7 +2241,7 @@ export default function Events({
                         </div>
 
                         {/* Footer */}
-                        <div className="p-8 bg-gradient-to-t from-background via-background to-transparent border-t border-border/40 flex items-center justify-between backdrop-blur-md">
+                        <div className="flex shrink-0 items-center justify-between border-t border-border/40 bg-gradient-to-t from-background via-background to-transparent p-5 backdrop-blur-md sm:p-8">
                             <div className="flex items-center gap-3 text-muted-foreground">
                                 <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
                                 <span className="text-[10px] font-bold uppercase tracking-widest opacity-60">Sistem Siap</span>

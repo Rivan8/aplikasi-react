@@ -47,6 +47,16 @@ class LiveEventController extends Controller
         ]);
     }
 
+    public function userRundown(Event $event)
+    {
+        $event->load(['rundownSegments.items.song.arrangements', 'rundownSegments.items.arrangement', 'liveSession.runs', 'liveSession.itemRuns']);
+
+        return Inertia::render('my/live-rundown', [
+            'event' => $this->serializeEvent($event),
+            'server_now' => now()->toISOString(),
+        ]);
+    }
+
     public function start(Event $event, Request $request)
     {
         $segments = $event->rundownSegments()->orderBy('sort_order')->get();
@@ -222,7 +232,7 @@ class LiveEventController extends Controller
         );
     }
 
-    private function serializeEvent(Event $event): array
+    public function serializeEvent(Event $event): array
     {
         $session = $event->liveSession;
 
@@ -246,6 +256,7 @@ class LiveEventController extends Controller
                         'id' => $item->song->id,
                         'title' => $item->song->title,
                         'artist' => $item->song->artist,
+                        'arrangement_name' => ($item->arrangement ?: $item->song->arrangements->first())?->name,
                         'song_flow' => ($item->arrangement ?: $item->song->arrangements->first())?->song_flow,
                         'bpm' => ($item->arrangement ?: $item->song->arrangements->first())?->bpm,
                         'keys' => ($item->arrangement ?: $item->song->arrangements->first())?->keys,

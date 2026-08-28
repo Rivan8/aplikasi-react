@@ -56,6 +56,18 @@ const mainNavItems: NavItem[] = [
         roles: ['user', 'jemaat', 'admin', 'superadmin'],
     },
     {
+        title: 'Event Saya',
+        href: '/my/events',
+        icon: CalendarDays,
+        roles: ['user', 'jemaat'],
+    },
+    {
+        title: 'Riwayat Saya',
+        href: '/my/attendance-history',
+        icon: History,
+        roles: ['user', 'jemaat'],
+    },
+    {
         title: 'Management Event',
         href: '/events',
         icon: CalendarDays,
@@ -101,7 +113,7 @@ const mainNavItems: NavItem[] = [
         title: 'Settings',
         href: '/settings/profile',
         icon: Settings,
-        roles: ['admin', 'superadmin'],
+        roles: ['user', 'jemaat', 'admin', 'superadmin'],
     },
     {
         title: 'Kelola Hak Akses',

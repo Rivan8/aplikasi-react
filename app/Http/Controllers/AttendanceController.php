@@ -125,6 +125,32 @@ class AttendanceController extends Controller
         ]);
     }
 
+    public function userHistory(Request $request)
+    {
+        $memberId = $request->user()->member_id;
+        $attendances = $memberId
+            ? Attendance::with(['event', 'session'])
+                ->where('member_id', $memberId)
+                ->orderByDesc('scan_time')
+                ->paginate(15)
+                ->withQueryString()
+            : Attendance::whereKey(0)->paginate(15);
+
+        return Inertia::render('my/attendance-history/index', [
+            'attendances' => $attendances->through(fn (Attendance $attendance) => [
+                'id' => $attendance->id,
+                'event_title' => $attendance->event?->title ?? 'Event Dihapus',
+                'event_date' => $attendance->event?->date,
+                'event_location' => $attendance->event?->location,
+                'session_title' => $attendance->session?->title,
+                'scan_time' => $attendance->scan_time?->format('d M Y, H:i'),
+                'check_out_time' => $attendance->check_out_time?->format('d M Y, H:i'),
+                'status' => $attendance->status,
+            ]),
+            'memberLinked' => filled($memberId),
+        ]);
+    }
+
     public function exportPdf(Request $request)
     {
         $rows = $this->buildAttendanceExportRows($request);

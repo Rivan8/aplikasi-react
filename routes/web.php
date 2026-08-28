@@ -14,6 +14,7 @@ use App\Models\CategoryRole;
 use App\Models\Department;
 use App\Models\Event;
 use App\Models\EventMessage;
+use App\Models\EventMessageRead;
 use App\Models\EventVolunteer;
 use App\Models\MemberDetail;
 use App\Models\MemberStatus;
@@ -30,7 +31,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         $today = now();
         $user = $request->user();
         $memberApi = app(MemberApiService::class);
-        $upcomingEvents = Event::with([
+        $upcomingEventsQuery = Event::with([
             'rundownSegments' => function ($query) {
                 $query->orderBy('sort_order');
             },
@@ -42,7 +43,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
             'volunteers',
             'attendances',
         ])
-            ->whereDate('date', '>=', $today->toDateString())
+            ->whereDate('date', '>=', $today->toDateString());
+
+        if (! $user->isAdmin()) {
+            if ($user->member_id) {
+                $upcomingEventsQuery->whereHas('volunteers', fn ($query) => $query->where('member_id', $user->member_id));
+            } else {
+                $upcomingEventsQuery->whereKey(0);
+            }
+        }
+
+        $upcomingEvents = $upcomingEventsQuery
             ->orderBy('date')
             ->orderBy('time')
             ->take(3)
@@ -281,6 +292,49 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ],
         ]);
     })->name('dashboard');
+
+    Route::get('my/events', [EventController::class, 'userIndex'])->name('my.events');
+    Route::get('my/events/{event}/live-rundown', [LiveEventController::class, 'userRundown'])->name('my.live-rundown');
+    Route::get('my/attendance-history', [AttendanceController::class, 'userHistory'])->name('my.attendance-history');
+
+    Route::post('notifications/schedules/read', function (Request $request) {
+        $user = $request->user();
+        abort_unless($user && ! $user->isAdmin() && $user->member_id, 403);
+
+        $assignmentIds = EventVolunteer::where('member_id', $user->member_id)
+            ->where('response_status', 'pending')
+            ->whereHas('event', fn ($query) => $query->whereDate('date', '>=', now()->toDateString()))
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        $viewedIds = collect($request->session()->get('viewed_user_assignment_ids', []))
+            ->merge($assignmentIds)
+            ->unique()
+            ->values()
+            ->all();
+
+        $request->session()->put('viewed_user_assignment_ids', $viewedIds);
+
+        return back();
+    })->name('notifications.schedules.read');
+
+    Route::post('notifications/messages/read', function (Request $request) {
+        $user = $request->user();
+        abort_unless($user && ! $user->isAdmin() && $user->member_id, 403);
+
+        $eventIds = EventVolunteer::where('member_id', $user->member_id)->pluck('event_id');
+
+        EventMessage::whereIn('event_id', $eventIds)
+            ->whereDoesntHave('reads', fn ($query) => $query->where('user_id', $user->id))
+            ->get()
+            ->each(fn (EventMessage $message) => EventMessageRead::firstOrCreate(
+                ['event_message_id' => $message->id, 'user_id' => $user->id],
+                ['read_at' => now()],
+            ));
+
+        return back();
+    })->name('notifications.messages.read');
 
     Route::post('dashboard/volunteer-assignments/{eventVolunteer}/accept', function (Request $request, EventVolunteer $eventVolunteer) {
         abort_unless((string) $eventVolunteer->member_id === (string) $request->user()?->member_id, 403);

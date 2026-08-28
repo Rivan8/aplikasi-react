@@ -57,6 +57,7 @@ import {
 import { useMemo, useState } from 'react';
 import { Activity, Music, Timer } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 interface DashboardStats {
     active_events: number;
@@ -401,7 +402,15 @@ const SearchableSelect = ({
     );
 };
 
-function UserDashboard({ assignments, messages }: { assignments: UserAssignment[]; messages: UserMessage[] }) {
+function LegacyUserDashboard({
+    assignments,
+    messages,
+    upcomingServices,
+}: {
+    assignments: UserAssignment[];
+    messages: UserMessage[];
+    upcomingServices: UpcomingService[];
+}) {
     const [decliningAssignment, setDecliningAssignment] =
         useState<UserAssignment | null>(null);
     const [declineReason, setDeclineReason] = useState('');
@@ -496,6 +505,67 @@ function UserDashboard({ assignments, messages }: { assignments: UserAssignment[
                         </div>
                     </div>
                 </div>
+
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <Button asChild variant="outline" className="h-auto justify-start gap-3 p-4 text-left">
+                        <Link href="/my/events">
+                            <CalendarDays className="h-5 w-5 shrink-0 text-primary" />
+                            <span><strong className="block text-sm">Event Mendatang</strong><small className="text-xs text-muted-foreground">Lihat semua kegiatan</small></span>
+                        </Link>
+                    </Button>
+                    <Button asChild variant="outline" className="h-auto justify-start gap-3 p-4 text-left">
+                        <Link href="/my/attendance-history">
+                            <History className="h-5 w-5 shrink-0 text-primary" />
+                            <span><strong className="block text-sm">Riwayat Absensi</strong><small className="text-xs text-muted-foreground">Cek kehadiran saya</small></span>
+                        </Link>
+                    </Button>
+                    <Button asChild variant="outline" className="h-auto justify-start gap-3 p-4 text-left">
+                        <Link href="/my/scan">
+                            <QrCode className="h-5 w-5 shrink-0 text-primary" />
+                            <span><strong className="block text-sm">Absensi Mandiri</strong><small className="text-xs text-muted-foreground">Scan QR event</small></span>
+                        </Link>
+                    </Button>
+                    <Button asChild variant="outline" className="h-auto justify-start gap-3 p-4 text-left">
+                        <Link href="/settings/profile">
+                            <Users className="h-5 w-5 shrink-0 text-primary" />
+                            <span><strong className="block text-sm">Profil Saya</strong><small className="text-xs text-muted-foreground">Kelola akun</small></span>
+                        </Link>
+                    </Button>
+                </div>
+
+                <section className="space-y-4">
+                    <div className="flex items-center justify-between gap-4">
+                        <div>
+                            <h2 className="text-lg font-bold text-foreground">Event Mendatang</h2>
+                            <p className="text-sm text-muted-foreground">Kegiatan yang dapat Anda ikuti atau layani.</p>
+                        </div>
+                        <Button asChild variant="ghost" size="sm" className="shrink-0 gap-1">
+                            <Link href="/my/events">Lihat semua <ChevronRight className="h-4 w-4" /></Link>
+                        </Button>
+                    </div>
+                    {upcomingServices.length === 0 ? (
+                        <Card><CardContent className="p-6 text-center text-sm text-muted-foreground">Belum ada event mendatang.</CardContent></Card>
+                    ) : (
+                        <div className="grid gap-4 md:grid-cols-3">
+                            {upcomingServices.map((event) => (
+                                <Card key={event.id} className="border-border/60 bg-card shadow-sm">
+                                    <CardContent className="space-y-3 p-5">
+                                        <Badge variant="secondary" className="rounded-md">{event.category}</Badge>
+                                        <h3 className="line-clamp-2 font-semibold text-foreground">{event.title}</h3>
+                                        <div className="space-y-1.5 text-xs text-muted-foreground">
+                                            <p className="flex items-center gap-2"><CalendarDays className="h-3.5 w-3.5" />{formatEventDate(event.date)}</p>
+                                            <p className="flex items-center gap-2"><Clock className="h-3.5 w-3.5" />{event.time}</p>
+                                            <p className="flex items-center gap-2"><MapPin className="h-3.5 w-3.5" />{event.location}</p>
+                                        </div>
+                                        <Button asChild size="sm" variant="outline" className="w-full">
+                                            <Link href="/my/scan">Buka absensi</Link>
+                                        </Button>
+                                    </CardContent>
+                                </Card>
+                            ))}
+                        </div>
+                    )}
+                </section>
 
                 <div className="flex w-full gap-1 overflow-x-auto rounded-xl border border-border/50 bg-card/70 p-1 sm:w-fit">
                     <button
@@ -888,6 +958,108 @@ function UserDashboard({ assignments, messages }: { assignments: UserAssignment[
     );
 }
 
+function UserDashboard({
+    assignments,
+    messages,
+    upcomingServices,
+}: {
+    assignments: UserAssignment[];
+    messages: UserMessage[];
+    upcomingServices: UpcomingService[];
+}) {
+    const [activeTab, setActiveTab] = useState<'schedules' | 'messages'>('schedules');
+    const [decliningAssignment, setDecliningAssignment] = useState<UserAssignment | null>(null);
+    const [declineReason, setDeclineReason] = useState('');
+    const [processingId, setProcessingId] = useState<number | null>(null);
+    const pendingAssignments = assignments.filter((assignment) => assignment.response_status === 'pending').length;
+    const unreadMessages = messages.filter((message) => !message.is_read).length;
+    const { auth } = usePage().props as { auth?: { user?: { name?: string; member_id?: string | number | null; avatar?: string | null } } };
+    const userName = auth?.user?.name?.split(' ')[0] || 'Jemaat';
+    const avatarUrl = auth?.user?.avatar;
+
+    const formatUserDate = (date: string) => {
+        if (!date || Number.isNaN(Date.parse(date))) return '-';
+        return new Date(date).toLocaleDateString('id-ID', {
+            weekday: 'short',
+            day: 'numeric',
+            month: 'short',
+        });
+    };
+
+    const markMessageRead = (message: UserMessage) => {
+        if (!message.is_read) {
+            router.post(`/event-messages/${message.id}/read`, {}, { preserveScroll: true });
+        }
+    };
+
+    const respondToAssignment = (assignment: UserAssignment, action: 'accept' | 'decline') => {
+        setProcessingId(assignment.id);
+        router.post(`/dashboard/volunteer-assignments/${assignment.id}/${action}`, action === 'decline' ? { reason: declineReason } : {}, {
+            preserveScroll: true,
+            onSuccess: () => {
+                if (action === 'decline') {
+                    setDecliningAssignment(null);
+                    setDeclineReason('');
+                }
+            },
+            onFinish: () => setProcessingId(null),
+        });
+    };
+
+    return (
+        <>
+            <Head title="Beranda" />
+            <div className="min-h-screen bg-[linear-gradient(180deg,#f0f7f5_0%,#f7f7f5_34%,#f4f2ef_100%)] px-4 py-4 sm:px-6 sm:py-7 lg:px-10 lg:py-10 dark:bg-[linear-gradient(180deg,#102524_0%,#141416_34%,#141416_100%)]">
+                <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 sm:gap-7">
+                    <section className="relative overflow-hidden rounded-[28px] bg-[#103d3b] px-5 py-6 text-white shadow-xl shadow-[#103d3b]/15 sm:px-8 sm:py-8">
+                        <div className="pointer-events-none absolute -right-12 -top-16 h-48 w-48 rounded-full border-[18px] border-teal-300/10" />
+                        <div className="pointer-events-none absolute -bottom-20 right-24 h-40 w-40 rounded-full border-[12px] border-amber-200/10" />
+                        <div className="relative flex items-start justify-between gap-4">
+                            <div>
+                                <p className="text-xs font-semibold tracking-[0.18em] text-teal-200 uppercase">Beranda Jemaat</p>
+                                <h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">Halo, {userName}</h1>
+                                <p className="mt-2 max-w-md text-sm leading-relaxed text-teal-50/75">Temukan kegiatan, cek jadwal pelayanan, dan pastikan kehadiranmu tercatat.</p>
+                            </div>
+                            <Link href="/settings/profile" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/15 bg-white/10 text-lg font-bold text-white transition hover:bg-white/20" aria-label="Buka profil">
+                                <Avatar className="h-10 w-10 rounded-xl">
+                                    <AvatarImage src={avatarUrl ?? undefined} alt={`Foto ${userName}`} className="object-cover" />
+                                    <AvatarFallback className="rounded-xl bg-teal-300 text-[#103d3b]">{userName.slice(0, 1).toUpperCase()}</AvatarFallback>
+                                </Avatar>
+                            </Link>
+                        </div>
+                        <Button asChild className="relative mt-6 h-12 w-full justify-between rounded-2xl bg-teal-300 px-4 font-bold text-[#103d3b] shadow-lg shadow-black/10 hover:bg-teal-200 sm:w-auto sm:min-w-56">
+                            <Link href="/my/scan"><span className="flex items-center gap-2"><QrCode className="h-5 w-5" />Absensi Mandiri</span><ChevronRight className="h-4 w-4" /></Link>
+                        </Button>
+                    </section>
+
+                    <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                        {[
+                            { label: 'Event', detail: `${upcomingServices.length} mendatang`, href: '/my/events', icon: CalendarDays, tone: 'text-sky-700 bg-sky-50 dark:bg-sky-950/30 dark:text-sky-300' },
+                            { label: 'Jadwal', detail: `${assignments.length} penugasan`, href: '#jadwal', icon: ClipboardList, tone: 'text-amber-700 bg-amber-50 dark:bg-amber-950/30 dark:text-amber-300' },
+                            { label: 'Riwayat', detail: 'Kehadiran saya', href: '/my/attendance-history', icon: History, tone: 'text-emerald-700 bg-emerald-50 dark:bg-emerald-950/30 dark:text-emerald-300' },
+                            { label: 'Pesan', detail: unreadMessages ? `${unreadMessages} belum dibaca` : 'Semua terbaca', href: '#pesan', icon: MessageSquare, tone: 'text-rose-700 bg-rose-50 dark:bg-rose-950/30 dark:text-rose-300' },
+                        ].map((action) => {
+                            const Icon = action.icon;
+                            return <Link key={action.label} href={action.href} onClick={() => action.href === '#pesan' && setActiveTab('messages')} className="group rounded-2xl border border-black/5 bg-white/80 p-3.5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-white/10 dark:bg-card/80 sm:p-4"><span className={`flex h-9 w-9 items-center justify-center rounded-xl ${action.tone}`}><Icon className="h-4 w-4" /></span><strong className="mt-3 block text-sm text-foreground">{action.label}</strong><span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{action.detail}</span></Link>;
+                        })}
+                    </section>
+
+                    <section className="space-y-3">
+                        <div className="flex items-end justify-between gap-4"><div><p className="text-xs font-semibold tracking-[0.16em] text-primary uppercase">Agenda</p><h2 className="mt-1 text-xl font-bold tracking-tight">Event mendatang</h2></div><Button asChild variant="ghost" size="sm" className="gap-1 text-primary"><Link href="/my/events">Lihat semua<ChevronRight className="h-4 w-4" /></Link></Button></div>
+                        {upcomingServices.length === 0 ? <Card><CardContent className="p-5 text-sm text-muted-foreground">Belum ada event mendatang.</CardContent></Card> : <div className="flex snap-x gap-3 overflow-x-auto pb-2 sm:grid sm:grid-cols-3 sm:overflow-visible">{upcomingServices.map((event) => <Card key={event.id} className="min-w-[82%] snap-start border-0 bg-white/90 shadow-sm dark:bg-card sm:min-w-0"><CardContent className="p-4"><div className="flex items-start justify-between gap-3"><div><Badge variant="secondary" className="rounded-md text-[10px]">{event.category}</Badge><h3 className="mt-3 line-clamp-2 font-semibold">{event.title}</h3></div><span className="rounded-xl bg-primary/10 p-2 text-primary"><CalendarDays className="h-4 w-4" /></span></div><div className="mt-4 space-y-2 text-xs text-muted-foreground"><p className="flex items-center gap-2"><CalendarDays className="h-3.5 w-3.5" />{formatUserDate(event.date)}</p><p className="flex items-center gap-2"><Clock className="h-3.5 w-3.5" />{event.time}</p><p className="flex items-center gap-2 truncate"><MapPin className="h-3.5 w-3.5 shrink-0" />{event.location}</p></div></CardContent></Card>)}</div>}
+                    </section>
+
+                    <section id="jadwal" className="scroll-mt-4 rounded-3xl border border-black/5 bg-white/75 p-4 shadow-sm dark:border-white/10 dark:bg-card/70 sm:p-6">
+                        <div className="flex items-center justify-between gap-3"><div><h2 className="text-lg font-bold">Aktivitas saya</h2><p className="mt-1 text-xs text-muted-foreground">Jadwal pelayanan dan komunikasi event.</p></div><div className="flex rounded-xl bg-muted/70 p-1"><button type="button" onClick={() => setActiveTab('schedules')} className={cn('rounded-lg px-3 py-2 text-xs font-semibold', activeTab === 'schedules' ? 'bg-background text-primary shadow-sm' : 'text-muted-foreground')}>Jadwal {pendingAssignments > 0 && <span className="ml-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-700">{pendingAssignments}</span>}</button><button type="button" onClick={() => setActiveTab('messages')} className={cn('rounded-lg px-3 py-2 text-xs font-semibold', activeTab === 'messages' ? 'bg-background text-primary shadow-sm' : 'text-muted-foreground')}>Pesan {unreadMessages > 0 && <span className="ml-1 rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] text-rose-700">{unreadMessages}</span>}</button></div></div>
+                        {activeTab === 'messages' ? <div id="pesan" className="mt-5 space-y-3 scroll-mt-4">{messages.length === 0 ? <div className="rounded-2xl border border-dashed p-7 text-center text-sm text-muted-foreground"><MessageSquare className="mx-auto mb-2 h-7 w-7 opacity-40" />Belum ada pesan untukmu.</div> : messages.map((message) => <button type="button" key={message.id} onClick={() => markMessageRead(message)} className={cn('w-full rounded-2xl border p-4 text-left transition hover:border-primary/30', message.is_read ? 'border-border/50 bg-background/60' : 'border-primary/25 bg-primary/5')}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-sm font-bold">{message.title}</p><p className="mt-1 text-xs font-medium text-primary">{message.event.title}</p></div><Badge variant={message.is_read ? 'outline' : 'default'} className="shrink-0 text-[10px]">{message.is_read ? 'Dibaca' : 'Baru'}</Badge></div><p className="mt-3 line-clamp-3 whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">{message.body}</p></button>)}</div> : <div className="mt-5 space-y-3">{assignments.length === 0 ? <div className="rounded-2xl border border-dashed p-7 text-center text-sm text-muted-foreground"><CalendarDays className="mx-auto mb-2 h-7 w-7 opacity-40" />Belum ada jadwal pelayanan.</div> : assignments.map((assignment) => { const badge = getResponseBadge(assignment.response_status); return <div key={assignment.id} className="rounded-2xl border border-border/60 bg-background/60 p-4"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><h3 className="truncate text-sm font-bold">{assignment.event.title}</h3><p className="mt-1 text-xs font-medium text-primary">{assignment.role_name} · {assignment.role_category}</p><div className="mt-3 flex flex-wrap gap-x-3 gap-y-1.5 text-xs text-muted-foreground"><span className="flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5" />{formatUserDate(assignment.event.date ?? '')}</span><span className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" />{assignment.event.time ?? '-'}</span><span className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5" />{assignment.event.location ?? '-'}</span></div></div><Badge variant="outline" className={badge.className}>{badge.label}</Badge></div>{assignment.response_status === 'pending' && <div className="mt-4 flex gap-2"><Button size="sm" className="flex-1 gap-1.5" disabled={processingId === assignment.id} onClick={() => respondToAssignment(assignment, 'accept')}><CheckCircle2 className="h-4 w-4" />Terima</Button><Button size="sm" variant="outline" className="flex-1 gap-1.5 text-rose-700" disabled={processingId === assignment.id} onClick={() => setDecliningAssignment(assignment)}><XCircle className="h-4 w-4" />Tolak</Button></div>}</div>; })}</div>}
+                    </section>
+                </div>
+            </div>
+            <Dialog open={!!decliningAssignment} onOpenChange={(open) => { if (!open) { setDecliningAssignment(null); setDeclineReason(''); } }}><DialogContent><DialogHeader><DialogTitle>Tolak jadwal pelayanan</DialogTitle><DialogDescription>Berikan alasan singkat agar admin dapat mengatur ulang jadwal.</DialogDescription></DialogHeader><textarea value={declineReason} onChange={(event) => setDeclineReason(event.target.value)} rows={4} placeholder="Tulis alasan penolakan..." className="w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" /><DialogFooter><Button type="button" variant="outline" onClick={() => setDecliningAssignment(null)}>Batal</Button><Button type="button" variant="destructive" disabled={!declineReason.trim() || processingId === decliningAssignment?.id} onClick={() => decliningAssignment && respondToAssignment(decliningAssignment, 'decline')}>Kirim Penolakan</Button></DialogFooter></DialogContent></Dialog>
+        </>
+    );
+}
+
 export default function Dashboard({
     dashboard,
 }: {
@@ -991,7 +1163,13 @@ export default function Dashboard({
     ];
 
     if (!['admin', 'superadmin'].includes(userRole)) {
-        return <UserDashboard assignments={userAssignments} messages={userMessages} />;
+        return (
+            <UserDashboard
+                assignments={userAssignments}
+                messages={userMessages}
+                upcomingServices={upcomingServices}
+            />
+        );
     }
 
     return (

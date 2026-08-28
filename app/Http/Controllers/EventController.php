@@ -12,9 +12,40 @@ use App\Models\Category;
 use App\Models\EventGroup;
 use App\Models\Song;
 use App\Services\MemberApiService;
+use App\Http\Controllers\LiveEventController;
 
 class EventController extends Controller
 {
+    public function userIndex(LiveEventController $liveEventController)
+    {
+        $user = request()->user();
+        $memberId = $user?->member_id;
+
+        $events = Event::with([
+            'sessions',
+            'volunteers',
+            'rundownSegments.items.song.arrangements',
+            'rundownSegments.items.arrangement',
+            'liveSession.runs',
+            'liveSession.itemRuns',
+        ])
+            ->orderBy('date')
+            ->orderBy('time')
+            ->get();
+
+        $assignedEventIds = $memberId
+            ? $events->filter(fn (Event $event) => $event->volunteers
+                ->contains('member_id', $memberId))
+                ->pluck('id')
+                ->all()
+            : [];
+
+        return Inertia::render('my/events/index', [
+            'events' => $events->map(fn (Event $event) => $liveEventController->serializeEvent($event))->values(),
+            'assignedEventIds' => $assignedEventIds,
+        ]);
+    }
+
     public function index(MemberApiService $memberApi)
     {
         $externalMembers = $memberApi->listAll();

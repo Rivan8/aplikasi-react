@@ -2,6 +2,8 @@
 
 Dokumen ini adalah konteks ringkas untuk AI dan developer. Baca file ini sebelum menelusuri file lain.
 
+Untuk pengembangan aplikasi native, baca juga [mobile/AGENTS.md](mobile/AGENTS.md) dan [docs/mobile-api.md](docs/mobile-api.md). Backend saat ini belum memiliki REST API/token mobile; route Inertia/web tidak boleh langsung dianggap kontrak API native.
+
 ## 1. Identitas Proyek
 
 Aplikasi monolith Laravel + React untuk:
@@ -57,8 +59,10 @@ app/
 resources/js/
   app.tsx                 Entry Inertia dan pemetaan layout.
   pages/                  Page React berdasarkan nama Inertia.
+  pages/my/               Halaman user/jemaat: kegiatan, riwayat, live rundown.
   components/ui/          Wrapper Radix/Tailwind.
   components/app-*.tsx    Sidebar, header, layout navigation.
+  components/mobile-bottom-nav.tsx  Bottom navigation mobile user/jemaat.
   layouts/                App, auth, settings layout.
   hooks/                  Hook UI/application.
   lib/                    Utility frontend.
@@ -80,6 +84,9 @@ tests/
 
 public/build/              Output production Vite. Jangan edit manual.
 AGENTS.md                  Panduan agent yang lebih panjang.
+mobile/AGENTS.md           Panduan client native mobile.
+mobile/PROMPT_AI.md        Template prompt AI untuk client React Native.
+docs/mobile-api.md         Status dan target kontrak API mobile.
 ```
 
 ## 5. Entry Point Frontend dan Layout
@@ -120,6 +127,46 @@ Tanggung jawab:
 - Event image.
 - Group/category filtering.
 - Event message modal, history, dan attachment.
+
+### User/Jemaat: Pelayanan dan Rundown
+
+- Pages: `resources/js/pages/my/events/index.tsx`, `resources/js/pages/my/live-rundown.tsx`
+- Controllers: `app/Http/Controllers/EventController.php`, `app/Http/Controllers/LiveEventController.php`
+- Routes: `GET /my/events`, `GET /my/events/{event}/live-rundown`
+
+Perilaku:
+
+- `/my/events` menampilkan seluruh pelayanan yang dijadwalkan, termasuk event yang sudah lewat.
+- Dashboard user hanya menampilkan maksimal tiga event mendatang yang memiliki `EventVolunteer.member_id` sama dengan `auth()->user()->member_id`.
+- Event yang sudah lewat disembunyikan dari bagian `Event mendatang` Dashboard, tetapi tetap tampil pada `/my/events`.
+- Card event menampilkan kategori, status `Jadwal saya`, sesi, status live, dan area `LIVE EVENT` yang dapat diklik untuk membuka modal rundown.
+- Modal rundown menampilkan segment, item, durasi, lagu, arrangement, key, BPM, dan birama.
+- Halaman live rundown menampilkan item aktif, timer, sequence/song flow, lirik, dan video referensi.
+- Timer item menggunakan `item_started_at`, berformat `MM:SS`, dan berubah merah dengan format `-MM:SS` saat overtime.
+- Data live di-refresh berkala agar perubahan `Next` dari operator mengubah item aktif dan timer user.
+- Screen Wake Lock API digunakan secara best effort agar layar mobile tidak meredup; dukungan browser dan HTTPS diperlukan.
+
+### Navigasi Mobile User
+
+- Component: `resources/js/components/mobile-bottom-nav.tsx`
+- Layout: `resources/js/layouts/app/app-sidebar-layout.tsx`
+- Header: `resources/js/components/app-sidebar-header.tsx`
+
+Role `user`/`jemaat` pada viewport mobile memakai bottom bar:
+
+```text
+Beranda | Event | Absensi | Riwayat | Profil
+```
+
+Tombol Absensi berada di tengah, lebih besar, berbentuk lingkaran, dan memiliki background/shadow berbeda. Layout mendapat padding bawah dengan safe-area agar card terakhir tidak tertutup. Admin dan desktop tetap memakai sidebar.
+
+### Notifikasi dan Avatar User
+
+- Shared props: `app/Http/Middleware/HandleInertiaRequests.php`
+- Header: `resources/js/components/app-sidebar-header.tsx`
+- Routes baca notifikasi: `POST /notifications/schedules/read`, `POST /notifications/messages/read`
+
+Notifikasi terdiri dari jadwal volunteer pending dan pesan event unread. Badge berkurang setelah kategori dibuka dan hilang ketika total menjadi nol. Jadwal yang sudah dibuka disimpan di session `viewed_user_assignment_ids`; pesan menggunakan `EventMessageRead`. Avatar memakai `foto_url` dari `MemberApiService` dan fallback ke inisial jika foto kosong/gagal.
 
 ### Category dan Event Group
 
