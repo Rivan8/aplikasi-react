@@ -6,7 +6,7 @@ Dokumen ini adalah sumber kebenaran untuk client native. Backend Laravel saat in
 
 | Area | Status | Catatan |
 | --- | --- | --- |
-| `routes/api.php` | Belum tersedia | Belum ada route REST khusus mobile di repository ini. |
+| `routes/api.php` | Tersedia | Endpoint event list dan detail tersedia pada `/api/mobile/v1/events`. |
 | Token API | Belum tersedia | Sanctum belum dipakai sebagai autentikasi token mobile. |
 | Login native | Belum tersedia | Login saat ini diproses Fortify melalui session web dan Inertia. |
 | Self check-in | Tersedia sebagai route web | `POST /attendance/{event}/scan-event`, membutuhkan session cookie dan mengembalikan redirect/flash. |
@@ -66,7 +66,7 @@ Response `200`:
 
 ### Events
 
-`GET /api/mobile/v1/events?from=YYYY-MM-DD&to=YYYY-MM-DD&page=1`
+`GET /api/mobile/v1/events?from=YYYY-MM-DD&to=YYYY-MM-DD&page=1` - **READY** setelah login dengan Bearer token.
 
 Response yang disarankan:
 
@@ -90,7 +90,7 @@ Response yang disarankan:
 }
 ```
 
-`GET /api/mobile/v1/events/{event}` - detail event, termasuk sessions yang boleh dipilih.
+`GET /api/mobile/v1/events/{event}` - **READY**, detail event termasuk sessions yang boleh dipilih.
 
 ### Attendance
 
@@ -141,9 +141,52 @@ Check-in duplikat harus mengembalikan `409` dengan kode `already_checked_in`. Ch
 
 Target endpoint native:
 
-- `GET /api/mobile/v1/me/schedules` - jadwal pelayanan user berdasarkan `member_id` dari token.
+- `GET /api/mobile/v1/me/schedules` - **READY**. Mengembalikan daftar jadwal pelayanan user dan `assignment_id` untuk sinkronisasi aksi UI.
+- `POST /api/mobile/v1/me/schedules/{eventVolunteer}/accept` - **READY**. Mengubah status jadwal menjadi `accepted` untuk user yang memiliki assignment tersebut.
+- `POST /api/mobile/v1/me/schedules/{eventVolunteer}/decline` - **READY**. Mengubah status jadwal menjadi `declined` dan menyimpan `response_reason`.
 - `GET /api/mobile/v1/events/{event}/rundown` - seluruh segment dan item rundown beserta detail lagu/arrangement.
 - `GET /api/mobile/v1/events/{event}/live-rundown` - live session, item aktif, `item_started_at`, `duration_seconds`, dan server time.
+
+Contoh response jadwal:
+
+```json
+{
+  "data": [
+    {
+      "assignment_id": 12,
+      "event_id": 4,
+      "response_status": "pending",
+      "response_reason": null,
+      "responded_at": null,
+      "id": 4,
+      "title": "Sunday Service",
+      "date": "2026-09-10",
+      "time": "09:00:00",
+      "location": "Main Hall",
+      "address": "Jl. Merdeka 1",
+      "category": "Volunteer",
+      "attendance_type": "volunteer",
+      "total_sessions": 1,
+      "sessions": []
+    }
+  ]
+}
+```
+
+Contoh response aksi jadwal:
+
+```json
+{
+  "message": "Jadwal pelayanan berhasil diterima.",
+  "data": {
+    "assignment_id": 12,
+    "event_id": 4,
+    "response_status": "accepted",
+    "response_reason": null,
+    "responded_at": "2026-08-29T10:00:00+00:00"
+  }
+}
+```
 
 Aturan data:
 

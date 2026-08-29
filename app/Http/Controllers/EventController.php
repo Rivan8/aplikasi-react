@@ -21,6 +21,14 @@ class EventController extends Controller
         $user = request()->user();
         $memberId = $user?->member_id;
 
+        $assignedEventIds = $memberId
+            ? \App\Models\EventVolunteer::where('member_id', $memberId)
+                ->pluck('event_id')
+                ->unique()
+                ->values()
+                ->all()
+            : [];
+
         $events = Event::with([
             'sessions',
             'volunteers',
@@ -29,16 +37,10 @@ class EventController extends Controller
             'liveSession.runs',
             'liveSession.itemRuns',
         ])
+            ->when($memberId, fn ($query) => $query->whereIn('id', $assignedEventIds))
             ->orderBy('date')
             ->orderBy('time')
             ->get();
-
-        $assignedEventIds = $memberId
-            ? $events->filter(fn (Event $event) => $event->volunteers
-                ->contains('member_id', $memberId))
-                ->pluck('id')
-                ->all()
-            : [];
 
         return Inertia::render('my/events/index', [
             'events' => $events->map(fn (Event $event) => $liveEventController->serializeEvent($event))->values(),

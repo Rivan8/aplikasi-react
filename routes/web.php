@@ -43,7 +43,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
             'volunteers',
             'attendances',
         ])
-            ->whereDate('date', '>=', $today->toDateString());
+            ->where(function ($query) use ($today) {
+                $query->whereDate('date', '>', $today->toDateString())
+                    ->orWhere(function ($dateQuery) use ($today) {
+                        $dateQuery->whereDate('date', '=', $today->toDateString())
+                            ->whereRaw("TIMESTAMP(date, time) >= DATE_SUB(NOW(), INTERVAL 12 HOUR)");
+                    });
+            });
 
         if (! $user->isAdmin()) {
             if ($user->member_id) {

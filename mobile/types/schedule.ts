@@ -1,0 +1,40 @@
+export type ScheduleResponseStatus = 'pending' | 'accepted' | 'declined';
+
+export interface EventSessionSummary {
+  id: number;
+  name: string;
+  start_time: string;
+  end_time: string;
+  attendance_start_time: string;
+}
+
+export interface EventSchedule {
+  assignment_id: number;
+  event_id: number;
+  response_status: ScheduleResponseStatus;
+  response_reason: string | null;
+  responded_at: string | null;
+  id: number;
+  title: string;
+  date: string;
+  time: string;
+  location: string;
+  address: string;
+  category: string;
+  attendance_type: 'volunteer' | 'general';
+  total_sessions: number;
+  sessions: EventSessionSummary[];
+}
+
+export interface ScheduleActionData {
+  assignment_id: number;
+  event_id: number;
+  response_status: ScheduleResponseStatus;
+  response_reason: string | null;
+  responded_at: string | null;
+}
+
+export interface ApiEnvelope<T> {
+  data: T;
+  message?: string;
+}
