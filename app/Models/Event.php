@@ -25,6 +25,13 @@ class Event extends Model
         'total_sessions',
         'expected',
         'image_path',
+        'training_schedules',
+        'other_schedules',
+    ];
+
+    protected $casts = [
+        'training_schedules' => 'array',
+        'other_schedules' => 'array',
     ];
 
     public function volunteers()

@@ -300,6 +300,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     })->name('dashboard');
 
     Route::get('my/events', [EventController::class, 'userIndex'])->name('my.events');
+    Route::get('my/events/{event}', [EventController::class, 'userShow'])->name('my.events.show');
     Route::get('my/events/{event}/live-rundown', [LiveEventController::class, 'userRundown'])->name('my.live-rundown');
     Route::get('my/attendance-history', [AttendanceController::class, 'userHistory'])->name('my.attendance-history');
 

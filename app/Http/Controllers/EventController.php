@@ -48,6 +48,42 @@ class EventController extends Controller
         ]);
     }
 
+    public function userShow(LiveEventController $liveEventController, Event $event)
+    {
+        $user = request()->user();
+        $memberId = $user?->member_id;
+
+        if ($memberId) {
+            $isAssigned = \App\Models\EventVolunteer::where('event_id', $event->id)
+                ->where('member_id', $memberId)
+                ->exists();
+
+            abort_unless($isAssigned, 403, 'Anda tidak memiliki akses ke event ini.');
+        }
+
+        $event->load([
+            'sessions',
+            'volunteers',
+            'rundownSegments.items.song.arrangements',
+            'rundownSegments.items.arrangement',
+            'liveSession.runs',
+            'liveSession.itemRuns',
+        ]);
+
+        return Inertia::render('my/events/show', [
+            'event' => $liveEventController->serializeEvent($event),
+            'eventData' => [
+                'worship' => [
+                    'date' => $event->date,
+                    'start_time' => $event->time,
+                    'end_time' => null,
+                ],
+                'training' => $event->training_schedules ?? [],
+                'other' => $event->other_schedules ?? [],
+            ],
+        ]);
+    }
+
     public function index(MemberApiService $memberApi)
     {
         $externalMembers = $memberApi->listAll();
@@ -101,9 +137,13 @@ class EventController extends Controller
             'rundown_segments' => 'nullable|string',
             'sessions' => 'nullable|string',
             'participants' => 'nullable|string',
+            'training_schedules' => 'nullable|string',
+            'other_schedules' => 'nullable|string',
         ]);
 
-        $data = \Illuminate\Support\Arr::except($validated, ['image', 'volunteers', 'rundown_segments', 'sessions', 'participants']);
+        $data = \Illuminate\Support\Arr::except($validated, ['image', 'volunteers', 'rundown_segments', 'sessions', 'participants', 'training_schedules', 'other_schedules']);
+        $data['training_schedules'] = $request->filled('training_schedules') ? json_decode($request->training_schedules, true) ?? [] : [];
+        $data['other_schedules'] = $request->filled('other_schedules') ? json_decode($request->other_schedules, true) ?? [] : [];
         $data['attendance_type'] = $validated['attendance_type'] ?? 'volunteer';
         $data['total_sessions'] = $validated['total_sessions'] ?? 1;
 
@@ -154,10 +194,14 @@ class EventController extends Controller
             'rundown_segments' => 'nullable|string',
             'sessions' => 'nullable|string',
             'participants' => 'nullable|string',
+            'training_schedules' => 'nullable|string',
+            'other_schedules' => 'nullable|string',
             '_method' => 'nullable|string',
         ]);
 
-        $data = \Illuminate\Support\Arr::except($validated, ['image', 'volunteers', 'rundown_segments', 'sessions', 'participants', '_method']);
+        $data = \Illuminate\Support\Arr::except($validated, ['image', 'volunteers', 'rundown_segments', 'sessions', 'participants', 'training_schedules', 'other_schedules', '_method']);
+        $data['training_schedules'] = $request->filled('training_schedules') ? json_decode($request->training_schedules, true) ?? [] : [];
+        $data['other_schedules'] = $request->filled('other_schedules') ? json_decode($request->other_schedules, true) ?? [] : [];
 
         if ($request->hasFile('image')) {
             if ($event->image_path) {

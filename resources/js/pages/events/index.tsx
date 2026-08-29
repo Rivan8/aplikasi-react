@@ -140,6 +140,14 @@ interface EventMessage {
     attachment_size?: number | null;
 }
 
+interface EventScheduleItem {
+    id?: number;
+    title: string;
+    date: string;
+    start_time: string;
+    end_time: string;
+}
+
 interface Event {
     id: number;
     title: string;
@@ -157,6 +165,8 @@ interface Event {
     rundown_segments: EventRundownSegment[];
     sessions?: EventSession[];
     participants?: EventParticipant[];
+    training_schedules?: EventScheduleItem[];
+    other_schedules?: EventScheduleItem[];
     messages?: EventMessage[];
     live_session?: {
         status: 'idle' | 'running' | 'completed' | string;
@@ -398,6 +408,69 @@ export default function Events({
     const [messageAttachment, setMessageAttachment] = useState<File | null>(null);
     const [messageProcessing, setMessageProcessing] = useState(false);
     const [clientErrors, setClientErrors] = useState<Record<string, string>>({});
+    const [timeScheduleTab, setTimeScheduleTab] = useState<'worship' | 'training' | 'other'>('worship');
+    const [trainingSchedules, setTrainingSchedules] = useState<Array<{ id: number; title: string; date: string; start_time: string; end_time: string }>>([
+        { id: 1, title: '', date: '', start_time: '', end_time: '' },
+    ]);
+    const [otherSchedules, setOtherSchedules] = useState<Array<{ id: number; title: string; date: string; start_time: string; end_time: string }>>([
+        { id: 1, title: '', date: '', start_time: '', end_time: '' },
+    ]);
+
+    useEffect(() => {
+        setData(
+            'training_schedules',
+            trainingSchedules.map(({ id: _id, ...rest }) => rest),
+        );
+    }, [trainingSchedules]);
+
+    useEffect(() => {
+        setData(
+            'other_schedules',
+            otherSchedules.map(({ id: _id, ...rest }) => rest),
+        );
+    }, [otherSchedules]);
+
+    const addScheduleItem = (type: 'training' | 'other') => {
+        if (type === 'training') {
+            setTrainingSchedules((current) => [
+                ...current,
+                { id: Date.now(), title: '', date: '', start_time: '', end_time: '' },
+            ]);
+            return;
+        }
+
+        setOtherSchedules((current) => [
+            ...current,
+            { id: Date.now(), title: '', date: '', start_time: '', end_time: '' },
+        ]);
+    };
+
+    const updateScheduleItem = (
+        type: 'training' | 'other',
+        id: number,
+        field: 'title' | 'date' | 'start_time' | 'end_time',
+        value: string,
+    ) => {
+        if (type === 'training') {
+            setTrainingSchedules((current) =>
+                current.map((item) => (item.id === id ? { ...item, [field]: value } : item)),
+            );
+            return;
+        }
+
+        setOtherSchedules((current) =>
+            current.map((item) => (item.id === id ? { ...item, [field]: value } : item)),
+        );
+    };
+
+    const removeScheduleItem = (type: 'training' | 'other', id: number) => {
+        if (type === 'training') {
+            setTrainingSchedules((current) => current.filter((item) => item.id !== id));
+            return;
+        }
+
+        setOtherSchedules((current) => current.filter((item) => item.id !== id));
+    };
 
     useEffect(() => {
         const timer = window.setInterval(() => setCurrentTime(new Date()), 30_000);
@@ -421,6 +494,8 @@ export default function Events({
         rundown_segments: [] as EventRundownSegment[],
         sessions: [] as EventSession[],
         participants: [] as EventParticipant[],
+        training_schedules: [] as EventScheduleItem[],
+        other_schedules: [] as EventScheduleItem[],
     });
 
     const fieldError = (field: string) => clientErrors[field] || errors[field as keyof typeof errors];
@@ -591,6 +666,9 @@ export default function Events({
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
+        setData('training_schedules', trainingSchedules.map(({ id: _id, ...rest }) => rest));
+        setData('other_schedules', otherSchedules.map(({ id: _id, ...rest }) => rest));
+
         const requiredErrors: Record<string, string> = {};
         if (!data.title.trim()) requiredErrors.title = 'Nama event wajib diisi.';
         if (!data.category) requiredErrors.category = 'Kategori wajib dipilih.';
@@ -627,6 +705,8 @@ export default function Events({
         formData.append('volunteers', JSON.stringify(data.volunteers));
         formData.append('sessions', JSON.stringify(data.sessions));
         formData.append('participants', JSON.stringify(data.participants));
+        formData.append('training_schedules', JSON.stringify(data.training_schedules));
+        formData.append('other_schedules', JSON.stringify(data.other_schedules));
 
         const segmentsPayload = data.rundown_segments.map((s) => ({
             ...s,
@@ -683,6 +763,25 @@ export default function Events({
                 };
             });
 
+            const trainingData = (editingEvent.training_schedules ?? []).map((item, index) => ({
+                id: Number(item.id ?? index + 1),
+                title: item.title ?? '',
+                date: item.date ?? '',
+                start_time: item.start_time ?? '',
+                end_time: item.end_time ?? '',
+            }));
+
+            const otherData = (editingEvent.other_schedules ?? []).map((item, index) => ({
+                id: Number(item.id ?? index + 1),
+                title: item.title ?? '',
+                date: item.date ?? '',
+                start_time: item.start_time ?? '',
+                end_time: item.end_time ?? '',
+            }));
+
+            setTrainingSchedules(trainingData.length ? trainingData : [{ id: 1, title: '', date: '', start_time: '', end_time: '' }]);
+            setOtherSchedules(otherData.length ? otherData : [{ id: 1, title: '', date: '', start_time: '', end_time: '' }]);
+
             setData({
                 title: editingEvent.title,
                 date: editingEvent.date ? new Date(editingEvent.date) : undefined,
@@ -698,6 +797,8 @@ export default function Events({
                 volunteers: rehydratedVolunteers,
                 sessions: editingEvent.sessions || [],
                 participants: editingEvent.participants || [],
+                training_schedules: trainingData.map(({ id: _id, ...rest }) => rest),
+                other_schedules: otherData.map(({ id: _id, ...rest }) => rest),
                 rundown_segments:
                     editingEvent.rundown_segments?.map((segment) => ({
                         title: segment.title,
@@ -1773,59 +1874,163 @@ export default function Events({
                                                     <span className="h-px w-8 bg-primary/30" />
                                                     Logistik & Waktu
                                                 </div>
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                    <div className="space-y-2.5">
-                                                        <Label className="text-xs font-bold text-foreground/70 ml-1">Tanggal <span className="text-destructive">Wajib</span></Label>
-                                                        <Popover>
-                                                            <PopoverTrigger asChild>
-                                                                <Button
-                                                                    variant="outline"
-                                                                    className={cn(
-                                                                        'h-12 w-full justify-start text-left font-medium rounded-xl bg-muted/20 border-border/40 px-4 transition-all hover:bg-background',
-                                                                        !data.date && 'text-muted-foreground',
-                                                                        fieldError('date') && 'border-destructive text-destructive',
-                                                                    )}
-                                                                >
-                                                                    <CalendarIcon className="mr-2 h-4 w-4 opacity-50" />
-                                                                    {data.date ? format(data.date, 'PPP', { locale: id }) : <span>Pilih tanggal</span>}
-                                                                </Button>
-                                                            </PopoverTrigger>
-                                                            <PopoverContent className="w-auto p-0 rounded-2xl border-border/40 shadow-2xl" align="start">
-                                                                <Calendar
-                                                                    mode="single"
-                                                                    selected={data.date}
-                                                                    onSelect={(date: Date | undefined) => { clearFieldError('date'); setData('date', date); }}
-                                                                    initialFocus
-                                                                />
-                                                            </PopoverContent>
-                                                        </Popover>
-                                                        {fieldError('date') && <p className="text-[10px] font-bold text-destructive px-1">{fieldError('date')}</p>}
-                                                    </div>
-                                                    <div className="grid grid-cols-2 gap-4">
-                                                        <div className="space-y-2.5">
-                                                            <Label htmlFor="time" className="text-xs font-bold text-foreground/70 ml-1">Mulai <span className="text-destructive">Wajib</span></Label>
-                                                            <Input
-                                                                id="time"
-                                                                type="time"
-                                                                value={data.time}
-                                                                onChange={(e) => { clearFieldError('time'); setData('time', e.target.value); }}
-                                                                aria-invalid={!!fieldError('time')}
-                                                                className={cn("h-12 bg-muted/20 border-border/40 focus:bg-background transition-all rounded-xl", fieldError('time') && 'border-destructive focus-visible:ring-destructive')}
-                                                            />
-                                                            {fieldError('time') && <p className="text-[10px] font-bold text-destructive px-1">{fieldError('time')}</p>}
-                                                        </div>
-                                                        <div className="space-y-2.5">
-                                                            <Label htmlFor="attendance_start_time" className="text-xs font-bold text-foreground/70 ml-1">Absen</Label>
-                                                            <Input
-                                                                id="attendance_start_time"
-                                                                type="time"
-                                                                value={data.attendance_start_time}
-                                                                onChange={(e) => setData('attendance_start_time', e.target.value)}
-                                                                className="h-12 bg-muted/20 border-border/40 focus:bg-background transition-all rounded-xl"
-                                                            />
-                                                        </div>
+
+                                                <div className="rounded-2xl border border-border/40 bg-muted/20 p-2">
+                                                    <div className="grid grid-cols-3 gap-2">
+                                                        {[
+                                                            { id: 'worship', label: 'Waktu Ibadah' },
+                                                            { id: 'training', label: 'Waktu Latihan' },
+                                                            { id: 'other', label: 'Waktu Lainnya' },
+                                                        ].map((tab) => (
+                                                            <button
+                                                                key={tab.id}
+                                                                type="button"
+                                                                onClick={() => setTimeScheduleTab(tab.id as 'worship' | 'training' | 'other')}
+                                                                className={cn(
+                                                                    'rounded-xl px-3 py-2 text-[11px] font-bold transition-all',
+                                                                    timeScheduleTab === tab.id
+                                                                        ? 'bg-background text-primary shadow-sm ring-1 ring-primary/10'
+                                                                        : 'text-muted-foreground hover:bg-background/60',
+                                                                )}
+                                                            >
+                                                                {tab.label}
+                                                            </button>
+                                                        ))}
                                                     </div>
                                                 </div>
+
+                                                {timeScheduleTab === 'worship' && (
+                                                    <div className="space-y-6">
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                            <div className="space-y-2.5">
+                                                                <Label className="text-xs font-bold text-foreground/70 ml-1">Tanggal <span className="text-destructive">Wajib</span></Label>
+                                                                <Popover>
+                                                                    <PopoverTrigger asChild>
+                                                                        <Button
+                                                                            variant="outline"
+                                                                            className={cn(
+                                                                                'h-12 w-full justify-start text-left font-medium rounded-xl bg-muted/20 border-border/40 px-4 transition-all hover:bg-background',
+                                                                                !data.date && 'text-muted-foreground',
+                                                                                fieldError('date') && 'border-destructive text-destructive',
+                                                                            )}
+                                                                        >
+                                                                            <CalendarIcon className="mr-2 h-4 w-4 opacity-50" />
+                                                                            {data.date ? format(data.date, 'PPP', { locale: id }) : <span>Pilih tanggal</span>}
+                                                                        </Button>
+                                                                    </PopoverTrigger>
+                                                                    <PopoverContent className="w-auto p-0 rounded-2xl border-border/40 shadow-2xl" align="start">
+                                                                        <Calendar
+                                                                            mode="single"
+                                                                            selected={data.date}
+                                                                            onSelect={(date: Date | undefined) => { clearFieldError('date'); setData('date', date); }}
+                                                                            initialFocus
+                                                                        />
+                                                                    </PopoverContent>
+                                                                </Popover>
+                                                                {fieldError('date') && <p className="text-[10px] font-bold text-destructive px-1">{fieldError('date')}</p>}
+                                                            </div>
+                                                            <div className="grid grid-cols-2 gap-4">
+                                                                <div className="space-y-2.5">
+                                                                    <Label htmlFor="time" className="text-xs font-bold text-foreground/70 ml-1">Mulai <span className="text-destructive">Wajib</span></Label>
+                                                                    <Input
+                                                                        id="time"
+                                                                        type="time"
+                                                                        value={data.time}
+                                                                        onChange={(e) => { clearFieldError('time'); setData('time', e.target.value); }}
+                                                                        aria-invalid={!!fieldError('time')}
+                                                                        className={cn("h-12 bg-muted/20 border-border/40 focus:bg-background transition-all rounded-xl", fieldError('time') && 'border-destructive focus-visible:ring-destructive')}
+                                                                    />
+                                                                    {fieldError('time') && <p className="text-[10px] font-bold text-destructive px-1">{fieldError('time')}</p>}
+                                                                </div>
+                                                                <div className="space-y-2.5">
+                                                                    <Label htmlFor="attendance_start_time" className="text-xs font-bold text-foreground/70 ml-1">Absen</Label>
+                                                                    <Input
+                                                                        id="attendance_start_time"
+                                                                        type="time"
+                                                                        value={data.attendance_start_time}
+                                                                        onChange={(e) => setData('attendance_start_time', e.target.value)}
+                                                                        className="h-12 bg-muted/20 border-border/40 focus:bg-background transition-all rounded-xl"
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {(timeScheduleTab === 'training' || timeScheduleTab === 'other') && (
+                                                    <div className="space-y-4">
+                                                        {(timeScheduleTab === 'training' ? trainingSchedules : otherSchedules).map((item, index) => (
+                                                            <div key={item.id} className="rounded-2xl border border-border/40 bg-background p-4 shadow-sm">
+                                                                <div className="mb-4 flex items-center justify-between">
+                                                                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">
+                                                                        {timeScheduleTab === 'training' ? 'Latihan' : 'Lainnya'} {index + 1}
+                                                                    </p>
+                                                                    {(timeScheduleTab === 'training' ? trainingSchedules : otherSchedules).length > 1 && (
+                                                                        <Button
+                                                                            type="button"
+                                                                            variant="ghost"
+                                                                            size="icon"
+                                                                            className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                                                                            onClick={() => removeScheduleItem(timeScheduleTab, item.id)}
+                                                                        >
+                                                                            <Trash2 className="h-4 w-4" />
+                                                                        </Button>
+                                                                    )}
+                                                                </div>
+                                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                                    <div className="space-y-2.5 md:col-span-2">
+                                                                        <Label className="text-xs font-bold text-foreground/70 ml-1">Judul</Label>
+                                                                        <Input
+                                                                            value={item.title}
+                                                                            onChange={(e) => updateScheduleItem(timeScheduleTab, item.id, 'title', e.target.value)}
+                                                                            placeholder={timeScheduleTab === 'training' ? 'Latihan Worship' : 'Kegiatan Lainnya'}
+                                                                            className="h-11 bg-muted/20 border-border/40"
+                                                                        />
+                                                                    </div>
+                                                                    <div className="space-y-2.5">
+                                                                        <Label className="text-xs font-bold text-foreground/70 ml-1">Tanggal</Label>
+                                                                        <Input
+                                                                            type="date"
+                                                                            value={item.date}
+                                                                            onChange={(e) => updateScheduleItem(timeScheduleTab, item.id, 'date', e.target.value)}
+                                                                            className="h-11 bg-muted/20 border-border/40"
+                                                                        />
+                                                                    </div>
+                                                                    <div className="grid grid-cols-2 gap-4">
+                                                                        <div className="space-y-2.5">
+                                                                            <Label className="text-xs font-bold text-foreground/70 ml-1">Waktu Mulai</Label>
+                                                                            <Input
+                                                                                type="time"
+                                                                                value={item.start_time}
+                                                                                onChange={(e) => updateScheduleItem(timeScheduleTab, item.id, 'start_time', e.target.value)}
+                                                                                className="h-11 bg-muted/20 border-border/40"
+                                                                            />
+                                                                        </div>
+                                                                        <div className="space-y-2.5">
+                                                                            <Label className="text-xs font-bold text-foreground/70 ml-1">Waktu Selesai</Label>
+                                                                            <Input
+                                                                                type="time"
+                                                                                value={item.end_time}
+                                                                                onChange={(e) => updateScheduleItem(timeScheduleTab, item.id, 'end_time', e.target.value)}
+                                                                                className="h-11 bg-muted/20 border-border/40"
+                                                                            />
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            className="h-11 w-full rounded-xl border-dashed border-border/60 bg-background/40 text-sm font-bold"
+                                                            onClick={() => addScheduleItem(timeScheduleTab)}
+                                                        >
+                                                            <Plus className="mr-2 h-4 w-4" /> Tambah {timeScheduleTab === 'training' ? 'Waktu Latihan' : 'Waktu Lainnya'}
+                                                        </Button>
+                                                    </div>
+                                                )}
+
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                     <div className="space-y-2.5">
                                                         <Label htmlFor="expected" className="text-xs font-bold text-foreground/70 ml-1">Target Peserta <span className="text-destructive">Wajib</span></Label>

@@ -197,11 +197,18 @@ export default function MyEvents({
                                                 <p className="mt-2 font-semibold text-primary">Ketuk untuk melihat item rundown</p>
                                             </button>
                                         )}
-                                        <Button asChild variant={isLive ? 'default' : 'outline'} className={`w-full ${isLive ? 'bg-amber-500 text-amber-950 hover:bg-amber-400' : ''}`}>
-                                            <Link href={isLive ? `/my/events/${event.id}/live-rundown` : '/my/scan'}>
-                                                {isLive ? <><Play className="mr-2 h-4 w-4" />Event sedang berlangsung</> : 'Buka absensi'}
-                                            </Link>
-                                        </Button>
+                                        <div className="grid gap-2 sm:grid-cols-2">
+                                            <Button asChild variant="outline" className="w-full">
+                                                <Link href={`/my/events/${event.id}`}>
+                                                    Detail event
+                                                </Link>
+                                            </Button>
+                                            <Button asChild variant={isLive ? 'default' : 'outline'} className={`w-full ${isLive ? 'bg-amber-500 text-amber-950 hover:bg-amber-400' : ''}`}>
+                                                <Link href={isLive ? `/my/events/${event.id}/live-rundown` : '/my/scan'}>
+                                                    {isLive ? <><Play className="mr-2 h-4 w-4" />Event sedang berlangsung</> : 'Buka absensi'}
+                                                </Link>
+                                            </Button>
+                                        </div>
                                     </CardContent>
                                 </Card>
                             );

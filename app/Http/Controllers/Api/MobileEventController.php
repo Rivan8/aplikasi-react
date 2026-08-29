@@ -54,6 +54,13 @@ class MobileEventController extends Controller
             'attendance_type' => $attendanceType,
             'total_sessions' => (int) ($event->total_sessions ?: max(1, count($sessions))),
             'sessions' => $sessions,
+            'worship' => [
+                'date' => $event->date,
+                'start_time' => $event->time,
+                'end_time' => null,
+            ],
+            'training_schedules' => $event->training_schedules ?? [],
+            'other_schedules' => $event->other_schedules ?? [],
         ];
     }
 
