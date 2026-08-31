@@ -8,6 +8,14 @@ export interface EventSessionSummary {
   attendance_start_time: string;
 }
 
+export interface EventScheduleItem {
+  id?: number;
+  title: string;
+  date?: string | null;
+  start_time?: string | null;
+  end_time?: string | null;
+}
+
 export interface EventSchedule {
   assignment_id: number;
   event_id: number;
@@ -24,6 +32,28 @@ export interface EventSchedule {
   attendance_type: 'volunteer' | 'general';
   total_sessions: number;
   sessions: EventSessionSummary[];
+}
+
+export interface EventDetail {
+  id: number;
+  title: string;
+  date: string | null;
+  time: string | null;
+  location: string | null;
+  address: string | null;
+  category: string;
+  attendance_type?: 'volunteer' | 'general';
+  total_sessions?: number;
+  sessions: EventSessionSummary[];
+  worship: {
+    date: string | null;
+    start_time: string | null;
+    end_time: string | null;
+  };
+  training: EventScheduleItem[];
+  other: EventScheduleItem[];
+  training_schedules: EventScheduleItem[];
+  other_schedules: EventScheduleItem[];
 }
 
 export interface ScheduleActionData {

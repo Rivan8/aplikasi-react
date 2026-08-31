@@ -31,5 +31,7 @@ it('includes training and other schedules in the mobile event payload', function
         ->getJson('/api/mobile/v1/events/' . $event->id)
         ->assertOk()
         ->assertJsonPath('data.training_schedules.0.title', 'Latihan Paduan Suara')
-        ->assertJsonPath('data.other_schedules.0.title', 'Persiapan Acara');
+        ->assertJsonPath('data.other_schedules.0.title', 'Persiapan Acara')
+        ->assertJsonPath('data.training.0.title', 'Latihan Paduan Suara')
+        ->assertJsonPath('data.other.0.title', 'Persiapan Acara');
 });

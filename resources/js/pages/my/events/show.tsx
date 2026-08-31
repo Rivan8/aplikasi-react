@@ -150,16 +150,16 @@ export default function MyEventShow({
                     <CardContent className="p-5 md:p-6">
                         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                             <div className="space-y-3">
-                                <Badge variant="secondary" className="bg-stone-100 text-stone-700 hover:bg-stone-100 dark:bg-stone-900/60 dark:text-stone-200">
+                                <Badge variant="secondary" className="inline-flex items-center rounded-full bg-gradient-to-r from-stone-900 to-stone-600 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-white shadow-sm dark:from-stone-700 dark:to-stone-500">
                                     {event.category}
                                 </Badge>
-                                <div>
-                                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-stone-600 dark:text-stone-300">
+                                <div className="space-y-2">
+                                    <p className="text-[10px] font-black uppercase tracking-[0.28em] text-stone-600 dark:text-stone-300">
                                         Jadwal Ibadah
                                     </p>
-                                    <CardTitle className="mt-2 text-3xl font-bold tracking-tight text-foreground">
+                                    <h1 className="max-w-2xl text-3xl font-black leading-none tracking-[-0.04em] text-transparent bg-gradient-to-r from-stone-900 via-stone-700 to-stone-500 bg-clip-text sm:text-4xl lg:text-5xl dark:from-stone-100 dark:via-stone-200 dark:to-stone-400">
                                         {event.title}
-                                    </CardTitle>
+                                    </h1>
                                 </div>
                             </div>
 

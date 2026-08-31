@@ -1,4 +1,9 @@
-import type { ApiEnvelope, EventSchedule, ScheduleActionData } from '../types/schedule';
+import type {
+  ApiEnvelope,
+  EventDetail,
+  EventSchedule,
+  ScheduleActionData,
+} from '../types/schedule';
 
 const API_BASE_URL =
   (typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_API_BASE_URL) ||
@@ -22,6 +27,19 @@ async function fetchJson<T>(url: string, init: RequestInit): Promise<T> {
 
 export async function getMySchedules(token: string): Promise<ApiEnvelope<EventSchedule[]>> {
   return fetchJson<ApiEnvelope<EventSchedule[]>>(buildUrl('/api/mobile/v1/me/schedules'), {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/json',
+    },
+  });
+}
+
+export async function getEventDetail(
+  token: string,
+  eventId: number,
+): Promise<ApiEnvelope<EventDetail>> {
+  return fetchJson<ApiEnvelope<EventDetail>>(buildUrl(`/api/mobile/v1/events/${eventId}`), {
     method: 'GET',
     headers: {
       Authorization: `Bearer ${token}`,

@@ -43,6 +43,9 @@ class MobileEventController extends Controller
             ];
         }
 
+        $trainingSchedules = $event->training_schedules ?? [];
+        $otherSchedules = $event->other_schedules ?? [];
+
         return [
             'id' => $event->id,
             'title' => $event->title,
@@ -59,8 +62,10 @@ class MobileEventController extends Controller
                 'start_time' => $event->time,
                 'end_time' => null,
             ],
-            'training_schedules' => $event->training_schedules ?? [],
-            'other_schedules' => $event->other_schedules ?? [],
+            'training_schedules' => $trainingSchedules,
+            'training' => $trainingSchedules,
+            'other_schedules' => $otherSchedules,
+            'other' => $otherSchedules,
         ];
     }
 
