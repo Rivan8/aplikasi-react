@@ -128,6 +128,8 @@ class MobileEventController extends Controller
             return [
                 'assignment_id' => $assignment->id,
                 'event_id' => $event->id,
+                'role_category' => $assignment->role_category,
+                'role_name' => $assignment->role_name,
                 'response_status' => $assignment->response_status ?? 'pending',
                 'response_reason' => $assignment->response_reason,
                 'responded_at' => $assignment->responded_at?->toIso8601String(),

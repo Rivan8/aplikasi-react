@@ -5,6 +5,41 @@ use App\Models\EventVolunteer;
 use App\Models\User;
 use Illuminate\Support\Str;
 
+it('mobile user receives volunteer role assignment details in schedule list', function () {
+    $token = 'mobile-token-list-'.Str::uuid()->toString();
+
+    $user = User::factory()->create([
+        'member_id' => 'MEM-3003',
+        'role' => 'user',
+        'api_token' => hash('sha256', $token),
+    ]);
+
+    $event = Event::create([
+        'title' => 'Jadwal Paduan Suara',
+        'date' => '2026-09-12',
+        'time' => '18:30:00',
+        'location' => 'Studio Musik',
+        'address' => 'Jl. Contoh 3',
+        'category' => 'Volunteer',
+        'attendance_type' => 'volunteer',
+        'expected' => 18,
+    ]);
+
+    EventVolunteer::create([
+        'event_id' => $event->id,
+        'role_category' => 'music',
+        'role_name' => 'Keyboard',
+        'member_id' => $user->member_id,
+        'response_status' => 'pending',
+    ]);
+
+    $this->withHeader('Authorization', 'Bearer '.$token)
+        ->getJson('/api/mobile/v1/me/schedules')
+        ->assertOk()
+        ->assertJsonPath('data.0.role_name', 'Keyboard')
+        ->assertJsonPath('data.0.role_category', 'music');
+});
+
 it('mobile user can accept a schedule assignment', function () {
     $token = 'mobile-token-accept-'.Str::uuid()->toString();
 
