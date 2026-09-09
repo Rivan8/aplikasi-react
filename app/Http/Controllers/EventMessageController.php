@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\EventMessage;
 use App\Models\EventMessageRead;
+use App\Models\User;
+use App\Notifications\EventMessageNotification;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
@@ -28,7 +30,16 @@ class EventMessageController extends Controller
             $validated['attachment_size'] = $attachment->getSize();
         }
 
-        EventMessage::create($validated);
+        $eventMessage = EventMessage::create($validated);
+
+        User::query()
+            ->whereIn('member_id', $eventMessage->event->volunteers()->pluck('member_id'))
+            ->where(function ($query): void {
+                $query->whereNotNull('email')->where('email', '!=', '')
+                    ->orWhereNotNull('expo_push_token')->where('expo_push_token', '!=', '');
+            })
+            ->get()
+            ->each(fn (User $user): mixed => $user->notify(new EventMessageNotification($eventMessage)));
 
         return back()->with('success', 'Pesan berhasil dikirim kepada volunteer event.');
     }

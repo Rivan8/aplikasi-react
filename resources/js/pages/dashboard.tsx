@@ -27,6 +27,7 @@ import { format } from 'date-fns';
 import { id } from 'date-fns/locale';
 import {
     AlertCircle,
+    ArrowRight,
     CalendarDays,
     CheckCircle2,
     ChevronRight,
@@ -133,6 +134,15 @@ interface DashboardData {
     user_messages?: UserMessage[];
     admin_assignments?: AdminAssignment[];
     external_members?: ExternalMember[];
+    featured_article?: FeaturedArticle | null;
+    articles?: FeaturedArticle[];
+}
+
+interface FeaturedArticle {
+    id: number;
+    title: string;
+    excerpt: string | null;
+    image_path: string | null;
 }
 
 interface AdminAssignment {
@@ -962,10 +972,12 @@ function UserDashboard({
     assignments,
     messages,
     upcomingServices,
+    articles,
 }: {
     assignments: UserAssignment[];
     messages: UserMessage[];
     upcomingServices: UpcomingService[];
+    articles?: FeaturedArticle[];
 }) {
     const [activeTab, setActiveTab] = useState<'schedules' | 'messages'>('schedules');
     const [decliningAssignment, setDecliningAssignment] = useState<UserAssignment | null>(null);
@@ -1043,6 +1055,8 @@ function UserDashboard({
                             return <Link key={action.label} href={action.href} onClick={() => action.href === '#pesan' && setActiveTab('messages')} className="group rounded-2xl border border-black/5 bg-white/80 p-3.5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-white/10 dark:bg-card/80 sm:p-4"><span className={`flex h-9 w-9 items-center justify-center rounded-xl ${action.tone}`}><Icon className="h-4 w-4" /></span><strong className="mt-3 block text-sm text-foreground">{action.label}</strong><span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{action.detail}</span></Link>;
                         })}
                     </section>
+
+                    <section className="space-y-3"><div className="flex items-end justify-between gap-4"><div><p className="text-xs font-semibold tracking-[0.16em] text-primary uppercase">Ruang inspirasi</p><h2 className="mt-1 text-xl font-bold tracking-tight">Artikel terbaru</h2></div><Button asChild variant="ghost" size="sm" className="gap-1 text-primary"><Link href="/articles">Lihat semua<ChevronRight className="h-4 w-4" /></Link></Button></div>{articles && articles.length > 0 ? <div className="flex snap-x gap-3 overflow-x-auto pb-3 sm:gap-4 lg:grid lg:grid-cols-4 lg:overflow-visible lg:pb-0">{articles.map((article) => <Link key={article.id} href={`/articles/${article.id}`} className="group relative min-h-[220px] min-w-[82%] snap-start overflow-hidden rounded-3xl bg-slate-950 text-white shadow-lg shadow-slate-950/10 sm:min-w-[45%] lg:min-w-0">{article.image_path && <img src={article.image_path} alt="" className="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-105" />}<div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(2,6,23,0.05)_15%,rgba(2,6,23,0.9)_100%)]" /><div className="relative flex min-h-[220px] flex-col justify-end p-5"><p className="text-[10px] font-bold tracking-[0.16em] text-teal-200 uppercase">Artikel</p><h3 className="mt-2 line-clamp-2 text-lg font-black tracking-tight">{article.title}</h3><p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-200">{article.excerpt || 'Baca artikel selengkapnya.'}</p><span className="mt-4 flex items-center gap-1 text-xs font-bold text-white">Baca artikel <ArrowRight className="h-3.5 w-3.5 transition group-hover:translate-x-1" /></span></div></Link>)}</div> : <Link href="/articles" className="flex min-h-[160px] items-center justify-center rounded-3xl border border-dashed bg-white/70 p-6 text-sm text-muted-foreground shadow-sm dark:bg-card/70">Belum ada artikel yang diterbitkan. Buka ruang artikel.</Link>}</section>
 
                     <section className="space-y-3">
                         <div className="flex items-end justify-between gap-4"><div><p className="text-xs font-semibold tracking-[0.16em] text-primary uppercase">Agenda</p><h2 className="mt-1 text-xl font-bold tracking-tight">Event mendatang</h2></div><Button asChild variant="ghost" size="sm" className="gap-1 text-primary"><Link href="/my/events">Lihat semua<ChevronRight className="h-4 w-4" /></Link></Button></div>
@@ -1168,6 +1182,7 @@ export default function Dashboard({
                 assignments={userAssignments}
                 messages={userMessages}
                 upcomingServices={upcomingServices}
+                articles={dashboard?.articles}
             />
         );
     }

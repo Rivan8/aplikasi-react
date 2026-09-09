@@ -50,13 +50,13 @@ export default function Login({
 
             <div className="grid min-h-svh lg:grid-cols-2">
                 {/* Left branded panel */}
-                <div className="relative hidden flex-col justify-between overflow-hidden bg-[#172022] p-10 text-white lg:flex">
+                <div className="relative hidden flex-col justify-between overflow-hidden bg-[#FFF4EA] p-10 text-[#431407] lg:flex">
                     {/* Gradient overlays */}
-                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(45,212,191,0.24),transparent_30%),radial-gradient(circle_at_82%_80%,rgba(96,165,250,0.14),transparent_28%),linear-gradient(135deg,#111827_0%,#172022_46%,#26332f_100%)]" />
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(251,146,60,0.2),transparent_30%),radial-gradient(circle_at_82%_80%,rgba(234,88,12,0.12),transparent_28%)]" />
 
                     {/* Animated floating orbs */}
-                    <div className="absolute top-[15%] left-[12%] h-64 w-64 rounded-full bg-teal-400/10 blur-3xl" />
-                    <div className="absolute right-[8%] bottom-[20%] h-48 w-48 rounded-full bg-blue-400/8 blur-3xl" />
+                    <div className="absolute top-[15%] left-[12%] h-64 w-64 rounded-full bg-orange-300/20 blur-3xl" />
+                    <div className="absolute right-[8%] bottom-[20%] h-48 w-48 rounded-full bg-amber-200/15 blur-3xl" />
 
                     {/* Header with logo */}
                     <div className="relative z-10">
@@ -65,14 +65,14 @@ export default function Login({
                             className="flex items-center gap-3"
                             aria-label="ESC Planning Center Home"
                         >
-                            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-teal-300 text-slate-950 shadow-lg shadow-teal-950/20">
+                            <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-orange-200 bg-white p-1 shadow-lg shadow-orange-900/15">
                                 <AppLogoIcon className="h-6 w-6 fill-current" />
                             </div>
                             <div>
                                 <p className="text-lg font-bold tracking-tight">
                                     ESC Planning Center
                                 </p>
-                                <p className="text-xs font-medium text-white/55">
+                                <p className="text-xs font-medium text-[#7C2D12]/75">
                                     Church Service Operations
                                 </p>
                             </div>
@@ -84,7 +84,7 @@ export default function Login({
                         <h2 className="text-3xl font-bold leading-tight tracking-tight xl:text-4xl">
                             Pusat kendali pelayanan yang rapi untuk setiap event gereja.
                         </h2>
-                        <p className="mt-4 text-sm leading-relaxed text-white/60">
+                        <p className="mt-4 text-sm leading-relaxed text-[#7C2D12]/80">
                             Kelola event, susun volunteer, minta konfirmasi jadwal, dan catat kehadiran jemaat dengan alur yang modern dan efisien.
                         </p>
 
@@ -95,16 +95,16 @@ export default function Login({
                                 return (
                                     <div
                                         key={item.title}
-                                        className="flex items-start gap-4 rounded-xl border border-white/8 bg-white/[0.04] p-4 backdrop-blur-sm transition-colors hover:border-white/12 hover:bg-white/[0.06]"
+                                        className="flex items-start gap-4 rounded-xl border border-orange-200/80 bg-white/60 p-4 backdrop-blur-sm transition-colors hover:border-orange-300 hover:bg-white/80"
                                     >
-                                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-teal-400/15 text-teal-300">
+                                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-orange-100 text-orange-700">
                                             <Icon className="h-5 w-5" />
                                         </div>
                                         <div>
-                                            <p className="text-sm font-semibold text-white">
+                                            <p className="text-sm font-semibold text-[#431407]">
                                                 {item.title}
                                             </p>
-                                            <p className="mt-1 text-xs leading-relaxed text-white/50">
+                                            <p className="mt-1 text-xs leading-relaxed text-[#7C2D12]/75">
                                                 {item.description}
                                             </p>
                                         </div>
@@ -116,7 +116,7 @@ export default function Login({
 
                     {/* Footer */}
                     <div className="relative z-10">
-                        <p className="text-xs text-white/30">
+                        <p className="text-xs text-[#7C2D12]/60">
                             &copy; {new Date().getFullYear()} ESC Planning Center. All rights reserved.
                         </p>
                     </div>
@@ -130,7 +130,7 @@ export default function Login({
                             href={home()}
                             className="flex items-center gap-3"
                         >
-                            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-lg">
+                            <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-orange-200 bg-white p-1 shadow-lg shadow-orange-900/15">
                                 <AppLogoIcon className="h-6 w-6 fill-current" />
                             </div>
                         </Link>

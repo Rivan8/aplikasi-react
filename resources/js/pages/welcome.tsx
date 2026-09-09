@@ -66,8 +66,9 @@ const teamRows = [
 
 function ProductPreview() {
     return (
-        <div className="relative mx-auto w-full max-w-5xl px-4 pt-28 md:px-8 lg:pt-32">
-            <div className="overflow-hidden rounded-lg border border-white/15 bg-[#111827]/95 shadow-2xl shadow-black/30">
+        <div className="relative mx-auto w-full max-w-5xl px-2 pt-10 md:px-8 lg:pt-6">
+            <div className="absolute -inset-4 -z-10 rounded-[2rem] bg-[#7C2D1E]/10 blur-2xl" />
+            <div className="overflow-hidden rounded-xl border border-white/20 bg-[#111827]/95 shadow-2xl shadow-[#7C2D1E]/25 ring-1 ring-black/10">
                 <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
                     <div className="flex items-center gap-2">
                         <span className="h-3 w-3 rounded-full bg-rose-400" />
@@ -249,10 +250,14 @@ export default function Welcome() {
                 />
             </Head>
 
-            <div className="min-h-screen bg-[#f7f5f1] text-slate-950">
-                <section className="relative isolate min-h-[94svh] overflow-hidden bg-[#172022] text-white">
-                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(45,212,191,0.24),transparent_30%),radial-gradient(circle_at_82%_12%,rgba(96,165,250,0.18),transparent_28%),linear-gradient(135deg,#111827_0%,#172022_46%,#26332f_100%)]" />
-                    <div className="absolute inset-x-0 bottom-0 h-44 bg-gradient-to-t from-[#f7f5f1] via-[#f7f5f1]/70 to-transparent" />
+            <div className="min-h-screen bg-[#FFF4EC] text-stone-950">
+                <section className="relative isolate min-h-[94svh] overflow-hidden bg-[linear-gradient(120deg,#C96A4A_0%,#A95F63_48%,#526B68_100%)] text-white">
+                    <div className="absolute inset-0 opacity-25 [background-image:linear-gradient(rgba(255,255,255,0.14)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.14)_1px,transparent_1px)] [background-size:42px_42px] [mask-image:linear-gradient(to_bottom,black,transparent_78%)]" />
+                    <div className="absolute -top-24 left-[38%] h-56 w-56 rotate-12 rounded-[3rem] border border-white/15 bg-[#E9B9A7]/15 shadow-2xl shadow-[#7C2D1E]/10" />
+                    <div className="absolute top-20 -right-24 h-80 w-80 -rotate-12 rounded-[4rem] border border-white/15 bg-[#526B68]/25 shadow-2xl shadow-[#263F3D]/20" />
+                    <div className="absolute -bottom-28 -left-16 h-64 w-64 rotate-45 rounded-[2.5rem] border border-white/10 bg-white/10" />
+                    <div className="absolute inset-x-0 top-0 h-56 bg-gradient-to-b from-[#263F3D]/20 to-transparent" />
+                    <div className="absolute inset-x-0 bottom-0 h-44 bg-gradient-to-t from-[#FFF4EC] via-[#FFF4EC]/70 to-transparent" />
 
                     <header className="relative z-20 mx-auto flex max-w-7xl items-center justify-between px-5 py-5 md:px-8">
                         <Link
@@ -260,7 +265,7 @@ export default function Welcome() {
                             className="flex items-center gap-3"
                             aria-label="ESC Planning Center Home"
                         >
-                            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-teal-300 text-slate-950 shadow-lg shadow-teal-950/20">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white text-[#B8543A] shadow-lg shadow-[#7C2D1E]/20">
                                 <AppLogoIcon className="h-6 w-6 fill-current" />
                             </div>
                             <div>
@@ -277,14 +282,14 @@ export default function Welcome() {
                             {auth.user ? (
                                 <Link
                                     href={dashboard()}
-                                    className="inline-flex h-10 items-center rounded-md bg-white px-4 text-sm font-semibold text-slate-950 shadow-sm transition hover:bg-teal-50"
+                                    className="inline-flex h-10 items-center rounded-md bg-white px-4 text-sm font-semibold text-[#A84D36] shadow-sm transition hover:bg-[#FBE3D5]"
                                 >
                                     Dashboard
                                 </Link>
                             ) : (
                                     <Link
                                         href={login()}
-                                        className="inline-flex h-10 items-center rounded-md bg-white px-4 text-sm font-semibold text-slate-950 shadow-sm transition hover:bg-teal-50"
+                                        className="inline-flex h-10 items-center rounded-md bg-white px-4 text-sm font-semibold text-[#A84D36] shadow-sm transition hover:bg-[#FBE3D5]"
                                     >
                                         Log in
                                     </Link>
@@ -292,13 +297,13 @@ export default function Welcome() {
                         </nav>
                     </header>
 
-                    <div className="relative z-10 mx-auto grid max-w-7xl items-center gap-8 px-5 pt-8 pb-20 md:px-8 lg:grid-cols-[0.82fr_1.18fr] lg:pt-10 lg:pb-28">
+                    <div className="relative z-10 mx-auto grid max-w-7xl items-center gap-8 px-5 pt-8 pb-20 md:px-8 lg:grid-cols-[0.82fr_1.18fr] lg:pt-14 lg:pb-28">
                         <div className="max-w-3xl">
-                            <div className="mb-5 inline-flex items-center gap-2 rounded-md border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold tracking-widest text-teal-100 uppercase backdrop-blur">
+                            <div className="mb-5 inline-flex items-center gap-2 rounded-md border border-white/20 bg-white/10 px-3 py-2 text-xs font-bold tracking-widest text-[#FFF1E8] uppercase backdrop-blur">
                                 <Sparkles className="h-4 w-4" />
                                 Plan services. Schedule teams. Track attendance.
                             </div>
-                            <h1 className="max-w-3xl text-5xl font-bold tracking-tight text-balance md:text-6xl lg:text-7xl">
+                            <h1 className="max-w-3xl text-5xl font-bold leading-[1.05] tracking-tight text-balance md:text-6xl lg:text-7xl">
                                 Pusat kendali pelayanan yang rapi untuk setiap
                                 event gereja.
                             </h1>
@@ -312,7 +317,7 @@ export default function Welcome() {
                             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                                 <Link
                                     href={auth.user ? dashboard() : login()}
-                                    className="inline-flex h-12 items-center justify-center rounded-md bg-teal-300 px-6 text-sm font-bold text-slate-950 shadow-lg shadow-teal-950/25 transition hover:bg-teal-200"
+                                    className="inline-flex h-12 items-center justify-center rounded-md bg-white px-6 text-sm font-bold text-[#A84D36] shadow-lg shadow-[#7C2D1E]/25 transition hover:bg-[#FBE3D5]"
                                 >
                                     {auth.user
                                         ? 'Buka Dashboard'
@@ -349,36 +354,51 @@ export default function Welcome() {
                     </div>
                 </section>
 
-                <section
-                    id="features"
-                    className="mx-auto grid max-w-7xl gap-4 px-5 py-20 md:px-8 lg:grid-cols-3"
-                >
-                    {features.map((feature) => {
-                        const Icon = feature.icon;
-
-                        return (
-                            <article
-                                key={feature.title}
-                                className="rounded-lg border border-stone-200 bg-white p-6 shadow-sm"
-                            >
-                                <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-lg bg-teal-50 text-teal-700">
-                                    <Icon className="h-5 w-5" />
-                                </div>
-                                <h2 className="text-xl font-bold tracking-tight">
-                                    {feature.title}
-                                </h2>
-                                <p className="mt-3 text-sm leading-6 text-stone-600">
-                                    {feature.description}
+                <section id="features" className="px-5 py-20 md:px-8">
+                    <div className="mx-auto max-w-7xl">
+                        <div className="mb-10 flex flex-col justify-between gap-4 md:flex-row md:items-end">
+                            <div className="max-w-2xl">
+                                <p className="text-sm font-bold tracking-widest text-[#A84D36] uppercase">
+                                    Satu ruang kerja
                                 </p>
-                            </article>
-                        );
-                    })}
+                                <h2 className="mt-3 text-3xl font-bold tracking-tight text-balance md:text-4xl">
+                                    Semua yang dibutuhkan tim pelayanan, dalam satu alur.
+                                </h2>
+                            </div>
+                            <p className="max-w-sm text-sm leading-6 text-stone-600">
+                                Dari jadwal pertama sampai laporan kehadiran, setiap detail tetap mudah ditemukan.
+                            </p>
+                        </div>
+
+                        <div className="grid gap-4 lg:grid-cols-3">
+                            {features.map((feature) => {
+                                const Icon = feature.icon;
+
+                                return (
+                                    <article
+                                        key={feature.title}
+                                        className="group rounded-xl border border-[#F1D5C6] bg-white p-6 shadow-sm transition duration-300 hover:-translate-y-1 hover:border-[#E9B9A7] hover:shadow-xl hover:shadow-[#7C2D1E]/10"
+                                    >
+                                        <div className="mb-8 flex h-11 w-11 items-center justify-center rounded-lg bg-[#FBE3D5] text-[#A84D36] transition group-hover:bg-[#B8543A] group-hover:text-white">
+                                            <Icon className="h-5 w-5" />
+                                        </div>
+                                        <h2 className="text-xl font-bold tracking-tight">
+                                            {feature.title}
+                                        </h2>
+                                        <p className="mt-3 text-sm leading-6 text-stone-600">
+                                            {feature.description}
+                                        </p>
+                                    </article>
+                                );
+                            })}
+                        </div>
+                    </div>
                 </section>
 
-                <section className="border-y border-stone-200 bg-white">
+                <section className="border-y border-[#F1D5C6] bg-[#FFFDFC]">
                     <div className="mx-auto grid max-w-7xl gap-10 px-5 py-20 md:px-8 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
                         <div>
-                            <p className="text-sm font-bold tracking-widest text-teal-700 uppercase">
+                            <p className="text-sm font-bold tracking-widest text-[#A84D36] uppercase">
                                 Built for ministry teams
                             </p>
                             <h2 className="mt-3 text-3xl font-bold tracking-tight text-balance md:text-4xl">
@@ -397,7 +417,7 @@ export default function Welcome() {
                             {serviceFlow.map((step, index) => (
                                 <div
                                     key={step}
-                                    className="flex items-center gap-4 rounded-lg border border-stone-200 bg-[#fbfaf8] p-4"
+                                    className="flex items-center gap-4 rounded-xl border border-[#F1D5C6] bg-white p-4 shadow-sm transition hover:border-[#E9B9A7] hover:shadow-md"
                                 >
                                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-950 text-sm font-bold text-white">
                                         {index + 1}
@@ -435,9 +455,9 @@ export default function Welcome() {
                             return (
                                 <div
                                     key={item.title}
-                                    className="rounded-lg bg-slate-950 p-6 text-white shadow-sm"
+                                    className="rounded-xl bg-[#B8543A] p-6 text-white shadow-lg shadow-[#7C2D1E]/10 transition hover:-translate-y-1 hover:bg-[#9F4632]"
                                 >
-                                    <Icon className="h-6 w-6 text-teal-300" />
+                                    <Icon className="h-6 w-6 text-[#FBE3D5]" />
                                     <h3 className="mt-5 text-xl font-bold">
                                         {item.title}
                                     </h3>
@@ -451,7 +471,7 @@ export default function Welcome() {
                 </section>
 
                 <section className="px-5 pb-20 md:px-8">
-                    <div className="mx-auto flex max-w-7xl flex-col items-start justify-between gap-6 rounded-lg bg-teal-700 p-8 text-white md:flex-row md:items-center lg:p-10">
+                    <div className="mx-auto flex max-w-7xl flex-col items-start justify-between gap-6 rounded-xl bg-[#C96A4A] p-8 text-white shadow-xl shadow-[#7C2D1E]/15 md:flex-row md:items-center lg:p-10">
                         <div>
                             <h2 className="text-2xl font-bold tracking-tight">
                                 Siap mengelola pelayanan berikutnya?
@@ -463,7 +483,7 @@ export default function Welcome() {
                         </div>
                         <Link
                             href={auth.user ? dashboard() : login()}
-                            className="inline-flex h-11 shrink-0 items-center justify-center rounded-md bg-white px-5 text-sm font-bold text-teal-800 transition hover:bg-teal-50"
+                            className="inline-flex h-11 shrink-0 items-center justify-center rounded-md bg-white px-5 text-sm font-bold text-[#8F3F2D] transition hover:bg-[#FBE3D5]"
                         >
                             {auth.user ? 'Dashboard' : 'Log in'}
                         </Link>

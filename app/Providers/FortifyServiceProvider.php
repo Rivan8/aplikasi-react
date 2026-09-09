@@ -44,7 +44,7 @@ class FortifyServiceProvider extends ServiceProvider
         Fortify::createUsersUsing(CreateNewUser::class);
 
         Fortify::authenticateUsing(function (Request $request) {
-            $login = trim((string) $request->input('login'));
+            $login = trim((string) ($request->input('login') ?? $request->input('email')));
             $phone = preg_replace('/\D+/', '', $login);
             $user = \App\Models\User::where('email', $login)
                 ->orWhere('phone', $phone)
@@ -128,7 +128,8 @@ class FortifyServiceProvider extends ServiceProvider
         });
 
         RateLimiter::for('login', function (Request $request) {
-            $throttleKey = Str::transliterate(Str::lower($request->input(Fortify::username())).'|'.$request->ip());
+            $identity = $request->input('login') ?? $request->input('email');
+            $throttleKey = Str::transliterate(Str::lower((string) $identity).'|'.$request->ip());
 
             return Limit::perMinute(5)->by($throttleKey);
         });

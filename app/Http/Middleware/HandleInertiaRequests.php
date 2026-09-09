@@ -74,7 +74,7 @@ class HandleInertiaRequests extends Middleware
             ...parent::share($request),
             'name' => config('app.name'),
             'auth' => [
-                'user' => $user?->setAttribute('avatar', $avatar),
+                'user' => $user ? [...$user->toArray(), 'avatar' => $avatar] : null,
             ],
             'notifications' => [
                 'pending_assignments' => $pendingAssignments,

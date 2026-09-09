@@ -2,17 +2,21 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Category;
 use App\Models\Event;
+use App\Models\EventGroup;
+use App\Models\EventParticipant;
+use App\Models\EventVolunteer;
+use App\Models\Song;
+use App\Models\User;
+use App\Notifications\VolunteerScheduledNotification;
+use App\Services\MemberApiService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
-
-use App\Models\Category;
-use App\Models\EventGroup;
-use App\Models\Song;
-use App\Services\MemberApiService;
-use App\Http\Controllers\LiveEventController;
 
 class EventController extends Controller
 {
@@ -22,7 +26,7 @@ class EventController extends Controller
         $memberId = $user?->member_id;
 
         $assignedEventIds = $memberId
-            ? \App\Models\EventVolunteer::where('member_id', $memberId)
+            ? EventVolunteer::where('member_id', $memberId)
                 ->pluck('event_id')
                 ->unique()
                 ->values()
@@ -54,7 +58,7 @@ class EventController extends Controller
         $memberId = $user?->member_id;
 
         if ($memberId) {
-            $isAssigned = \App\Models\EventVolunteer::where('event_id', $event->id)
+            $isAssigned = EventVolunteer::where('event_id', $event->id)
                 ->where('member_id', $memberId)
                 ->exists();
 
@@ -95,7 +99,7 @@ class EventController extends Controller
             'liveSession',
             'messages',
             'rundownSegments.items.song.arrangements',
-            'rundownSegments.items.arrangement'
+            'rundownSegments.items.arrangement',
         ])->orderBy('date', 'desc')->get();
 
         $events->each(function (Event $event) use ($membersById): void {
@@ -115,11 +119,11 @@ class EventController extends Controller
             'external_members' => $externalMembers,
             'breadcrumbs' => [
                 ['title' => 'Event Dashboard', 'href' => '/events'],
-            ]
+            ],
         ]);
     }
 
-    public function store(Request $request)
+    public function store(Request $request, MemberApiService $memberApi)
     {
         $validated = $request->validate([
             'title' => 'required|string|max:255',
@@ -141,7 +145,7 @@ class EventController extends Controller
             'other_schedules' => 'nullable|string',
         ]);
 
-        $data = \Illuminate\Support\Arr::except($validated, ['image', 'volunteers', 'rundown_segments', 'sessions', 'participants', 'training_schedules', 'other_schedules']);
+        $data = Arr::except($validated, ['image', 'volunteers', 'rundown_segments', 'sessions', 'participants', 'training_schedules', 'other_schedules']);
         $data['training_schedules'] = $request->filled('training_schedules') ? json_decode($request->training_schedules, true) ?? [] : [];
         $data['other_schedules'] = $request->filled('other_schedules') ? json_decode($request->other_schedules, true) ?? [] : [];
         $data['attendance_type'] = $validated['attendance_type'] ?? 'volunteer';
@@ -155,19 +159,23 @@ class EventController extends Controller
                 ]);
             }
 
-            $data['image_path'] = '/event-images/' . $path;
+            $data['image_path'] = '/event-images/'.$path;
         }
 
         $event = Event::create($data);
 
         $volunteers = is_string($request->volunteers) ? json_decode($request->volunteers, true) : $request->volunteers;
-        if (!empty($volunteers) && is_array($volunteers)) {
+        $newAssignments = [];
+        if (! empty($volunteers) && is_array($volunteers)) {
             foreach ($volunteers as $v) {
-                if (!empty($v['member_id']) && $v['member_id'] !== 'none') {
+                if (! empty($v['member_id']) && $v['member_id'] !== 'none') {
                     $event->volunteers()->create($v);
+                    $newAssignments[] = $v;
                 }
             }
         }
+
+        $this->notifyScheduledUsers($event, $newAssignments, $memberApi);
 
         $this->syncSessions($event, $request->sessions);
         $this->syncParticipants($event, $request->participants);
@@ -176,7 +184,7 @@ class EventController extends Controller
         return back()->with('success', 'Event berhasil dibuat');
     }
 
-    public function update(Request $request, Event $event)
+    public function update(Request $request, Event $event, MemberApiService $memberApi)
     {
         $validated = $request->validate([
             'title' => 'required|string|max:255',
@@ -199,7 +207,7 @@ class EventController extends Controller
             '_method' => 'nullable|string',
         ]);
 
-        $data = \Illuminate\Support\Arr::except($validated, ['image', 'volunteers', 'rundown_segments', 'sessions', 'participants', 'training_schedules', 'other_schedules', '_method']);
+        $data = Arr::except($validated, ['image', 'volunteers', 'rundown_segments', 'sessions', 'participants', 'training_schedules', 'other_schedules', '_method']);
         $data['training_schedules'] = $request->filled('training_schedules') ? json_decode($request->training_schedules, true) ?? [] : [];
         $data['other_schedules'] = $request->filled('other_schedules') ? json_decode($request->other_schedules, true) ?? [] : [];
 
@@ -217,20 +225,27 @@ class EventController extends Controller
                 ]);
             }
 
-            $data['image_path'] = '/event-images/' . $path;
+            $data['image_path'] = '/event-images/'.$path;
         }
 
         $event->update($data);
 
+        $previousMemberIds = $event->volunteers()->pluck('member_id')->map(fn ($id) => (string) $id)->all();
         $event->volunteers()->delete();
         $volunteers = is_string($request->volunteers) ? json_decode($request->volunteers, true) : $request->volunteers;
-        if (!empty($volunteers) && is_array($volunteers)) {
+        $newAssignments = [];
+        if (! empty($volunteers) && is_array($volunteers)) {
             foreach ($volunteers as $v) {
-                if (!empty($v['member_id']) && $v['member_id'] !== 'none') {
+                if (! empty($v['member_id']) && $v['member_id'] !== 'none') {
                     $event->volunteers()->create($v);
+                    if (! in_array((string) $v['member_id'], $previousMemberIds, true)) {
+                        $newAssignments[] = $v;
+                    }
                 }
             }
         }
+
+        $this->notifyScheduledUsers($event, $newAssignments, $memberApi);
 
         $this->syncSessions($event, $request->sessions);
         $this->syncParticipants($event, $request->participants);
@@ -259,17 +274,18 @@ class EventController extends Controller
         return back()->with('success', 'Peserta berhasil didaftarkan ke kelas.');
     }
 
-    public function removeParticipant(Event $event, \App\Models\EventParticipant $participant)
+    public function removeParticipant(Event $event, EventParticipant $participant)
     {
         if ($participant->event_id !== $event->id) {
             abort(403);
         }
 
         $participant->delete();
+
         return back()->with('success', 'Peserta berhasil dihapus dari kelas.');
     }
 
-    public function updateParticipantStatus(Request $request, Event $event, \App\Models\EventParticipant $participant)
+    public function updateParticipantStatus(Request $request, Event $event, EventParticipant $participant)
     {
         if ($participant->event_id !== $event->id) {
             abort(403);
@@ -280,12 +296,14 @@ class EventController extends Controller
         ]);
 
         $participant->update($validated);
+
         return back()->with('success', 'Status peserta berhasil diperbarui.');
     }
 
     public function destroy(Event $event)
     {
         $event->delete();
+
         return back()->with('success', 'Event berhasil dihapus');
     }
 
@@ -293,6 +311,7 @@ class EventController extends Controller
     {
         if ($event->attendance_type !== 'class_participant') {
             $event->sessions()->delete();
+
             return;
         }
 
@@ -305,11 +324,12 @@ class EventController extends Controller
                     'start_time' => $event->time,
                 ]);
             }
+
             return;
         }
 
         $sessions = is_string($payload) ? json_decode($payload, true) : $payload;
-        if (!is_array($sessions)) {
+        if (! is_array($sessions)) {
             return;
         }
 
@@ -319,7 +339,7 @@ class EventController extends Controller
             $sessionNum = $index + 1;
             $event->sessions()->create([
                 'session_number' => $sessionNum,
-                'title' => trim((string) ($sess['title'] ?? ('Sesi ' . $sessionNum))),
+                'title' => trim((string) ($sess['title'] ?? ('Sesi '.$sessionNum))),
                 'date' => $sess['date'] ?? $event->date,
                 'start_time' => $sess['start_time'] ?? $event->time,
                 'end_time' => $sess['end_time'] ?? null,
@@ -332,7 +352,7 @@ class EventController extends Controller
 
     private function syncRundown(Event $event, ?string $payload): void
     {
-        if (!auth()->user()->isSuperAdmin()) {
+        if (! auth()->user()->isSuperAdmin()) {
             return;
         }
 
@@ -341,7 +361,7 @@ class EventController extends Controller
         }
 
         $segments = json_decode($payload, true);
-        if (!is_array($segments)) {
+        if (! is_array($segments)) {
             return;
         }
 
@@ -391,17 +411,53 @@ class EventController extends Controller
         }
 
         $participants = is_string($payload) ? json_decode($payload, true) : $payload;
-        if (!is_array($participants)) {
+        if (! is_array($participants)) {
             return;
         }
 
         foreach ($participants as $p) {
-            if (!empty($p['member_id'])) {
+            if (! empty($p['member_id'])) {
                 $event->participants()->firstOrCreate(
                     ['member_id' => $p['member_id']],
                     ['status' => $p['status'] ?? 'registered', 'registered_at' => now()]
                 );
             }
         }
+    }
+
+    private function notifyScheduledUsers(Event $event, array $assignments, MemberApiService $memberApi): void
+    {
+        collect($assignments)
+            ->filter(fn (array $assignment): bool => ! empty($assignment['member_id']))
+            ->groupBy(fn (array $assignment): string => (string) $assignment['member_id'])
+            ->each(function ($memberAssignments, string $memberId) use ($event, $memberApi): void {
+                $user = User::query()
+                    ->where('member_id', $memberId)
+                    ->whereNotNull('email')
+                    ->where('email', '!=', '')
+                    ->first();
+
+                $roles = $memberAssignments
+                    ->pluck('role_name')
+                    ->filter()
+                    ->unique()
+                    ->implode(', ');
+
+                $notification = new VolunteerScheduledNotification(
+                    $event,
+                    $roles !== '' ? $roles : 'Volunteer',
+                );
+
+                if ($user) {
+                    $user->notify($notification);
+
+                    return;
+                }
+
+                $memberEmail = $memberApi->findById($memberId)['email'] ?? null;
+                if (is_string($memberEmail) && filter_var($memberEmail, FILTER_VALIDATE_EMAIL)) {
+                    Notification::route('mail', $memberEmail)->notify($notification);
+                }
+            });
     }
 }

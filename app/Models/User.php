@@ -11,7 +11,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 
-#[Fillable(['name', 'email', 'phone', 'password', 'member_id', 'role'])]
+#[Fillable(['name', 'email', 'phone', 'password', 'member_id', 'role', 'expo_push_token'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -78,10 +78,6 @@ class User extends Authenticatable
 
     /**
      * Check if user has specific role in a category
-     *
-     * @param string $categoryName
-     * @param array|string $allowedRoles
-     * @return bool
      */
     public function hasCategoryRole(string $categoryName, array|string $allowedRoles): bool
     {
@@ -96,11 +92,13 @@ class User extends Authenticatable
         }
 
         // Periksa role berbasis kategori
-        $categoryId = \App\Models\Category::where('name', $categoryName)->value('id');
-        if (!$categoryId) return false;
+        $categoryId = Category::where('name', $categoryName)->value('id');
+        if (! $categoryId) {
+            return false;
+        }
 
         // Cek apakah user memiliki relasi dengan member_detail
-        if (!$this->member_detail) {
+        if (! $this->member_detail) {
             return false;
         }
 

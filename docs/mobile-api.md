@@ -7,8 +7,8 @@ Dokumen ini adalah sumber kebenaran untuk client native. Backend Laravel saat in
 | Area | Status | Catatan |
 | --- | --- | --- |
 | `routes/api.php` | Tersedia | Endpoint event list dan detail tersedia pada `/api/mobile/v1/events`. |
-| Token API | Belum tersedia | Sanctum belum dipakai sebagai autentikasi token mobile. |
-| Login native | Belum tersedia | Login saat ini diproses Fortify melalui session web dan Inertia. |
+| Token API | READY | Login native mengeluarkan Bearer token yang disimpan pada `users.api_token`. |
+| Login native | READY | `POST /api/mobile/v1/auth/login` menerima email, nomor telepon, atau `member_id`. |
 | Self check-in | Tersedia sebagai route web | `POST /attendance/{event}/scan-event`, membutuhkan session cookie dan mengembalikan redirect/flash. |
 | Admin scan kartu | Tersedia sebagai route web | `POST /attendance/scan-member`, membutuhkan session admin dan mengembalikan redirect/flash. |
 
@@ -143,7 +143,17 @@ Target endpoint native:
 
 - `GET /api/mobile/v1/me/schedules` - **READY**. Mengembalikan daftar jadwal pelayanan user dan `assignment_id` untuk sinkronisasi aksi UI.
 - `POST /api/mobile/v1/me/schedules/{eventVolunteer}/accept` - **READY**. Mengubah status jadwal menjadi `accepted` untuk user yang memiliki assignment tersebut.
-- `POST /api/mobile/v1/me/schedules/{eventVolunteer}/decline` - **READY**. Mengubah status jadwal menjadi `declined` dan menyimpan `response_reason`.
+- `POST /api/mobile/v1/me/schedules/{eventVolunteer}/decline` - **READY**. Wajib mengirim alasan sebelum status diubah menjadi `declined`; backend menyimpan `response_reason`.
+
+Request decline:
+
+```json
+{
+  "reason": "Saya sedang sakit dan tidak bisa hadir."
+}
+```
+
+`reason` wajib berupa string sepanjang 5-1000 karakter. Request tanpa alasan atau dengan alasan yang terlalu pendek mengembalikan `422` dan tidak mengubah status jadwal.
 - `GET /api/mobile/v1/events/{event}/rundown` - seluruh segment dan item rundown beserta detail lagu/arrangement.
 - `GET /api/mobile/v1/events/{event}/live-rundown` - live session, item aktif, `item_started_at`, `duration_seconds`, dan server time.
 
@@ -198,13 +208,33 @@ Aturan data:
 
 ### Notifikasi User
 
+`POST /api/mobile/v1/me/push-token` - menyimpan Expo push token perangkat yang sedang login.
+
+Request:
+
+```json
+{
+  "token": "ExponentPushToken[xxx]"
+}
+```
+
 Target endpoint native:
 
 - `GET /api/mobile/v1/me/notifications` - jumlah dan daftar notifikasi user.
 - `POST /api/mobile/v1/me/notifications/{notification}/read` - membaca satu notifikasi.
 - `POST /api/mobile/v1/me/notifications/read-all` - membaca seluruh notifikasi yang diizinkan.
 
+Semua endpoint notifikasi di atas berstatus **READY** dan menggunakan Bearer token. Push notification menggunakan Expo Push API setelah mobile mendaftarkan `ExponentPushToken`. Notifikasi jadwal yang sudah dibaca tetap muncul dengan `is_read: true`, sedangkan `response_status` tetap menunjukkan `pending`, `accepted`, atau `declined`.
+
 Kategori minimum adalah `schedule_pending` dan `event_message`. Badge dihitung dari status server: jika ada dua notifikasi, membuka satu mengubah total menjadi satu, dan membuka semuanya mengubah total menjadi nol.
+
+### Pesan Event
+
+- `GET /api/mobile/v1/me/messages` - daftar pesan lengkap untuk event yang menugaskan user sebagai volunteer.
+- `GET /api/mobile/v1/me/messages/{eventMessage}` - detail pesan lengkap.
+- `POST /api/mobile/v1/me/messages/{eventMessage}/read` - menandai pesan sebagai sudah dibaca.
+
+Request wajib mengirim `Authorization: Bearer <token>` dan `Accept: application/json`. Response pesan berisi `id`, `event_id`, `event_title`, `title`, `body`, `attachment`, `is_read`, dan `created_at`.
 
 ### Avatar User
 

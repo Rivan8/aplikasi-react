@@ -125,3 +125,43 @@ it('mobile user can decline a schedule assignment with a reason', function () {
         'response_reason' => 'Saya sedang sakit dan tidak bisa hadir.',
     ]);
 });
+
+it('mobile user must provide a reason when declining a schedule assignment', function () {
+    $token = 'mobile-token-decline-validation-'.Str::uuid()->toString();
+
+    $user = User::factory()->create([
+        'member_id' => 'MEM-4004',
+        'role' => 'user',
+        'api_token' => hash('sha256', $token),
+    ]);
+
+    $event = Event::create([
+        'title' => 'Jadwal Validasi',
+        'date' => '2026-09-13',
+        'time' => '10:00:00',
+        'location' => 'Ruang 3',
+        'address' => 'Jl. Contoh 4',
+        'category' => 'Volunteer',
+        'attendance_type' => 'volunteer',
+        'expected' => 10,
+    ]);
+
+    $assignment = EventVolunteer::create([
+        'event_id' => $event->id,
+        'role_category' => 'worship',
+        'role_name' => 'Vocal',
+        'member_id' => $user->member_id,
+        'response_status' => 'pending',
+    ]);
+
+    $this->withHeader('Authorization', 'Bearer '.$token)
+        ->postJson('/api/mobile/v1/me/schedules/'.$assignment->id.'/decline')
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['reason']);
+
+    $this->assertDatabaseHas('event_volunteers', [
+        'id' => $assignment->id,
+        'response_status' => 'pending',
+        'response_reason' => null,
+    ]);
+});

@@ -1,6 +1,7 @@
 import { Link, usePage } from '@inertiajs/react';
 import {
     CalendarDays,
+    FileText,
     HelpCircle,
     History,
     LayoutDashboard,
@@ -74,6 +75,12 @@ const mainNavItems: NavItem[] = [
         roles: ['admin', 'superadmin'],
     },
     {
+        title: 'Artikel & Media',
+        href: '/articles',
+        icon: FileText,
+        roles: ['admin', 'superadmin', 'user', 'jemaat'],
+    },
+    {
         title: 'Live Event',
         href: '/live-events',
         icon: Radio,
@@ -144,7 +151,7 @@ export function AppSidebar() {
     });
 
     return (
-        <Sidebar collapsible="icon" variant="inset">
+        <Sidebar collapsible="icon" variant="inset" className="border-r border-orange-100 shadow-sm shadow-orange-900/5">
             <SidebarHeader>
                 <SidebarMenu>
                     <SidebarMenuItem>

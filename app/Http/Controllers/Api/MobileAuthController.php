@@ -89,6 +89,22 @@ class MobileAuthController extends Controller
         ]);
     }
 
+    public function registerPushToken(Request $request)
+    {
+        $validated = $request->validate([
+            'token' => ['required', 'string', 'max:255', 'regex:/^ExponentPushToken\[[^\]]+\]$/'],
+        ]);
+
+        $request->user()->update([
+            'expo_push_token' => $validated['token'],
+        ]);
+
+        return response()->json([
+            'message' => 'Token push berhasil disimpan.',
+            'code' => 'success',
+        ]);
+    }
+
     public function me(Request $request)
     {
         $user = $request->user();

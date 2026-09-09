@@ -23,7 +23,7 @@ class MobileNotificationController extends Controller
                 ->where('member_id', $memberId)
                 ->where(function ($q) {
                     $q->whereNull('response_status')
-                        ->orWhere('response_status', 'pending');
+                        ->orWhereIn('response_status', ['pending', 'read']);
                 })
                 ->orderBy('id', 'desc')
                 ->get();
@@ -38,16 +38,18 @@ class MobileNotificationController extends Controller
                     'description' => sprintf(
                         'Anda dijadwalkan sebagai %s pada %s.',
                         $pv->role_name ?: 'Pelayanan',
-                        $event ? ($event->date . ' • ' . ($event->time ?? '')) : 'event terdekat'
+                        $event ? ($event->date.' • '.($event->time ?? '')) : 'event terdekat'
                     ),
                     'category' => 'schedule_pending',
                     'is_read' => $isRead,
-                    'created_at' => $event?->date ? ($event->date . 'T00:00:00Z') : now()->toIso8601String(),
+                    'created_at' => $event?->date ? ($event->date.'T00:00:00Z') : now()->toIso8601String(),
                 ];
             }
         }
 
         $messages = EventMessage::with(['event', 'reads'])
+            ->when($memberId, fn ($query) => $query->whereHas('event.volunteers', fn ($volunteers) => $volunteers->where('member_id', $memberId)))
+            ->when(! $memberId, fn ($query) => $query->whereKey(0))
             ->latest()
             ->limit(50)
             ->get();
@@ -67,6 +69,8 @@ class MobileNotificationController extends Controller
                 'id' => 2000000 + (int) $msg->id,
                 'title' => $msg->title ?: ($event ? "Pesan: {$event->title}" : 'Pesan event'),
                 'description' => mb_substr(strip_tags($msg->body ?? ''), 0, 120),
+                'body' => $msg->body,
+                'event_id' => $msg->event_id,
                 'category' => 'event_message',
                 'is_read' => in_array($msg->id, $readIdsByUser, true),
                 'created_at' => $msg->created_at?->toIso8601String() ?: now()->toIso8601String(),
@@ -99,6 +103,12 @@ class MobileNotificationController extends Controller
         }
 
         if ($category === 'event_message' && $userId) {
+            $message = EventMessage::whereKey($realId)
+                ->whereHas('event.volunteers', fn ($query) => $query->where('member_id', $memberId))
+                ->exists();
+
+            abort_unless($message, 403);
+
             EventMessageRead::firstOrCreate([
                 'event_message_id' => $realId,
                 'user_id' => $userId,
@@ -108,7 +118,9 @@ class MobileNotificationController extends Controller
         }
 
         if ($category === 'schedule_pending') {
-            $volunteer = EventVolunteer::find($realId);
+            $volunteer = EventVolunteer::whereKey($realId)
+                ->where('member_id', $memberId)
+                ->first();
             if ($volunteer) {
                 $volunteer->response_status = in_array($volunteer->response_status, ['accepted', 'declined', 'rejected'], true)
                     ? $volunteer->response_status
@@ -130,7 +142,8 @@ class MobileNotificationController extends Controller
         $userId = $user?->id;
 
         if ($userId) {
-            $unreadMessageIds = EventMessage::latest()
+            $unreadMessageIds = EventMessage::whereHas('event.volunteers', fn ($query) => $query->where('member_id', $memberId))
+                ->latest()
                 ->whereNotIn('id', function ($q) use ($userId) {
                     $q->select('event_message_id')
                         ->from((new EventMessageRead)->getTable())

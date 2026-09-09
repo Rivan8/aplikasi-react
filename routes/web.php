@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AttendanceController;
+use App\Http\Controllers\ArticleController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\EventController;
@@ -9,6 +10,7 @@ use App\Http\Controllers\LiveEventController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\SongController;
 use App\Models\Attendance;
+use App\Models\Article;
 use App\Models\Category;
 use App\Models\CategoryRole;
 use App\Models\Department;
@@ -18,10 +20,13 @@ use App\Models\EventMessageRead;
 use App\Models\EventVolunteer;
 use App\Models\MemberDetail;
 use App\Models\MemberStatus;
+use App\Models\User;
+use App\Notifications\VolunteerScheduledNotification;
 use App\Services\MemberApiService;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 
 Route::inertia('/', 'welcome')->name('home');
@@ -30,6 +35,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', function (Request $request) {
         $today = now();
         $user = $request->user();
+        $featuredArticle = Article::where('is_published', true)->latest()->first();
+        $latestArticles = Article::where('is_published', true)->latest()->take(8)->get();
         $memberApi = app(MemberApiService::class);
         $upcomingEventsQuery = Event::with([
             'rundownSegments' => function ($query) {
@@ -47,7 +54,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 $query->whereDate('date', '>', $today->toDateString())
                     ->orWhere(function ($dateQuery) use ($today) {
                         $dateQuery->whereDate('date', '=', $today->toDateString())
-                            ->whereRaw("TIMESTAMP(date, time) >= DATE_SUB(NOW(), INTERVAL 12 HOUR)");
+                            ->whereRaw('TIMESTAMP(date, time) >= DATE_SUB(NOW(), INTERVAL 12 HOUR)');
                     });
             });
 
@@ -214,7 +221,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 ->whereIn('event_id', $assignments->pluck('event_id')->unique())
                 ->latest()
                 ->get()
-                ->map(function (EventMessage $message) use ($user) {
+                ->map(function (EventMessage $message) {
                     return [
                         'id' => $message->id,
                         'title' => $message->title,
@@ -295,9 +302,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 'user_assignments' => $userAssignments,
                 'user_messages' => $userMessages,
                 'external_members' => [],
+                'featured_article' => $featuredArticle,
+                'articles' => $latestArticles,
             ],
         ]);
     })->name('dashboard');
+
+    Route::get('articles', [ArticleController::class, 'index'])->name('articles.index');
+    Route::get('articles/create', [ArticleController::class, 'create'])->middleware('role:admin,superadmin')->name('articles.create');
+    Route::get('articles/{article}/edit', [ArticleController::class, 'edit'])->middleware('role:admin,superadmin')->name('articles.edit');
+    Route::get('articles/{article}', [ArticleController::class, 'show'])->name('articles.show');
+    Route::post('articles', [ArticleController::class, 'store'])->middleware('role:admin,superadmin')->name('articles.store');
+    Route::put('articles/{article}', [ArticleController::class, 'update'])->middleware('role:admin,superadmin')->name('articles.update');
+    Route::delete('articles/{article}', [ArticleController::class, 'destroy'])->middleware('role:admin,superadmin')->name('articles.destroy');
 
     Route::get('my/events', [EventController::class, 'userIndex'])->name('my.events');
     Route::get('my/events/{event}', [EventController::class, 'userShow'])->name('my.events.show');
@@ -384,6 +401,29 @@ Route::middleware(['auth', 'verified'])->group(function () {
             'response_reason' => null,
             'responded_at' => null,
         ]);
+
+        $user = User::query()
+            ->where('member_id', $validated['member_id'])
+            ->whereNotNull('email')
+            ->where('email', '!=', '')
+            ->first();
+
+        $notification = new VolunteerScheduledNotification(
+            $eventVolunteer->event,
+            $eventVolunteer->role_name ?: 'Volunteer',
+        );
+
+        if ($user) {
+            $eventVolunteer->load('event');
+            $user->notify($notification);
+        } else {
+            $member = app(MemberApiService::class)->findById((string) $validated['member_id']);
+            $email = $member['email'] ?? null;
+
+            if (is_string($email) && filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                Notification::route('mail', $email)->notify($notification);
+            }
+        }
 
         return back()->with('success', 'Volunteer berhasil diganti.');
     })->middleware('role:admin,superadmin')->name('dashboard.volunteer-assignments.replace');
@@ -543,6 +583,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         return response()->file($disk->path($path));
     })->where('path', '.*')->name('event-images.show');
+
+    Route::get('article-images/{path}', function (string $path) {
+        abort_if(str_contains($path, '..'), 404);
+
+        $disk = Storage::disk('public');
+        abort_unless($disk->exists($path), 404);
+
+        return response()->file($disk->path($path));
+    })->where('path', '.*')->name('article-images.show');
 });
 
 // Settings Routes

@@ -1,7 +1,9 @@
 <?php
 
 use App\Http\Controllers\Api\MobileAuthController;
+use App\Http\Controllers\Api\MobileArticleController;
 use App\Http\Controllers\Api\MobileEventController;
+use App\Http\Controllers\Api\MobileMessageController;
 use App\Http\Controllers\Api\MobileNotificationController;
 use Illuminate\Support\Facades\Route;
 
@@ -10,6 +12,7 @@ Route::prefix('mobile/v1')->group(function (): void {
 
     Route::middleware(['auth.mobile'])->group(function (): void {
         Route::post('/auth/logout', [MobileAuthController::class, 'logout']);
+        Route::post('/me/push-token', [MobileAuthController::class, 'registerPushToken']);
         Route::get('/me', [MobileAuthController::class, 'me']);
 
         Route::get('/events', [MobileEventController::class, 'index']);
@@ -17,6 +20,9 @@ Route::prefix('mobile/v1')->group(function (): void {
         Route::post('/events/{event}/attendance', [MobileEventController::class, 'postAttendance']);
         Route::get('/events/{event}/rundown', [MobileEventController::class, 'rundown']);
         Route::get('/events/{event}/live-rundown', [MobileEventController::class, 'liveRundown']);
+
+        Route::get('/articles', [MobileArticleController::class, 'index']);
+        Route::get('/articles/{article}', [MobileArticleController::class, 'show']);
 
         Route::get('/me/schedules', [MobileEventController::class, 'mySchedules']);
         Route::post('/me/schedules/{eventVolunteer}/accept', [MobileEventController::class, 'acceptSchedule']);
@@ -26,5 +32,9 @@ Route::prefix('mobile/v1')->group(function (): void {
         Route::get('/me/notifications', [MobileNotificationController::class, 'index']);
         Route::post('/me/notifications/{notification}/read', [MobileNotificationController::class, 'markRead']);
         Route::post('/me/notifications/read-all', [MobileNotificationController::class, 'readAll']);
+
+        Route::get('/me/messages', [MobileMessageController::class, 'index']);
+        Route::get('/me/messages/{eventMessage}', [MobileMessageController::class, 'show']);
+        Route::post('/me/messages/{eventMessage}/read', [MobileMessageController::class, 'markRead']);
     });
 });
