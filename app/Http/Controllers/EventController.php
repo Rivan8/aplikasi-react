@@ -123,6 +123,28 @@ class EventController extends Controller
         ]);
     }
 
+    public function calendar()
+    {
+        $eventsQuery = Event::query()
+            ->select(['id', 'title', 'date', 'time', 'location', 'category'])
+            ->orderBy('date')
+            ->orderBy('time');
+
+        if (! request()->user()->isAdmin()) {
+            $memberId = request()->user()->member_id;
+
+            if ($memberId) {
+                $eventsQuery->whereHas('volunteers', fn ($query) => $query->where('member_id', $memberId));
+            } else {
+                $eventsQuery->whereKey(0);
+            }
+        }
+
+        return Inertia::render('event-calendar/index', [
+            'events' => $eventsQuery->get(),
+        ]);
+    }
+
     public function store(Request $request, MemberApiService $memberApi)
     {
         $validated = $request->validate([
@@ -169,8 +191,8 @@ class EventController extends Controller
         if (! empty($volunteers) && is_array($volunteers)) {
             foreach ($volunteers as $v) {
                 if (! empty($v['member_id']) && $v['member_id'] !== 'none') {
-                    $event->volunteers()->create($v);
-                    $newAssignments[] = $v;
+                    $volunteer = $event->volunteers()->create($v);
+                    $newAssignments[] = array_merge($v, ['assignment_id' => $volunteer->id]);
                 }
             }
         }
@@ -237,9 +259,9 @@ class EventController extends Controller
         if (! empty($volunteers) && is_array($volunteers)) {
             foreach ($volunteers as $v) {
                 if (! empty($v['member_id']) && $v['member_id'] !== 'none') {
-                    $event->volunteers()->create($v);
+                    $volunteer = $event->volunteers()->create($v);
                     if (! in_array((string) $v['member_id'], $previousMemberIds, true)) {
-                        $newAssignments[] = $v;
+                        $newAssignments[] = array_merge($v, ['assignment_id' => $volunteer->id]);
                     }
                 }
             }
@@ -446,6 +468,7 @@ class EventController extends Controller
                 $notification = new VolunteerScheduledNotification(
                     $event,
                     $roles !== '' ? $roles : 'Volunteer',
+                    (int) $memberAssignments->first()['assignment_id'],
                 );
 
                 if ($user) {

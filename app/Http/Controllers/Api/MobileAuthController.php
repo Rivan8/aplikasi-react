@@ -91,17 +91,49 @@ class MobileAuthController extends Controller
 
     public function registerPushToken(Request $request)
     {
-        $validated = $request->validate([
-            'token' => ['required', 'string', 'max:255', 'regex:/^ExponentPushToken\[[^\]]+\]$/'],
+        $tokenType = $request->input('token_type');
+
+        if (! $tokenType) {
+            $tokenType = $request->filled('fcm_token') && ! $request->filled('expo_push_token')
+                ? 'fcm'
+                : 'expo';
+        }
+
+        $request->merge([
+            'token' => $request->input('token') ?? ($tokenType === 'fcm'
+                ? $request->input('fcm_token')
+                : $request->input('expo_push_token')),
+            'token_type' => $tokenType,
         ]);
 
+        $validated = $request->validate([
+            'token' => ['required', 'string', 'max:512'],
+            'token_type' => ['nullable', 'string', 'in:expo,fcm'],
+            'expo_push_token' => ['nullable', 'string', 'max:512'],
+            'fcm_token' => ['nullable', 'string', 'max:512'],
+        ]);
+
+        $tokenType = $validated['token_type'] ?? 'expo';
+
+        if ($tokenType === 'expo' && ! preg_match('/^(?:Expo|Exponent)PushToken\[[^\]]+\]$/', $validated['token'])) {
+            return response()->json([
+                'message' => 'Format Expo push token tidak valid.',
+                'code' => 'validation_error',
+                'errors' => ['token' => ['Gunakan format ExpoPushToken[...] atau ExponentPushToken[...].']],
+            ], 422);
+        }
+
         $request->user()->update([
-            'expo_push_token' => $validated['token'],
+            $tokenType === 'fcm' ? 'fcm_token' : 'expo_push_token' => $validated['token'],
         ]);
 
         return response()->json([
             'message' => 'Token push berhasil disimpan.',
             'code' => 'success',
+            'data' => [
+                'token_type' => $tokenType,
+                'registered' => true,
+            ],
         ]);
     }
 

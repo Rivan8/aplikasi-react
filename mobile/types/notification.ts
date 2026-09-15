@@ -5,7 +5,9 @@ export interface MobileNotification {
     title: string;
     description: string;
     body?: string;
+    assignment_id?: number;
     event_id?: number;
+    response_status?: 'pending' | 'read' | 'accepted' | 'declined' | 'rejected' | string;
     category: MobileNotificationCategory;
     is_read: boolean;
     created_at: string;

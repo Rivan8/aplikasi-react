@@ -518,7 +518,7 @@ function LegacyUserDashboard({
 
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                     <Button asChild variant="outline" className="h-auto justify-start gap-3 p-4 text-left">
-                        <Link href="/my/events">
+                        <Link href="/event-calendar">
                             <CalendarDays className="h-5 w-5 shrink-0 text-primary" />
                             <span><strong className="block text-sm">Event Mendatang</strong><small className="text-xs text-muted-foreground">Lihat semua kegiatan</small></span>
                         </Link>
@@ -550,7 +550,7 @@ function LegacyUserDashboard({
                             <p className="text-sm text-muted-foreground">Kegiatan yang dapat Anda ikuti atau layani.</p>
                         </div>
                         <Button asChild variant="ghost" size="sm" className="shrink-0 gap-1">
-                            <Link href="/my/events">Lihat semua <ChevronRight className="h-4 w-4" /></Link>
+                            <Link href="/event-calendar">Lihat kalender <ChevronRight className="h-4 w-4" /></Link>
                         </Button>
                     </div>
                     {upcomingServices.length === 0 ? (
@@ -568,7 +568,7 @@ function LegacyUserDashboard({
                                             <p className="flex items-center gap-2"><MapPin className="h-3.5 w-3.5" />{event.location}</p>
                                         </div>
                                         <Button asChild size="sm" variant="outline" className="w-full">
-                                            <Link href="/my/scan">Buka absensi</Link>
+                                            <Link href="/event-calendar">Lihat di kalender</Link>
                                         </Button>
                                     </CardContent>
                                 </Card>
@@ -1046,7 +1046,7 @@ function UserDashboard({
 
                     <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                         {[
-                            { label: 'Event', detail: `${upcomingServices.length} mendatang`, href: '/my/events', icon: CalendarDays, tone: 'text-sky-700 bg-sky-50 dark:bg-sky-950/30 dark:text-sky-300' },
+                            { label: 'Event', detail: `${upcomingServices.length} mendatang`, href: '/event-calendar', icon: CalendarDays, tone: 'text-sky-700 bg-sky-50 dark:bg-sky-950/30 dark:text-sky-300' },
                             { label: 'Jadwal', detail: `${assignments.length} penugasan`, href: '#jadwal', icon: ClipboardList, tone: 'text-amber-700 bg-amber-50 dark:bg-amber-950/30 dark:text-amber-300' },
                             { label: 'Riwayat', detail: 'Kehadiran saya', href: '/my/attendance-history', icon: History, tone: 'text-emerald-700 bg-emerald-50 dark:bg-emerald-950/30 dark:text-emerald-300' },
                             { label: 'Pesan', detail: unreadMessages ? `${unreadMessages} belum dibaca` : 'Semua terbaca', href: '#pesan', icon: MessageSquare, tone: 'text-rose-700 bg-rose-50 dark:bg-rose-950/30 dark:text-rose-300' },
@@ -1059,7 +1059,7 @@ function UserDashboard({
                     <section className="space-y-3"><div className="flex items-end justify-between gap-4"><div><p className="text-xs font-semibold tracking-[0.16em] text-primary uppercase">Ruang inspirasi</p><h2 className="mt-1 text-xl font-bold tracking-tight">Artikel terbaru</h2></div><Button asChild variant="ghost" size="sm" className="gap-1 text-primary"><Link href="/articles">Lihat semua<ChevronRight className="h-4 w-4" /></Link></Button></div>{articles && articles.length > 0 ? <div className="flex snap-x gap-3 overflow-x-auto pb-3 sm:gap-4 lg:grid lg:grid-cols-4 lg:overflow-visible lg:pb-0">{articles.map((article) => <Link key={article.id} href={`/articles/${article.id}`} className="group relative min-h-[220px] min-w-[82%] snap-start overflow-hidden rounded-3xl bg-slate-950 text-white shadow-lg shadow-slate-950/10 sm:min-w-[45%] lg:min-w-0">{article.image_path && <img src={article.image_path} alt="" className="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-105" />}<div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(2,6,23,0.05)_15%,rgba(2,6,23,0.9)_100%)]" /><div className="relative flex min-h-[220px] flex-col justify-end p-5"><p className="text-[10px] font-bold tracking-[0.16em] text-teal-200 uppercase">Artikel</p><h3 className="mt-2 line-clamp-2 text-lg font-black tracking-tight">{article.title}</h3><p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-200">{article.excerpt || 'Baca artikel selengkapnya.'}</p><span className="mt-4 flex items-center gap-1 text-xs font-bold text-white">Baca artikel <ArrowRight className="h-3.5 w-3.5 transition group-hover:translate-x-1" /></span></div></Link>)}</div> : <Link href="/articles" className="flex min-h-[160px] items-center justify-center rounded-3xl border border-dashed bg-white/70 p-6 text-sm text-muted-foreground shadow-sm dark:bg-card/70">Belum ada artikel yang diterbitkan. Buka ruang artikel.</Link>}</section>
 
                     <section className="space-y-3">
-                        <div className="flex items-end justify-between gap-4"><div><p className="text-xs font-semibold tracking-[0.16em] text-primary uppercase">Agenda</p><h2 className="mt-1 text-xl font-bold tracking-tight">Event mendatang</h2></div><Button asChild variant="ghost" size="sm" className="gap-1 text-primary"><Link href="/my/events">Lihat semua<ChevronRight className="h-4 w-4" /></Link></Button></div>
+                        <div className="flex items-end justify-between gap-4"><div><p className="text-xs font-semibold tracking-[0.16em] text-primary uppercase">Agenda</p><h2 className="mt-1 text-xl font-bold tracking-tight">Event mendatang</h2></div><Button asChild variant="ghost" size="sm" className="gap-1 text-primary"><Link href="/event-calendar">Lihat kalender<ChevronRight className="h-4 w-4" /></Link></Button></div>
                         {upcomingServices.length === 0 ? <Card><CardContent className="p-5 text-sm text-muted-foreground">Belum ada event mendatang.</CardContent></Card> : <div className="flex snap-x gap-3 overflow-x-auto pb-2 sm:grid sm:grid-cols-3 sm:overflow-visible">{upcomingServices.map((event) => <Card key={event.id} className="min-w-[82%] snap-start border-0 bg-white/90 shadow-sm dark:bg-card sm:min-w-0"><CardContent className="p-4"><div className="flex items-start justify-between gap-3"><div><Badge variant="secondary" className="rounded-md text-[10px]">{event.category}</Badge><h3 className="mt-3 line-clamp-2 font-semibold">{event.title}</h3></div><span className="rounded-xl bg-primary/10 p-2 text-primary"><CalendarDays className="h-4 w-4" /></span></div><div className="mt-4 space-y-2 text-xs text-muted-foreground"><p className="flex items-center gap-2"><CalendarDays className="h-3.5 w-3.5" />{formatUserDate(event.date)}</p><p className="flex items-center gap-2"><Clock className="h-3.5 w-3.5" />{event.time}</p><p className="flex items-center gap-2 truncate"><MapPin className="h-3.5 w-3.5 shrink-0" />{event.location}</p></div></CardContent></Card>)}</div>}
                     </section>
 

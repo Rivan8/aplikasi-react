@@ -40,6 +40,9 @@ class MobileNotificationController extends Controller
                         $pv->role_name ?: 'Pelayanan',
                         $event ? ($event->date.' • '.($event->time ?? '')) : 'event terdekat'
                     ),
+                    'assignment_id' => (int) $pv->id,
+                    'event_id' => $pv->event_id ? (int) $pv->event_id : null,
+                    'response_status' => $pv->response_status ?: 'pending',
                     'category' => 'schedule_pending',
                     'is_read' => $isRead,
                     'created_at' => $event?->date ? ($event->date.'T00:00:00Z') : now()->toIso8601String(),

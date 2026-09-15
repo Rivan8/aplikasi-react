@@ -14,6 +14,8 @@ function buildUrl(path: string): string {
 export function registerPushToken(
     token: string,
     expoPushToken: string,
+    devicePushToken = expoPushToken,
+    devicePlatform = 'expo',
 ): Promise<void> {
     return fetchJson<void>(
         buildUrl('/api/mobile/v1/me/push-token'),
@@ -21,7 +23,29 @@ export function registerPushToken(
         {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: expoPushToken }),
+            body: JSON.stringify({
+                token: expoPushToken,
+                expo_push_token: expoPushToken,
+                device_push_token: devicePushToken,
+                fcm_token: devicePushToken,
+                device_platform: devicePlatform,
+                platform: 'expo',
+            }),
+        },
+    );
+}
+
+export function registerFcmToken(
+    token: string,
+    fcmToken: string,
+): Promise<void> {
+    return fetchJson<void>(
+        buildUrl('/api/mobile/v1/me/push-token'),
+        token,
+        {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: fcmToken, token_type: 'fcm' }),
         },
     );
 }

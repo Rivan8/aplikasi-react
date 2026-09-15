@@ -18,6 +18,7 @@ class VolunteerScheduledNotification extends Notification implements ShouldQueue
     public function __construct(
         private readonly Event $event,
         private readonly string $roleName,
+        private readonly int $assignmentId,
     ) {
         $this->afterCommit = true;
     }
@@ -40,13 +41,12 @@ class VolunteerScheduledNotification extends Notification implements ShouldQueue
         return [
             'to' => $notifiable->expo_push_token,
             'title' => 'Penjadwalan baru',
-            'body' => 'Anda mendapat jadwal pelayanan baru.',
+            'body' => 'Anda menerima penjadwalan baru.',
             'sound' => 'default',
-            'badge' => 1,
             'channelId' => 'default',
+            'badge' => 1,
             'data' => [
-                'category' => 'schedule_pending',
-                'event_id' => $this->event->id,
+                'notificationId' => (string) (1000000 + $this->assignmentId),
             ],
         ];
     }

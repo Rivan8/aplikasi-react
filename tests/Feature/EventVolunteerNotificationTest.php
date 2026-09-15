@@ -75,3 +75,66 @@ it('notifies assigned users when an event message is created', function () {
 
     Notification::assertSentTo($volunteer, EventMessageNotification::class);
 });
+
+it('builds a visible Expo payload for event messages', function () {
+    $event = Event::create([
+        'title' => 'Sunday Service',
+        'date' => '2026-10-01',
+        'time' => '09:00',
+        'location' => 'Main Hall',
+        'address' => 'Jl. Contoh 1',
+        'category' => 'Worship',
+        'attendance_type' => 'volunteer',
+        'expected' => 10,
+    ]);
+    $message = $event->messages()->create([
+        'title' => 'Jadwal pelayanan baru',
+        'body' => 'Anda mendapatkan jadwal pelayanan.',
+    ]);
+    $user = User::factory()->create([
+        'expo_push_token' => 'ExponentPushToken[test-token]',
+    ]);
+
+    expect((new EventMessageNotification($message))->toExpo($user))->toMatchArray([
+        'to' => 'ExponentPushToken[test-token]',
+        'title' => 'Jadwal pelayanan baru',
+        'body' => 'Anda mendapatkan jadwal pelayanan.',
+        'sound' => 'default',
+        'channelId' => 'default',
+        'data' => [
+            'url' => '/messages',
+            'category' => 'event_message',
+            'event_id' => $event->id,
+            'message_id' => $message->id,
+        ],
+    ]);
+});
+
+it('builds a visible Expo payload for volunteer schedules', function () {
+    $event = Event::create([
+        'title' => 'Sunday Service',
+        'date' => '2026-10-01',
+        'time' => '09:00',
+        'location' => 'Main Hall',
+        'address' => 'Jl. Contoh 1',
+        'category' => 'Worship',
+        'attendance_type' => 'volunteer',
+        'expected' => 10,
+    ]);
+    $user = User::factory()->create([
+        'expo_push_token' => 'ExponentPushToken[test-token]',
+    ]);
+
+    expect((new VolunteerScheduledNotification($event, 'Vocal'))->toExpo($user))->toMatchArray([
+        'to' => 'ExponentPushToken[test-token]',
+        'title' => 'Penjadwalan baru',
+        'body' => 'Anda mendapat jadwal pelayanan baru.',
+        'sound' => 'default',
+        'channelId' => 'default',
+        'data' => [
+            'url' => '/messages',
+            'category' => 'schedule_pending',
+            'event_id' => $event->id,
+        ],
+    ]);
+});

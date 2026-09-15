@@ -208,13 +208,36 @@ Aturan data:
 
 ### Notifikasi User
 
-`POST /api/mobile/v1/me/push-token` - menyimpan Expo push token perangkat yang sedang login.
+`POST /api/mobile/v1/me/push-token` - menyimpan token push perangkat yang sedang login. Token FCM native dan Expo disimpan terpisah.
 
 Request:
 
 ```json
 {
-  "token": "ExponentPushToken[xxx]"
+  "token": "ExponentPushToken[xxx]",
+  "token_type": "expo"
+}
+```
+
+Untuk aplikasi React Native native yang memakai Firebase Cloud Messaging, kirim:
+
+```json
+{
+  "token": "fcm-device-token",
+  "token_type": "fcm"
+}
+```
+
+`token_type` bernilai `expo` atau `fcm`, dan default-nya `expo` untuk kompatibilitas client lama. Backend menyimpan token FCM pada `users.fcm_token` dan token Expo pada `users.expo_push_token`; token tidak dikembalikan dalam response. Response sukses menyertakan `data.token_type` dan `data.registered: true`.
+
+Untuk notifikasi kategori `schedule_pending`, response selalu menyertakan `assignment_id`, `event_id`, dan `response_status`. Penugasan baru menggunakan `response_status: "pending"`:
+
+```json
+{
+  "category": "schedule_pending",
+  "assignment_id": 12,
+  "event_id": 4,
+  "response_status": "pending"
 }
 ```
 

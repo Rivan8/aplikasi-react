@@ -75,6 +75,12 @@ const mainNavItems: NavItem[] = [
         roles: ['admin', 'superadmin'],
     },
     {
+        title: 'Kalender Event',
+        href: '/event-calendar',
+        icon: CalendarDays,
+        roles: ['admin', 'superadmin'],
+    },
+    {
         title: 'Artikel & Media',
         href: '/articles',
         icon: FileText,

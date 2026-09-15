@@ -540,6 +540,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     })->middleware('role:admin,superadmin')->name('anggota.update-details');
     Route::resource('departments', DepartmentController::class)->except(['create', 'edit', 'show'])->middleware('role:admin,superadmin');
 
+    Route::get('event-calendar', [EventController::class, 'calendar'])->name('event-calendar');
     Route::resource('events', EventController::class)->except(['create', 'edit', 'show'])->middleware('role:admin,superadmin');
     Route::post('event-messages', [EventMessageController::class, 'store'])->middleware('role:admin,superadmin')->name('event-messages.store');
     Route::post('event-messages/{eventMessage}/read', [EventMessageController::class, 'markRead'])->name('event-messages.read');

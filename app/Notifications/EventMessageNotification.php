@@ -51,6 +51,7 @@ class EventMessageNotification extends Notification implements ShouldQueue
             'badge' => 1,
             'channelId' => 'default',
             'data' => [
+                'url' => '/messages',
                 'category' => 'event_message',
                 'event_id' => $this->eventMessage->event_id,
                 'message_id' => $this->eventMessage->id,

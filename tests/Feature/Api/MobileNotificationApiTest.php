@@ -48,7 +48,14 @@ it('mobile receives schedule and event message notifications', function () {
     $this->withHeader('Authorization', 'Bearer '.$token)
         ->getJson('/api/mobile/v1/me/notifications')
         ->assertOk()
-        ->assertJsonFragment(['id' => 1000000 + $assignment->id, 'category' => 'schedule_pending', 'is_read' => false])
+        ->assertJsonFragment([
+            'id' => 1000000 + $assignment->id,
+            'category' => 'schedule_pending',
+            'assignment_id' => $assignment->id,
+            'event_id' => $assignment->event_id,
+            'response_status' => 'pending',
+            'is_read' => false,
+        ])
         ->assertJsonFragment(['id' => 2000000 + $message->id, 'category' => 'event_message', 'is_read' => false]);
 });
 
