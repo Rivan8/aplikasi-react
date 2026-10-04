@@ -32,6 +32,7 @@ function splitLongBlock(node: Element, maxCharacters: number): string[] {
 
     words.forEach((word) => {
         const candidate = current ? `${current} ${word}` : word;
+
         if (current && candidate.length > maxCharacters) {
             pages.push(`<${node.tagName.toLowerCase()}>${escapeHtml(current)}</${node.tagName.toLowerCase()}>`);
             current = word;
@@ -69,6 +70,7 @@ function splitArticleContent(content: string, maxCharacters: number): string[] {
             }
 
             pages.push(...splitLongBlock(node as Element, maxCharacters));
+
             return;
         }
 

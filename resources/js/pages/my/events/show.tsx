@@ -36,7 +36,9 @@ interface EventDataPayload {
 }
 
 const formatDate = (value?: string | null) => {
-    if (!value) return '-';
+    if (!value) {
+return '-';
+}
 
     return new Intl.DateTimeFormat('id-ID', {
         weekday: 'long',
@@ -47,7 +49,9 @@ const formatDate = (value?: string | null) => {
 };
 
 const formatTime = (value?: string | null) => {
-    if (!value) return '-';
+    if (!value) {
+return '-';
+}
 
     const [hour, minute] = value.split(':');
     const date = new Date();

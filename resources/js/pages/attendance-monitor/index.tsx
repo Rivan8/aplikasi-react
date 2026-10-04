@@ -2,7 +2,8 @@ import { Head, router } from '@inertiajs/react';
 import { CheckCircle2, Clock3, Monitor, Users } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { formatEventDate } from '@/lib/utils';
 
 interface EventSession {
     id: number;
@@ -19,6 +20,7 @@ interface EventItem {
     time: string | null;
     attendance_start_time: string | null;
     expected: number;
+    attendance_type?: string;
     sessions?: EventSession[];
 }
 
@@ -95,8 +97,14 @@ export default function AttendanceMonitor({
     }, []);
 
     const subtitle = useMemo(() => {
-        if (!selectedEvent) return 'Pilih event untuk menampilkan kehadiran.';
-        if (selectedSession) return `${selectedEvent.title} - ${selectedSession.title}`;
+        if (!selectedEvent) {
+return 'Pilih event untuk menampilkan kehadiran.';
+}
+
+        if (selectedSession) {
+return `${selectedEvent.title} - ${selectedSession.title}`;
+}
+
         return selectedEvent.title;
     }, [selectedEvent, selectedSession]);
 
@@ -109,6 +117,9 @@ export default function AttendanceMonitor({
             replace: true,
         });
     };
+
+    const classParticipantEvents = events.filter((event) => event.attendance_type === 'class_participant');
+    const volunteerEvents = events.filter((event) => event.attendance_type !== 'class_participant');
 
     return (
         <>
@@ -132,18 +143,41 @@ export default function AttendanceMonitor({
                                 <SelectValue placeholder="Pilih event" />
                             </SelectTrigger>
                             <SelectContent>
-                                {events.map((event) => (
-                                    <SelectItem key={event.id} value={String(event.id)}>{event.title}</SelectItem>
-                                ))}
+                                {volunteerEvents.length > 0 && (
+                                    <SelectGroup>
+                                        <SelectLabel>Pelayanan (Doa Persiapan Ibadah)</SelectLabel>
+                                        {volunteerEvents.map((event) => (
+                                            <SelectItem key={event.id} value={String(event.id)}>
+                                                <span className="truncate">{event.title}</span>
+                                                {event.date && (
+                                                    <span className="text-muted-foreground">{formatEventDate(event.date)}</span>
+                                                )}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectGroup>
+                                )}
+                                {classParticipantEvents.length > 0 && (
+                                    <SelectGroup>
+                                        <SelectLabel>Peserta Kelas/Sesi</SelectLabel>
+                                        {classParticipantEvents.map((event) => (
+                                            <SelectItem key={event.id} value={String(event.id)}>
+                                                <span className="truncate">{event.title}</span>
+                                                {event.date && (
+                                                    <span className="text-muted-foreground">{formatEventDate(event.date)}</span>
+                                                )}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectGroup>
+                                )}
                             </SelectContent>
                         </Select>
                         {sessions.length > 0 && (
                             <Select value={filters.event_session_id || 'all'} onValueChange={(value) => changeFilter(filters.event_id, value === 'all' ? '' : value)}>
                                 <SelectTrigger className="border-white/15 bg-white/10 text-white">
-                                    <SelectValue placeholder="Semua sesi" />
+                                    <SelectValue placeholder="Doa Persiapan Ibadah" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="all">Semua sesi</SelectItem>
+                                    <SelectItem value="all">Doa Persiapan Ibadah</SelectItem>
                                     {sessions.map((session) => (
                                         <SelectItem key={session.id} value={String(session.id)}>{session.title}</SelectItem>
                                     ))}
@@ -199,7 +233,9 @@ export default function AttendanceMonitor({
                                 <article key={scan.id} className={`flex items-center gap-4 rounded-2xl border p-4 animate-in fade-in slide-in-from-bottom-2 duration-500 ${scan.status === 'Late' ? 'border-amber-400/40 bg-amber-400/[0.10]' : 'border-white/10 bg-white/[0.06]'}`}>
                                     <div className={`relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full text-lg font-bold text-white ${scan.status === 'Late' ? 'bg-amber-500' : 'bg-emerald-500'}`}>
                                         {scan.name.charAt(0).toUpperCase()}
-                                        {scan.foto_url && <img src={scan.foto_url} alt="" className="absolute inset-0 h-full w-full object-cover" onError={(event) => { event.currentTarget.style.display = 'none'; }} />}
+                                        {scan.foto_url && <img src={scan.foto_url} alt="" className="absolute inset-0 h-full w-full object-cover" onError={(event) => {
+ event.currentTarget.style.display = 'none'; 
+}} />}
                                     </div>
                                     <div className="min-w-0 flex-1">
                                         <h3 className="truncate font-semibold">{scan.name}</h3>

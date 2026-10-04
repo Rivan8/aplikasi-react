@@ -16,7 +16,9 @@ export function MobileBottomNav() {
     };
     const isMember = ['user', 'jemaat'].includes(auth?.user?.role ?? '');
 
-    if (!isMember) return null;
+    if (!isMember) {
+return null;
+}
 
     const currentPath = url?.split('?')[0] ?? window.location.pathname;
     const isActive = (href: string) => currentPath === href || currentPath.startsWith(`${href}/`);

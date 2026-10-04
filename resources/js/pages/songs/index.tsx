@@ -1,26 +1,3 @@
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-    Dialog,
-    DialogContent,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import AppLayout from '@/layouts/app-layout';
-import { type BreadcrumbItem } from '@/types';
-import { cn } from '@/lib/utils';
 import { Head, router, useForm } from '@inertiajs/react';
 import {
     Music,
@@ -47,12 +24,35 @@ import {
 } from 'lucide-react';
 import { useEffect, useState, useMemo } from 'react';
 import { toast } from 'sonner';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+    Dialog,
+    DialogContent,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import AppLayout from '@/layouts/app-layout';
+import { cn } from '@/lib/utils';
+import type {BreadcrumbItem} from '@/types';
 
 interface SongArrangement {
     id: number;
@@ -114,10 +114,14 @@ export default function SongsIndex({ songs, filters, breadcrumbs }: Props) {
     , [selectedSongId, songs.data]);
 
     const activeArrangement = useMemo(() => {
-        if (!selectedSong) return null;
+        if (!selectedSong) {
+return null;
+}
+
         if (selectedArrangementId) {
             return selectedSong.arrangements.find(a => a.id === selectedArrangementId) || selectedSong.arrangements[0];
         }
+
         return selectedSong.arrangements[0];
     }, [selectedSong, selectedArrangementId]);
 
@@ -155,6 +159,7 @@ export default function SongsIndex({ songs, filters, breadcrumbs }: Props) {
                 router.get('/songs', { search }, { preserveState: true, replace: true });
             }
         }, 500);
+
         return () => clearTimeout(delayDebounceFn);
     }, [search]);
 
@@ -182,7 +187,10 @@ export default function SongsIndex({ songs, filters, breadcrumbs }: Props) {
     };
 
     const openAddArrangement = () => {
-        if (!selectedSong) return;
+        if (!selectedSong) {
+return;
+}
+
         setEditingArrangement(null);
         arrangementForm.reset();
         arrangementForm.setData('_method', 'POST');
@@ -210,6 +218,7 @@ export default function SongsIndex({ songs, filters, breadcrumbs }: Props) {
 
     const handleSongSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+
         if (editingSong) {
             songForm.put(`/songs/${editingSong.id}`, {
                 onSuccess: () => {
@@ -272,11 +281,19 @@ export default function SongsIndex({ songs, filters, breadcrumbs }: Props) {
 
     // --- Helpers ---
     const parseLyricsToSections = (text: string) => {
-        if (!text?.trim()) return [];
+        if (!text?.trim()) {
+return [];
+}
+
         let blocks = text.split(/\n\s*\n\s*\n/);
-        if (blocks.length <= 1) blocks = text.split(/\n\s*\n/);
+
+        if (blocks.length <= 1) {
+blocks = text.split(/\n\s*\n/);
+}
+
         return blocks.map(block => {
             const lines = block.trim().split('\n');
+
             return { heading: lines[0] || '', body: lines.slice(1).join('\n').trim() };
         }).filter(s => s.heading || s.body);
     };

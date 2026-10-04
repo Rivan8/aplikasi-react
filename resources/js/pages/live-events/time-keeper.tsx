@@ -1,3 +1,6 @@
+import { Head, router } from '@inertiajs/react';
+import { CheckCircle2, Clock, Maximize2, Minimize2, Music } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
     Select,
@@ -6,9 +9,6 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { Head, router } from '@inertiajs/react';
-import { CheckCircle2, Clock, Maximize2, Minimize2, Music } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
 
 interface RundownItem {
@@ -95,6 +95,7 @@ export default function TimeKeeper({
     const serverOffset = useMemo(() => {
         const serverTime = new Date(server_now).getTime();
         const clientTime = Date.now();
+
         return serverTime - clientTime;
     }, [server_now]);
 
@@ -107,7 +108,9 @@ export default function TimeKeeper({
     }, []);
 
     useEffect(() => {
-        if (!selected_event || selected_event.live_session?.status !== 'running') return;
+        if (!selected_event || selected_event.live_session?.status !== 'running') {
+return;
+}
 
         const pollInterval = window.setInterval(() => {
             router.reload({
@@ -125,8 +128,12 @@ export default function TimeKeeper({
 
     // Elapsed calculation
     const itemElapsedSeconds = useMemo(() => {
-        if (!isRunning || !session?.item_started_at) return 0;
+        if (!isRunning || !session?.item_started_at) {
+return 0;
+}
+
         const itemStartedAt = new Date(session.item_started_at).getTime();
+
         return Math.max(0, Math.floor((now + serverOffset - itemStartedAt) / 1000));
     }, [now, serverOffset, isRunning, session?.item_started_at]);
 
@@ -170,6 +177,7 @@ export default function TimeKeeper({
         };
 
         window.addEventListener('mousemove', handleMouseMove);
+
         return () => window.removeEventListener('mousemove', handleMouseMove);
     }, []);
 

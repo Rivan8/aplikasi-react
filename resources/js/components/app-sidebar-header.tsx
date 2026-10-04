@@ -1,6 +1,7 @@
+import { Link, router, usePage } from '@inertiajs/react';
+import { Bell, CalendarDays, MessageSquare } from 'lucide-react';
 import { Breadcrumbs } from '@/components/breadcrumbs';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
@@ -9,8 +10,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Link, router, usePage } from '@inertiajs/react';
-import { Bell, CalendarDays, MessageSquare } from 'lucide-react';
+import { SidebarTrigger } from '@/components/ui/sidebar';
 import type { BreadcrumbItem as BreadcrumbItemType } from '@/types';
 
 export function AppSidebarHeader({
@@ -69,13 +69,17 @@ export function AppSidebarHeader({
                             ) : (
                                 <>
                                     {(notifications?.pending_assignments ?? 0) > 0 && (
-                                        <a href="/dashboard#jadwal" onClick={(event) => { event.preventDefault(); openNotification('schedules'); }} className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm transition-colors hover:bg-muted">
+                                        <a href="/dashboard#jadwal" onClick={(event) => {
+ event.preventDefault(); openNotification('schedules'); 
+}} className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm transition-colors hover:bg-muted">
                                             <span className="rounded-lg bg-amber-100 p-2 text-amber-700"><CalendarDays className="h-4 w-4" /></span>
                                             <span className="min-w-0"><strong className="block text-xs">Jadwal pelayanan</strong><small className="text-muted-foreground">{notifications?.pending_assignments} jadwal menunggu respons</small></span>
                                         </a>
                                     )}
                                     {(notifications?.unread_messages ?? 0) > 0 && (
-                                        <a href="/dashboard#pesan" onClick={(event) => { event.preventDefault(); openNotification('messages'); }} className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm transition-colors hover:bg-muted">
+                                        <a href="/dashboard#pesan" onClick={(event) => {
+ event.preventDefault(); openNotification('messages'); 
+}} className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm transition-colors hover:bg-muted">
                                             <span className="rounded-lg bg-rose-100 p-2 text-rose-700"><MessageSquare className="h-4 w-4" /></span>
                                             <span className="min-w-0"><strong className="block text-xs">Pesan baru</strong><small className="text-muted-foreground">{notifications?.unread_messages} pesan belum dibaca</small></span>
                                         </a>

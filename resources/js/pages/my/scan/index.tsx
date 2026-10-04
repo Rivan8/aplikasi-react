@@ -19,6 +19,7 @@ export default function MyScan({ event, qr_value }: { event?: any, qr_value?: st
 
     useEffect(() => {
         isMountedRef.current = true;
+
         return () => {
             isMountedRef.current = false;
         };
@@ -29,10 +30,12 @@ export default function MyScan({ event, qr_value }: { event?: any, qr_value?: st
             toast.success(flash.success);
             setScanResult('success');
         }
+
         if (flash?.error) {
             toast.error(flash.error);
             setScanError(flash.error);
         }
+
         if (flash?.info) {
             toast.info(flash.info);
             setScanResult('info');
@@ -55,12 +58,15 @@ export default function MyScan({ event, qr_value }: { event?: any, qr_value?: st
                 if (scannerRef.current.isScanning) {
                     await scannerRef.current.stop();
                 }
+
                 scannerRef.current.clear();
             } catch {
                 // ignore
             }
+
             scannerRef.current = null;
         }
+
         setIsScanning(false);
     }, [scanType]);
 
@@ -71,6 +77,7 @@ export default function MyScan({ event, qr_value }: { event?: any, qr_value?: st
 
             if (!/^\/attendance\/[^/]+\/scan(?:-event)?$/.test(path)) {
                 setScanError("QR Code tidak valid untuk absensi event ini.");
+
                 return;
             }
 
@@ -118,6 +125,7 @@ export default function MyScan({ event, qr_value }: { event?: any, qr_value?: st
         if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
             setIsScanning(false);
             setScanError(getCameraErrorMessage(null));
+
             return;
         }
 
@@ -128,6 +136,7 @@ export default function MyScan({ event, qr_value }: { event?: any, qr_value?: st
         } catch (error) {
             setIsScanning(false);
             setScanError(getCameraErrorMessage(error));
+
             return;
         } finally {
             permissionStream?.getTracks().forEach((track) => track.stop());
@@ -139,10 +148,12 @@ export default function MyScan({ event, qr_value }: { event?: any, qr_value?: st
                 if (scannerRef.current.isScanning) {
                     await scannerRef.current.stop();
                 }
+
                 scannerRef.current.clear();
             } catch {
                 // ignore
             }
+
             scannerRef.current = null;
         }
 
@@ -151,13 +162,17 @@ export default function MyScan({ event, qr_value }: { event?: any, qr_value?: st
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
                 setTimeout(async () => {
-                    if (!isMountedRef.current) return;
+                    if (!isMountedRef.current) {
+return;
+}
 
                     const element = document.getElementById("reader");
+
                     if (!element) {
                         console.error("Element #reader not found in DOM");
                         setIsScanning(false);
                         setScanError("Gagal memulai scanner. Coba muat ulang halaman.");
+
                         return;
                     }
 
@@ -193,6 +208,7 @@ export default function MyScan({ event, qr_value }: { event?: any, qr_value?: st
                         }
                     } catch (err: any) {
                         console.error("Error starting scanner:", err);
+
                         if (isMountedRef.current) {
                             setIsScanning(false);
                             setScanError(getCameraErrorMessage(err));
@@ -210,11 +226,13 @@ export default function MyScan({ event, qr_value }: { event?: any, qr_value?: st
                 if (scannerRef.current.isScanning) {
                     scannerRef.current.stop().catch(() => {});
                 }
+
                 try {
                     scannerRef.current.clear();
                 } catch {
                     // ignore
                 }
+
                 scannerRef.current = null;
             }
         };

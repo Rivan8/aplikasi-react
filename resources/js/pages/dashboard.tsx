@@ -1,27 +1,3 @@
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-    Collapsible,
-    CollapsibleContent,
-    CollapsibleTrigger,
-} from '@/components/ui/collapsible';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
-import {
-    Sheet,
-    SheetContent,
-    SheetHeader,
-    SheetTitle,
-    SheetDescription,
-} from '@/components/ui/sheet';
-import { dashboard } from '@/routes';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { format } from 'date-fns';
 import { id } from 'date-fns/locale';
@@ -55,10 +31,34 @@ import {
     Bell,
     MessageSquare,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
 import { Activity, Music, Timer } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { useMemo, useState } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+    Collapsible,
+    CollapsibleContent,
+    CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import {
+    Sheet,
+    SheetContent,
+    SheetHeader,
+    SheetTitle,
+    SheetDescription,
+} from '@/components/ui/sheet';
+import { cn } from '@/lib/utils';
+import { dashboard } from '@/routes';
 
 interface DashboardStats {
     active_events: number;
@@ -306,15 +306,18 @@ function formatDuration(seconds: number): string {
     if (hours > 0) {
         return `${hours}j ${minutes}m`;
     }
+
     if (minutes > 0) {
         return `${minutes}m ${secs}d`;
     }
+
     return `${secs}d`;
 }
 
 function getTotalRundownDuration(segments: RundownSegment[]): number {
     return segments.reduce((total, segment) => {
         const segmentDuration = segment.items.reduce((itemTotal, item) => itemTotal + (item.duration_seconds || 0), 0);
+
         return total + segmentDuration;
     }, 0);
 }
@@ -990,7 +993,10 @@ function UserDashboard({
     const avatarUrl = auth?.user?.avatar;
 
     const formatUserDate = (date: string) => {
-        if (!date || Number.isNaN(Date.parse(date))) return '-';
+        if (!date || Number.isNaN(Date.parse(date))) {
+return '-';
+}
+
         return new Date(date).toLocaleDateString('id-ID', {
             weekday: 'short',
             day: 'numeric',
@@ -1052,6 +1058,7 @@ function UserDashboard({
                             { label: 'Pesan', detail: unreadMessages ? `${unreadMessages} belum dibaca` : 'Semua terbaca', href: '#pesan', icon: MessageSquare, tone: 'text-rose-700 bg-rose-50 dark:bg-rose-950/30 dark:text-rose-300' },
                         ].map((action) => {
                             const Icon = action.icon;
+
                             return <Link key={action.label} href={action.href} onClick={() => action.href === '#pesan' && setActiveTab('messages')} className="group rounded-2xl border border-black/5 bg-white/80 p-3.5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-white/10 dark:bg-card/80 sm:p-4"><span className={`flex h-9 w-9 items-center justify-center rounded-xl ${action.tone}`}><Icon className="h-4 w-4" /></span><strong className="mt-3 block text-sm text-foreground">{action.label}</strong><span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{action.detail}</span></Link>;
                         })}
                     </section>
@@ -1065,11 +1072,19 @@ function UserDashboard({
 
                     <section id="jadwal" className="scroll-mt-4 rounded-3xl border border-black/5 bg-white/75 p-4 shadow-sm dark:border-white/10 dark:bg-card/70 sm:p-6">
                         <div className="flex items-center justify-between gap-3"><div><h2 className="text-lg font-bold">Aktivitas saya</h2><p className="mt-1 text-xs text-muted-foreground">Jadwal pelayanan dan komunikasi event.</p></div><div className="flex rounded-xl bg-muted/70 p-1"><button type="button" onClick={() => setActiveTab('schedules')} className={cn('rounded-lg px-3 py-2 text-xs font-semibold', activeTab === 'schedules' ? 'bg-background text-primary shadow-sm' : 'text-muted-foreground')}>Jadwal {pendingAssignments > 0 && <span className="ml-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-700">{pendingAssignments}</span>}</button><button type="button" onClick={() => setActiveTab('messages')} className={cn('rounded-lg px-3 py-2 text-xs font-semibold', activeTab === 'messages' ? 'bg-background text-primary shadow-sm' : 'text-muted-foreground')}>Pesan {unreadMessages > 0 && <span className="ml-1 rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] text-rose-700">{unreadMessages}</span>}</button></div></div>
-                        {activeTab === 'messages' ? <div id="pesan" className="mt-5 space-y-3 scroll-mt-4">{messages.length === 0 ? <div className="rounded-2xl border border-dashed p-7 text-center text-sm text-muted-foreground"><MessageSquare className="mx-auto mb-2 h-7 w-7 opacity-40" />Belum ada pesan untukmu.</div> : messages.map((message) => <button type="button" key={message.id} onClick={() => markMessageRead(message)} className={cn('w-full rounded-2xl border p-4 text-left transition hover:border-primary/30', message.is_read ? 'border-border/50 bg-background/60' : 'border-primary/25 bg-primary/5')}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-sm font-bold">{message.title}</p><p className="mt-1 text-xs font-medium text-primary">{message.event.title}</p></div><Badge variant={message.is_read ? 'outline' : 'default'} className="shrink-0 text-[10px]">{message.is_read ? 'Dibaca' : 'Baru'}</Badge></div><p className="mt-3 line-clamp-3 whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">{message.body}</p></button>)}</div> : <div className="mt-5 space-y-3">{assignments.length === 0 ? <div className="rounded-2xl border border-dashed p-7 text-center text-sm text-muted-foreground"><CalendarDays className="mx-auto mb-2 h-7 w-7 opacity-40" />Belum ada jadwal pelayanan.</div> : assignments.map((assignment) => { const badge = getResponseBadge(assignment.response_status); return <div key={assignment.id} className="rounded-2xl border border-border/60 bg-background/60 p-4"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><h3 className="truncate text-sm font-bold">{assignment.event.title}</h3><p className="mt-1 text-xs font-medium text-primary">{assignment.role_name} · {assignment.role_category}</p><div className="mt-3 flex flex-wrap gap-x-3 gap-y-1.5 text-xs text-muted-foreground"><span className="flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5" />{formatUserDate(assignment.event.date ?? '')}</span><span className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" />{assignment.event.time ?? '-'}</span><span className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5" />{assignment.event.location ?? '-'}</span></div></div><Badge variant="outline" className={badge.className}>{badge.label}</Badge></div>{assignment.response_status === 'pending' && <div className="mt-4 flex gap-2"><Button size="sm" className="flex-1 gap-1.5" disabled={processingId === assignment.id} onClick={() => respondToAssignment(assignment, 'accept')}><CheckCircle2 className="h-4 w-4" />Terima</Button><Button size="sm" variant="outline" className="flex-1 gap-1.5 text-rose-700" disabled={processingId === assignment.id} onClick={() => setDecliningAssignment(assignment)}><XCircle className="h-4 w-4" />Tolak</Button></div>}</div>; })}</div>}
+                        {activeTab === 'messages' ? <div id="pesan" className="mt-5 space-y-3 scroll-mt-4">{messages.length === 0 ? <div className="rounded-2xl border border-dashed p-7 text-center text-sm text-muted-foreground"><MessageSquare className="mx-auto mb-2 h-7 w-7 opacity-40" />Belum ada pesan untukmu.</div> : messages.map((message) => <button type="button" key={message.id} onClick={() => markMessageRead(message)} className={cn('w-full rounded-2xl border p-4 text-left transition hover:border-primary/30', message.is_read ? 'border-border/50 bg-background/60' : 'border-primary/25 bg-primary/5')}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-sm font-bold">{message.title}</p><p className="mt-1 text-xs font-medium text-primary">{message.event.title}</p></div><Badge variant={message.is_read ? 'outline' : 'default'} className="shrink-0 text-[10px]">{message.is_read ? 'Dibaca' : 'Baru'}</Badge></div><p className="mt-3 line-clamp-3 whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">{message.body}</p></button>)}</div> : <div className="mt-5 space-y-3">{assignments.length === 0 ? <div className="rounded-2xl border border-dashed p-7 text-center text-sm text-muted-foreground"><CalendarDays className="mx-auto mb-2 h-7 w-7 opacity-40" />Belum ada jadwal pelayanan.</div> : assignments.map((assignment) => {
+ const badge = getResponseBadge(assignment.response_status);
+
+ return <div key={assignment.id} className="rounded-2xl border border-border/60 bg-background/60 p-4"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><h3 className="truncate text-sm font-bold">{assignment.event.title}</h3><p className="mt-1 text-xs font-medium text-primary">{assignment.role_name} · {assignment.role_category}</p><div className="mt-3 flex flex-wrap gap-x-3 gap-y-1.5 text-xs text-muted-foreground"><span className="flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5" />{formatUserDate(assignment.event.date ?? '')}</span><span className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" />{assignment.event.time ?? '-'}</span><span className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5" />{assignment.event.location ?? '-'}</span></div></div><Badge variant="outline" className={badge.className}>{badge.label}</Badge></div>{assignment.response_status === 'pending' && <div className="mt-4 flex gap-2"><Button size="sm" className="flex-1 gap-1.5" disabled={processingId === assignment.id} onClick={() => respondToAssignment(assignment, 'accept')}><CheckCircle2 className="h-4 w-4" />Terima</Button><Button size="sm" variant="outline" className="flex-1 gap-1.5 text-rose-700" disabled={processingId === assignment.id} onClick={() => setDecliningAssignment(assignment)}><XCircle className="h-4 w-4" />Tolak</Button></div>}</div>; 
+})}</div>}
                     </section>
                 </div>
             </div>
-            <Dialog open={!!decliningAssignment} onOpenChange={(open) => { if (!open) { setDecliningAssignment(null); setDeclineReason(''); } }}><DialogContent><DialogHeader><DialogTitle>Tolak jadwal pelayanan</DialogTitle><DialogDescription>Berikan alasan singkat agar admin dapat mengatur ulang jadwal.</DialogDescription></DialogHeader><textarea value={declineReason} onChange={(event) => setDeclineReason(event.target.value)} rows={4} placeholder="Tulis alasan penolakan..." className="w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" /><DialogFooter><Button type="button" variant="outline" onClick={() => setDecliningAssignment(null)}>Batal</Button><Button type="button" variant="destructive" disabled={!declineReason.trim() || processingId === decliningAssignment?.id} onClick={() => decliningAssignment && respondToAssignment(decliningAssignment, 'decline')}>Kirim Penolakan</Button></DialogFooter></DialogContent></Dialog>
+            <Dialog open={!!decliningAssignment} onOpenChange={(open) => {
+ if (!open) {
+ setDecliningAssignment(null); setDeclineReason(''); 
+} 
+}}><DialogContent><DialogHeader><DialogTitle>Tolak jadwal pelayanan</DialogTitle><DialogDescription>Berikan alasan singkat agar admin dapat mengatur ulang jadwal.</DialogDescription></DialogHeader><textarea value={declineReason} onChange={(event) => setDeclineReason(event.target.value)} rows={4} placeholder="Tulis alasan penolakan..." className="w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" /><DialogFooter><Button type="button" variant="outline" onClick={() => setDecliningAssignment(null)}>Batal</Button><Button type="button" variant="destructive" disabled={!declineReason.trim() || processingId === decliningAssignment?.id} onClick={() => decliningAssignment && respondToAssignment(decliningAssignment, 'decline')}>Kirim Penolakan</Button></DialogFooter></DialogContent></Dialog>
         </>
     );
 }
@@ -1102,7 +1117,10 @@ export default function Dashboard({
     const [selectedSong, setSelectedSong] = useState<Song | null>(null);
 
     const formatEventDate = (dateString: string) => {
-        if (!dateString) return '';
+        if (!dateString) {
+return '';
+}
+
         try {
             return format(new Date(dateString), 'EEEE, d MMMM yyyy', { locale: id });
         } catch (e) {
@@ -1111,7 +1129,10 @@ export default function Dashboard({
     };
 
     const formatTime = (timeString: string) => {
-        if (!timeString) return '';
+        if (!timeString) {
+return '';
+}
+
         return timeString.substring(0, 5);
     };
 
@@ -1120,8 +1141,14 @@ export default function Dashboard({
         const m = Math.floor((seconds % 3600) / 60);
         const s = seconds % 60;
 
-        if (h > 0) return `${h}j ${m}m`;
-        if (m > 0) return `${m}m ${s}s`;
+        if (h > 0) {
+return `${h}j ${m}m`;
+}
+
+        if (m > 0) {
+return `${m}m ${s}s`;
+}
+
         return `${s}s`;
     };
 
@@ -1130,7 +1157,9 @@ export default function Dashboard({
         [selectedRundownEventId, upcomingServices]);
 
     const handleReplaceVolunteer = () => {
-        if (!replacingAssignment || !selectedNewMember) return;
+        if (!replacingAssignment || !selectedNewMember) {
+return;
+}
 
         setProcessingId(replacingAssignment.id);
         router.post(`/dashboard/volunteer-assignments/${replacingAssignment.id}/replace`, {
@@ -1561,6 +1590,7 @@ export default function Dashboard({
                                     )}
                                     {adminAssignments.map((assignment) => {
                                         const badge = getResponseBadge(assignment.response_status);
+
                                         return (
                                             <div key={assignment.id} className="p-4 hover:bg-muted/30 transition-colors">
                                                 <div className="flex items-start justify-between gap-4">

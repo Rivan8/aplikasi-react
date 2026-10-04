@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 
 class Event extends Model
@@ -67,5 +68,38 @@ class Event extends Model
     public function messages()
     {
         return $this->hasMany(EventMessage::class)->latest();
+    }
+
+    /**
+     * Waktu selesai event: akhir sesi terakhir, atau date + time event jika tidak ada sesi.
+     */
+    public function latestEndDateTime(): ?Carbon
+    {
+        $latestSessionEnd = $this->sessions
+            ->filter(fn (EventSession $session) => ($session->date ?? $this->date) && ($session->end_time || $session->start_time))
+            ->map(fn (EventSession $session) => Carbon::parse(($session->date ?? $this->date).' '.($session->end_time ?? $session->start_time)))
+            ->sort()
+            ->last();
+
+        if ($latestSessionEnd) {
+            return $latestSessionEnd;
+        }
+
+        if ($this->date && $this->time) {
+            return Carbon::parse($this->date.' '.$this->time);
+        }
+
+        return null;
+    }
+
+    /**
+     * Event masih boleh dipilih untuk scan/monitor jika belum lewat grace period (default 3 jam) setelah selesai.
+     * Event tanpa waktu terjadwal dianggap masih aktif.
+     */
+    public function isAttendanceWindowOpen(int $graceHours = 3): bool
+    {
+        $end = $this->latestEndDateTime();
+
+        return $end === null || $end->copy()->addHours($graceHours)->isFuture();
     }
 }

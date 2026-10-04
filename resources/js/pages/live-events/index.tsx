@@ -1,20 +1,3 @@
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
-import {
-    Sheet,
-    SheetContent,
-    SheetDescription,
-    SheetHeader,
-    SheetTitle,
-} from '@/components/ui/sheet';
 import { Head, router } from '@inertiajs/react';
 import {
     AlertCircle,
@@ -36,6 +19,23 @@ import {
     Youtube,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import {
+    Sheet,
+    SheetContent,
+    SheetDescription,
+    SheetHeader,
+    SheetTitle,
+} from '@/components/ui/sheet';
 
 interface RundownItem {
     id: number;
@@ -168,6 +168,7 @@ export default function LiveEvents({
     const serverOffset = useMemo(() => {
         const serverTime = new Date(server_now).getTime();
         const clientTime = Date.now();
+
         return serverTime - clientTime;
     }, [server_now]);
 
@@ -185,7 +186,9 @@ export default function LiveEvents({
 
     // 3. Polling to keep the session data fresh from the server
     useEffect(() => {
-        if (!selected_event || selected_event.live_session?.status !== 'running') return;
+        if (!selected_event || selected_event.live_session?.status !== 'running') {
+return;
+}
 
         const pollInterval = window.setInterval(() => {
             router.reload({
@@ -200,7 +203,9 @@ export default function LiveEvents({
 
     // 4. Handle visibility change to refresh data
     useEffect(() => {
-        if (!selected_event) return;
+        if (!selected_event) {
+return;
+}
 
         const handleVisibilityChange = () => {
             if (!document.hidden) {
@@ -213,6 +218,7 @@ export default function LiveEvents({
         };
 
         document.addEventListener('visibilitychange', handleVisibilityChange);
+
         return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
     }, [selected_event?.id]);
 
@@ -222,17 +228,23 @@ export default function LiveEvents({
 
     // Use a memo for item calculation to avoid unnecessary re-renders
     const itemElapsedSeconds = useMemo(() => {
-        if (!isRunning || !session?.item_started_at) return 0;
+        if (!isRunning || !session?.item_started_at) {
+return 0;
+}
 
         const itemStartedAt = new Date(session.item_started_at).getTime();
+
         // now + serverOffset gives the current server-synced time
         return Math.max(0, Math.floor((now + serverOffset - itemStartedAt) / 1000));
     }, [now, serverOffset, isRunning, session?.item_started_at]);
 
     const segmentElapsedSeconds = useMemo(() => {
-        if (!isRunning || !session?.segment_started_at) return 0;
+        if (!isRunning || !session?.segment_started_at) {
+return 0;
+}
 
         const segmentStartedAt = new Date(session.segment_started_at).getTime();
+
         return Math.max(0, Math.floor((now + serverOffset - segmentStartedAt) / 1000));
     }, [now, serverOffset, isRunning, session?.segment_started_at]);
 
@@ -848,9 +860,11 @@ export default function LiveEvents({
                                                                             item,
                                                                         ) => {
                                                                             let label = item.title;
+
                                                                             if (item.song?.song_flow) {
                                                                                 label += ` (${item.song.song_flow})`;
                                                                             }
+
                                                                             return label;
                                                                         },
                                                                     )

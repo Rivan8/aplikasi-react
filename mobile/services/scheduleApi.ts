@@ -19,6 +19,7 @@ async function fetchJson<T>(url: string, init: RequestInit): Promise<T> {
 
   if (!response.ok) {
     const message = payload?.message ?? 'Request failed';
+
     throw new Error(message);
   }
 

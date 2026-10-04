@@ -58,6 +58,7 @@ interface EventData {
 const formatDuration = (seconds: number) => {
     const minutes = Math.floor(seconds / 60);
     const remaining = seconds % 60;
+
     return `${minutes}:${String(remaining).padStart(2, '0')}`;
 };
 
@@ -73,6 +74,7 @@ export default function LiveRundown({
 
     useEffect(() => {
         const timer = window.setInterval(() => setNow(Date.now()), 1000);
+
         return () => window.clearInterval(timer);
     }, []);
 
@@ -94,7 +96,11 @@ export default function LiveRundown({
                     };
                 }
             ).wakeLock;
-            if (!wakeLockApi) return;
+
+            if (!wakeLockApi) {
+return;
+}
+
             try {
                 sentinel = await wakeLockApi.request('screen');
                 setWakeLock(sentinel);
@@ -103,6 +109,7 @@ export default function LiveRundown({
             }
         };
         void requestWakeLock();
+
         return () => {
             void sentinel?.release();
         };
@@ -247,6 +254,7 @@ export default function LiveRundown({
                                                             segmentIndex &&
                                                         active.current_item_index ===
                                                             itemIndex;
+
                                                     return (
                                                         <div
                                                             key={item.id}

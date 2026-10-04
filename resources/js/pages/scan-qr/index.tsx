@@ -1,14 +1,15 @@
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Head, router, usePage } from '@inertiajs/react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { AlertTriangle, Aperture, History, Info, Keyboard, LogIn, LogOut, StopCircle, UserCheck } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { formatEventDate } from '@/lib/utils';
 
 interface EventSession {
     id: number;
@@ -20,6 +21,7 @@ interface EventSession {
 interface Event {
     id: number;
     title: string;
+    date: string | null;
     location: string;
     time: string;
     expected: number;
@@ -60,6 +62,8 @@ export default function ScanQR({
     const [lastScanResult, setLastScanResult] = useState<{ type: 'success' | 'info' | 'error'; name: string } | null>(null);
 
     const activeEvent = events.find(e => String(e.id) === selectedEventId);
+    const classParticipantEvents = events.filter(ev => ev.attendance_type === 'class_participant');
+    const volunteerEvents = events.filter(ev => ev.attendance_type !== 'class_participant');
 
     // Auto-refresh data setiap 5 detik untuk sinkronisasi antar komputer
     useEffect(() => {
@@ -76,6 +80,7 @@ export default function ScanQR({
 
     useEffect(() => {
         isMountedRef.current = true;
+
         return () => {
             isMountedRef.current = false;
         };
@@ -85,6 +90,7 @@ export default function ScanQR({
         if (filters.event_id && filters.event_id !== selectedEventId) {
             setSelectedEventId(filters.event_id);
         }
+
         if (filters.event_session_id !== undefined && filters.event_session_id !== selectedSessionId) {
             setSelectedSessionId(filters.event_session_id || '');
         }
@@ -138,6 +144,17 @@ export default function ScanQR({
         }
     }, [flash]);
 
+    // Popup hasil scan hanya tampil 3 detik lalu hilang
+    useEffect(() => {
+        if (!lastScanResult) {
+            return;
+        }
+
+        const timeout = window.setTimeout(() => setLastScanResult(null), 3000);
+
+        return () => window.clearTimeout(timeout);
+    }, [lastScanResult]);
+
     // Cleanup scanner saat unmount
     useEffect(() => {
         return () => {
@@ -145,18 +162,22 @@ export default function ScanQR({
                 if (scannerRef.current.isScanning) {
                     scannerRef.current.stop().catch(() => {});
                 }
+
                 try {
                     scannerRef.current.clear();
                 } catch {
                     // ignore
                 }
+
                 scannerRef.current = null;
             }
         };
     }, []);
 
     const processMemberScan = useCallback((scan: string) => {
-        if (processing) return;
+        if (processing) {
+return;
+}
 
         setProcessing(true);
         setLastScanResult(null);
@@ -176,6 +197,7 @@ export default function ScanQR({
             preserveScroll: true,
             onFinish: () => {
                 setProcessing(false);
+
                 // Resume scanner setelah jeda
                 if (scannerRef.current) {
                     setTimeout(() => {
@@ -195,12 +217,15 @@ export default function ScanQR({
     const startScanner = useCallback(async () => {
         if (!selectedEventId) {
             toast.error("Pilih event terlebih dahulu!");
+
             return;
         }
 
         const element = readerElementRef.current;
+
         if (!element) {
             toast.error("Elemen scanner tidak ditemukan. Muat ulang halaman.");
+
             return;
         }
 
@@ -212,10 +237,12 @@ export default function ScanQR({
                 if (scannerRef.current.isScanning) {
                     await scannerRef.current.stop();
                 }
+
                 scannerRef.current.clear();
             } catch {
                 // ignore cleanup errors
             }
+
             scannerRef.current = null;
         }
 
@@ -227,12 +254,16 @@ export default function ScanQR({
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
                 setTimeout(async () => {
-                    if (!isMountedRef.current) return;
+                    if (!isMountedRef.current) {
+return;
+}
 
                     const domElement = document.getElementById(elementId);
+
                     if (!domElement) {
                         setIsScanning(false);
                         toast.error("Gagal menginisialisasi scanner. Coba muat ulang halaman.");
+
                         return;
                     }
 
@@ -254,6 +285,7 @@ export default function ScanQR({
                         );
                     } catch (err: any) {
                         console.error("Error starting scanner:", err);
+
                         if (isMountedRef.current) {
                             setIsScanning(false);
                             toast.error("Tidak dapat mengakses kamera. Pastikan izin kamera sudah diberikan.");
@@ -270,12 +302,15 @@ export default function ScanQR({
                 if (scannerRef.current.isScanning) {
                     await scannerRef.current.stop();
                 }
+
                 scannerRef.current.clear();
             } catch {
                 // ignore
             }
+
             scannerRef.current = null;
         }
+
         setIsScanning(false);
         setLastScanResult(null);
     }, []);
@@ -292,14 +327,20 @@ export default function ScanQR({
     const handleUsbScan = useCallback((event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
 
-        if (!selectedEventId || processing) return;
+        if (!selectedEventId || processing) {
+return;
+}
 
         const scan = usbInputRef.current?.value.trim() || '';
-        if (!scan) return;
+
+        if (!scan) {
+return;
+}
 
         if (usbInputRef.current) {
             usbInputRef.current.value = '';
         }
+
         processMemberScan(scan);
     }, [processing, processMemberScan, selectedEventId]);
 
@@ -331,19 +372,42 @@ export default function ScanQR({
                                         <SelectValue placeholder="Pilih Event Aktif..." />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {events.map(ev => (
-                                            <SelectItem key={ev.id} value={String(ev.id)}>{ev.title}</SelectItem>
-                                        ))}
+                                        {volunteerEvents.length > 0 && (
+                                            <SelectGroup>
+                                                <SelectLabel>Pelayanan (Doa Persiapan Ibadah)</SelectLabel>
+                                                {volunteerEvents.map(ev => (
+                                                    <SelectItem key={ev.id} value={String(ev.id)}>
+                                                        <span className="truncate">{ev.title}</span>
+                                                        {ev.date && (
+                                                            <span className="text-muted-foreground">{formatEventDate(ev.date)}</span>
+                                                        )}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectGroup>
+                                        )}
+                                        {classParticipantEvents.length > 0 && (
+                                            <SelectGroup>
+                                                <SelectLabel>Peserta Kelas/Sesi</SelectLabel>
+                                                {classParticipantEvents.map(ev => (
+                                                    <SelectItem key={ev.id} value={String(ev.id)}>
+                                                        <span className="truncate">{ev.title}</span>
+                                                        {ev.date && (
+                                                            <span className="text-muted-foreground">{formatEventDate(ev.date)}</span>
+                                                        )}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectGroup>
+                                        )}
                                     </SelectContent>
                                 </Select>
 
                                 {activeEvent && activeEvent.sessions && activeEvent.sessions.length > 0 && (
                                     <Select value={selectedSessionId || 'all'} onValueChange={handleSessionChange} disabled={isScanning}>
                                         <SelectTrigger className="h-10 border-emerald-300/20 bg-emerald-300/10 text-sm font-semibold text-white">
-                                            <SelectValue placeholder="Pilih Sesi Kelas (Semua Sesi)..." />
+                                            <SelectValue placeholder="Pilih Sesi (Doa Persiapan Ibadah)..." />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="all">Semua Sesi Kelas</SelectItem>
+                                            <SelectItem value="all">Doa Persiapan Ibadah</SelectItem>
                                             {activeEvent.sessions.map(s => (
                                                 <SelectItem key={s.id} value={String(s.id)}>
                                                     {s.title} ({s.date})

@@ -6,23 +6,22 @@ use App\Exports\AttendanceHistoryExport;
 use App\Models\Attendance;
 use App\Models\Event;
 use App\Models\EventSession;
+use App\Services\MemberApiService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Inertia\Inertia;
 use Maatwebsite\Excel\Facades\Excel;
-use App\Services\MemberApiService;
 
 class AttendanceController extends Controller
 {
-    public function __construct(private readonly MemberApiService $memberApi)
-    {
-    }
+    public function __construct(private readonly MemberApiService $memberApi) {}
 
     private function attendanceStatus(?Event $event, ?EventSession $session, CarbonInterface $scanTime): string
     {
-        if (!$event) {
+        if (! $event) {
             return 'Present';
         }
 
@@ -32,11 +31,11 @@ class AttendanceController extends Controller
             ?? $event->attendance_start_time
             ?? $event->time;
 
-        if (!$date || !$time) {
+        if (! $date || ! $time) {
             return 'Present';
         }
 
-        $attendanceStart = Carbon::parse($date . ' ' . $time);
+        $attendanceStart = Carbon::parse($date.' '.$time);
 
         return $scanTime->greaterThan($attendanceStart) ? 'Late' : 'Present';
     }
@@ -82,13 +81,14 @@ class AttendanceController extends Controller
 
         // Fetch nama member dari external DB
         $members = [];
-        if (!empty($memberIds)) {
+        if (! empty($memberIds)) {
             try {
                 foreach ($this->memberApi->findMany($memberIds) as $member) {
                     $members[$member['idjemaat']] = [
                         'id' => $member['idjemaat'],
                         'name' => $member['name'],
                         'nik' => $member['nik'],
+                        'foto_url' => $member['foto_url'] ?? null,
                     ];
                 }
             } catch (\Exception $e) {
@@ -99,13 +99,15 @@ class AttendanceController extends Controller
         // Transform data attendance untuk frontend
         $attendanceLogs = $attendances->through(function ($attendance) use ($members) {
             $memberInfo = $members[$attendance->member_id] ?? null;
+
             return [
                 'id' => $attendance->id,
                 'member_id' => $attendance->member_id,
-                'member_name' => $memberInfo ? $memberInfo['name'] : 'Member #' . $attendance->member_id,
+                'member_name' => $memberInfo ? $memberInfo['name'] : 'Member #'.$attendance->member_id,
                 'member_nik' => $memberInfo ? $memberInfo['nik'] : null,
+                'member_foto_url' => $memberInfo ? ($memberInfo['foto_url'] ?? null) : null,
                 'event_title' => $attendance->event?->title ?? 'Event Dihapus',
-                'session_title' => $attendance->session ? ($attendance->session->title . ' (' . $attendance->session->date . ')') : null,
+                'session_title' => $attendance->session ? ($attendance->session->title.' ('.$attendance->session->date.')') : null,
                 'event_location' => $attendance->event?->location ?? '-',
                 'event_date' => $attendance->event?->date ?? null,
                 'scan_time' => $attendance->scan_time?->format('d M Y, H:i'),
@@ -123,6 +125,211 @@ class AttendanceController extends Controller
             'events' => $events,
             'filters' => $request->only(['event_id', 'event_session_id', 'status', 'date_from', 'date_to', 'search']),
         ]);
+    }
+
+    /**
+     * Laporan Detail: rekapitulasi kehadiran member per minggu dalam 1 tahun
+     */
+    public function reportDetail(Request $request)
+    {
+        $data = $this->buildReportDetailData($request);
+        $perPage = 15;
+        $page = LengthAwarePaginator::resolveCurrentPage();
+        $rows = new LengthAwarePaginator(
+            $data['rows']->forPage($page, $perPage)->values(),
+            $data['rows']->count(),
+            $perPage,
+            $page,
+            ['path' => $request->url(), 'pageName' => 'page'],
+        );
+        $rows->withQueryString();
+
+        return Inertia::render('attendance-history/detail', [
+            'months' => $data['months'],
+            'rows' => $rows,
+            'summary' => [
+                'total_members' => $data['rows']->count(),
+                'total_present' => $data['rows']->sum('hadir'),
+                'total_late' => $data['rows']->sum('terlambat'),
+            ],
+            'year' => $data['year'],
+            'availableYears' => $this->reportDetailAvailableYears(),
+            'filters' => [
+                'year' => (string) $data['year'],
+                'search' => $data['search'],
+            ],
+        ]);
+    }
+
+    public function exportDetailPdf(Request $request)
+    {
+        $data = $this->buildReportDetailData($request);
+
+        $monthNames = [1 => 'Jan', 2 => 'Feb', 3 => 'Mar', 4 => 'Apr', 5 => 'Mei', 6 => 'Jun', 7 => 'Jul', 8 => 'Agu', 9 => 'Sep', 10 => 'Okt', 11 => 'Nov', 12 => 'Des'];
+        $monthDataMap = collect($data['months'])->keyBy('month');
+
+        $fullMonths = [];
+        for ($m = 1; $m <= 12; $m++) {
+            $existing = $monthDataMap->get($m);
+            if ($existing && ! empty($existing['weeks'])) {
+                $fullMonths[] = $existing;
+            } else {
+                $fullMonths[] = [
+                    'month' => $m,
+                    'label' => $monthNames[$m].' '.$data['year'],
+                    'weeks' => [
+                        ['index' => 1, 'date' => '', 'day' => 0, 'event_title' => null],
+                        ['index' => 2, 'date' => '', 'day' => 0, 'event_title' => null],
+                        ['index' => 3, 'date' => '', 'day' => 0, 'event_title' => null],
+                        ['index' => 4, 'date' => '', 'day' => 0, 'event_title' => null],
+                    ],
+                ];
+            }
+        }
+
+        $pdf = Pdf::loadView('exports.attendance-detail', [
+            'months' => $fullMonths,
+            'rows' => $data['rows'],
+            'year' => $data['year'],
+            'search' => $data['search'],
+            'totalJemaat' => $data['rows']->count(),
+            'totalHadir' => $data['rows']->sum('hadir'),
+            'totalTerlambat' => $data['rows']->sum('terlambat'),
+            'monthNames' => $monthNames,
+            'generatedAt' => now()->format('d M Y, H:i'),
+        ])->setPaper('a4', 'landscape');
+
+        return $pdf->download('laporan-detail-absensi-'.$data['year'].'.pdf');
+    }
+
+    private function reportDetailAvailableYears()
+    {
+        $currentYear = now()->year;
+
+        $availableYears = Attendance::query()
+            ->selectRaw('YEAR(scan_time) as year')
+            ->distinct()
+            ->pluck('year');
+
+        if (! $availableYears->contains($currentYear)) {
+            $availableYears->push($currentYear);
+        }
+
+        return $availableYears->filter()->sortDesc()->values();
+    }
+
+    private function buildReportDetailData(Request $request): array
+    {
+        $currentYear = now()->year;
+        $year = (int) $request->input('year', $currentYear);
+
+        if ($year < 2000 || $year > $currentYear + 1) {
+            $year = $currentYear;
+        }
+
+        $attendances = Attendance::with('event')
+            ->whereYear('scan_time', $year)
+            ->orderBy('scan_time')
+            ->get();
+
+        // Kolom: tanggal event unik (per minggu ibadah) tahun terpilih + nama eventnya
+        $dateTitles = [];
+
+        foreach ($attendances as $attendance) {
+            if (! $attendance->event?->date || ! $attendance->event?->title) {
+                continue;
+            }
+
+            $date = substr($attendance->event->date, 0, 10);
+
+            if ((int) substr($date, 0, 4) !== $year) {
+                continue;
+            }
+
+            $dateTitles[$date] ??= $attendance->event->title;
+        }
+
+        $eventDates = collect(array_keys($dateTitles))->sort()->values();
+
+        $monthNames = [1 => 'Jan', 2 => 'Feb', 3 => 'Mar', 4 => 'Apr', 5 => 'Mei', 6 => 'Jun', 7 => 'Jul', 8 => 'Agu', 9 => 'Sep', 10 => 'Okt', 11 => 'Nov', 12 => 'Des'];
+
+        $months = $eventDates
+            ->groupBy(fn (string $date) => (int) substr($date, 5, 2))
+            ->map(function ($dates, $monthNum) use ($monthNames, $year, $dateTitles) {
+                return [
+                    'month' => (int) $monthNum,
+                    'label' => ($monthNames[(int) $monthNum] ?? $monthNum).' '.$year,
+                    'weeks' => $dates->values()->map(fn (string $date, int $index) => [
+                        'index' => $index + 1,
+                        'date' => $date,
+                        'day' => (int) substr($date, 8, 2),
+                        'event_title' => $dateTitles[$date] ?? null,
+                    ])->all(),
+                ];
+            })
+            ->sortBy('month')
+            ->values();
+
+        $memberMap = collect($this->memberApi->listAll())
+            ->keyBy(fn (array $member) => (string) $member['idjemaat']);
+
+        // Baris: member unik, status per tanggal event (Late menang bila ada lebih dari 1 sesi)
+        $rows = $attendances
+            ->groupBy('member_id')
+            ->map(function ($items, $memberId) use ($memberMap) {
+                $cells = [];
+                $hadir = 0;
+                $terlambat = 0;
+
+                foreach ($items as $attendance) {
+                    $date = $attendance->event?->date ? substr($attendance->event->date, 0, 10) : null;
+
+                    if (! $date) {
+                        continue;
+                    }
+
+                    if (($cells[$date] ?? null) !== 'Late') {
+                        $cells[$date] = $attendance->status;
+                    }
+                }
+
+                foreach ($cells as $status) {
+                    if ($status === 'Late') {
+                        $terlambat++;
+                    } else {
+                        $hadir++;
+                    }
+                }
+
+                $member = $memberMap->get((string) $memberId);
+
+                return [
+                    'member_id' => (string) $memberId,
+                    'name' => $member['name'] ?? 'Member #'.$memberId,
+                    'nik' => $member['nik'] ?? null,
+                    'foto_url' => $member['foto_url'] ?? null,
+                    'cells' => $cells,
+                    'hadir' => $hadir,
+                    'terlambat' => $terlambat,
+                ];
+            })
+            ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values();
+
+        $search = trim((string) $request->input('search', ''));
+
+        if ($search !== '') {
+            $rows = $rows
+                ->filter(fn (array $row) => str_contains(strtolower($row['name']), strtolower($search)))
+                ->values();
+        }
+
+        return [
+            'year' => $year,
+            'months' => $months,
+            'rows' => $rows,
+            'search' => $search,
+        ];
     }
 
     public function userHistory(Request $request)
@@ -207,7 +414,7 @@ class AttendanceController extends Controller
         $memberIds = $attendances->pluck('member_id')->unique()->values()->toArray();
         $members = [];
 
-        if (!empty($memberIds)) {
+        if (! empty($memberIds)) {
             try {
                 foreach ($this->memberApi->findMany($memberIds) as $member) {
                     $members[$member['idjemaat']] = [
@@ -225,10 +432,10 @@ class AttendanceController extends Controller
 
             return [
                 'ID' => $attendance->id,
-                'Nama Jemaat' => $memberInfo ? $memberInfo['name'] : 'Member #' . $attendance->member_id,
+                'Nama Jemaat' => $memberInfo ? $memberInfo['name'] : 'Member #'.$attendance->member_id,
                 'NIK' => $memberInfo ? $memberInfo['nik'] : '-',
                 'Event' => $attendance->event?->title ?? 'Event Dihapus',
-                'Sesi Kelas' => $attendance->session?->title ? ($attendance->session->title . ' (' . $attendance->session->date . ')') : '-',
+                'Sesi Kelas' => $attendance->session?->title ? ($attendance->session->title.' ('.$attendance->session->date.')') : '-',
                 'Lokasi' => $attendance->event?->location ?? '-',
                 'Tanggal Event' => $attendance->event?->date ?? '-',
                 'Waktu Scan' => $attendance->scan_time?->format('d M Y, H:i'),
@@ -249,13 +456,20 @@ class AttendanceController extends Controller
      */
     public function showAdminScan(Request $request)
     {
-        $events = Event::with('sessions')->orderBy('date', 'desc')->get();
-
-        if (!$request->has('event_id') && $events->isNotEmpty()) {
-            return redirect()->route('scan-qr', ['event_id' => $events->first()->id]);
-        }
+        $events = Event::with('sessions')->orderBy('date', 'desc')->orderBy('time', 'desc')->get()
+            ->filter(fn (Event $event) => $event->isAttendanceWindowOpen())
+            ->values();
 
         $selectedEventId = $request->input('event_id');
+
+        // Event yang sudah lewat dari 3 jam tidak bisa dipilih (termasuk via URL lama)
+        if ($selectedEventId && ! $events->firstWhere('id', $selectedEventId)) {
+            return redirect()->route('scan-qr', $events->isNotEmpty() ? ['event_id' => $events->first()->id] : []);
+        }
+
+        if (! $selectedEventId && $events->isNotEmpty()) {
+            return redirect()->route('scan-qr', ['event_id' => $events->first()->id]);
+        }
         $selectedSessionId = $request->input('event_session_id');
         $selectedEventIdStr = (string) $selectedEventId;
 
@@ -267,6 +481,8 @@ class AttendanceController extends Controller
 
             if ($selectedSessionId) {
                 $query->where('event_session_id', $selectedSessionId);
+            } else {
+                $query->whereNull('event_session_id');
             }
 
             $attendances = (clone $query)->orderBy('scan_time', 'desc')
@@ -278,7 +494,7 @@ class AttendanceController extends Controller
             $memberIds = $attendances->pluck('member_id')->unique()->toArray();
             $members = [];
 
-            if (!empty($memberIds)) {
+            if (! empty($memberIds)) {
                 try {
                     foreach ($this->memberApi->findMany($memberIds) as $member) {
                         $members[$member['idjemaat']] = [
@@ -293,7 +509,7 @@ class AttendanceController extends Controller
             $recentAttendances = $attendances->map(function ($att) use ($members) {
                 return [
                     'id' => $att->id,
-                    'name' => $members[$att->member_id]['name'] ?? 'Member #' . $att->member_id,
+                    'name' => $members[$att->member_id]['name'] ?? 'Member #'.$att->member_id,
                     'time' => $att->scan_time->diffForHumans(),
                     'check_out_time' => $att->check_out_time?->format('H:i:s'),
                     'status' => $att->status,
@@ -308,14 +524,23 @@ class AttendanceController extends Controller
             'filters' => [
                 'event_id' => $selectedEventIdStr,
                 'event_session_id' => $selectedSessionId,
-            ]
+            ],
         ]);
     }
 
     public function showAttendanceMonitor(Request $request)
     {
-        $events = Event::with('sessions')->orderBy('date', 'desc')->get();
+        $events = Event::with('sessions')->orderBy('date', 'desc')->orderBy('time', 'desc')->get()
+            ->filter(fn (Event $event) => $event->isAttendanceWindowOpen())
+            ->values();
+
         $selectedEventId = $request->input('event_id', $events->first()?->id);
+
+        // Event yang sudah lewat dari 3 jam tidak bisa dipilih (termasuk via URL lama)
+        if ($selectedEventId && ! $events->firstWhere('id', $selectedEventId)) {
+            return redirect()->route('attendance-monitor', $events->isNotEmpty() ? ['event_id' => $events->first()->id] : []);
+        }
+
         $selectedSessionId = $request->input('event_session_id');
         $recentScans = collect();
         $totalScanned = 0;
@@ -325,6 +550,8 @@ class AttendanceController extends Controller
 
             if ($selectedSessionId) {
                 $query->where('event_session_id', $selectedSessionId);
+            } else {
+                $query->whereNull('event_session_id');
             }
 
             $attendances = (clone $query)->orderBy('scan_time', 'desc')->get();
@@ -362,9 +589,10 @@ class AttendanceController extends Controller
     public function showEventScan(Event $event)
     {
         $event->load('sessions');
+
         return Inertia::render('my/scan/index', [
             'event' => $event,
-            'qr_value' => route('attendance.scan-event', $event)
+            'qr_value' => route('attendance.scan-event', $event),
         ]);
     }
 
@@ -376,23 +604,23 @@ class AttendanceController extends Controller
 
         $user = $request->user();
 
-        if (!$user->member_id) {
+        if (! $user->member_id) {
             return back()->with('error', 'Akun Anda belum terhubung dengan data jemaat. Silakan hubungi admin.');
         }
 
         $member = $this->memberApi->findByScan((string) $user->member_id);
 
-        if (!$member) {
+        if (! $member) {
             return back()->with('error', 'Data member akun Anda tidak ditemukan. Silakan hubungi admin.');
         }
 
         $memberScan = (string) $member['idjemaat'];
-        if (!empty($member['noaj'])) {
+        if (! empty($member['noaj'])) {
             $memberScan .= (string) $member['noaj'];
         }
 
         $verifiedMember = $this->memberApi->findByScan($memberScan);
-        if (!$verifiedMember) {
+        if (! $verifiedMember) {
             return back()->with('error', 'Kode member akun Anda tidak valid. Silakan hubungi admin.');
         }
 
@@ -401,7 +629,7 @@ class AttendanceController extends Controller
         $sessionId = $request->input('event_session_id');
 
         // Auto-match session by date if event is class_participant and session not specified
-        if (!$sessionId && $event->attendance_type === 'class_participant') {
+        if (! $sessionId && $event->attendance_type === 'class_participant') {
             $matchedSession = $event->sessions()->whereDate('date', now()->toDateString())->first();
             if ($matchedSession) {
                 $sessionId = $matchedSession->id;
@@ -413,13 +641,15 @@ class AttendanceController extends Controller
 
         if ($sessionId) {
             $query->where('event_session_id', $sessionId);
+        } else {
+            $query->whereNull('event_session_id');
         }
 
         $attendance = $query->first();
         $scanType = $request->input('scan_type', 'check_in');
 
         if ($scanType === 'check_out') {
-            if (!$attendance) {
+            if (! $attendance) {
                 return back()->with('error', 'Check-in belum tercatat untuk event/sesi ini.');
             }
 
@@ -449,6 +679,7 @@ class AttendanceController extends Controller
         ]);
 
         $message = $status === 'Late' ? 'Absensi dicatat (Terlambat).' : 'Absensi berhasil dicatat!';
+
         return back()->with('success', $message);
     }
 
@@ -464,14 +695,14 @@ class AttendanceController extends Controller
         $scan = trim($request->scan);
         $member = $this->memberApi->findByScan($scan);
 
-        if (!$member) {
-            return back()->with('error', 'QR Code tidak dikenali. Pastikan kartu member valid. (Kode: ' . $scan . ')');
+        if (! $member) {
+            return back()->with('error', 'QR Code tidak dikenali. Pastikan kartu member valid. (Kode: '.$scan.')');
         }
 
         $sessionId = $request->input('event_session_id');
         $event = Event::find($request->event_id);
 
-        if (!$sessionId && $event->attendance_type === 'class_participant') {
+        if (! $sessionId && $event->attendance_type === 'class_participant') {
             $matchedSession = $event->sessions()->whereDate('date', now()->toDateString())->first();
             if ($matchedSession) {
                 $sessionId = $matchedSession->id;
@@ -483,27 +714,29 @@ class AttendanceController extends Controller
 
         if ($sessionId) {
             $query->where('event_session_id', $sessionId);
+        } else {
+            $query->whereNull('event_session_id');
         }
 
         $attendance = $query->first();
         $scanType = $request->input('scan_type', 'check_in');
 
         if ($scanType === 'check_out') {
-            if (!$attendance) {
-                return back()->with('error', $member['name'] . ' belum tercatat check-in untuk sesi/event ini.');
+            if (! $attendance) {
+                return back()->with('error', $member['name'].' belum tercatat check-in untuk sesi/event ini.');
             }
 
             if ($attendance->check_out_time) {
-                return back()->with('info', $member['name'] . ' sudah tercatat check-out untuk sesi/event ini.');
+                return back()->with('info', $member['name'].' sudah tercatat check-out untuk sesi/event ini.');
             }
 
             $attendance->update(['check_out_time' => now()]);
 
-            return back()->with('success', 'Check-out berhasil dicatat untuk ' . $member['name']);
+            return back()->with('success', 'Check-out berhasil dicatat untuk '.$member['name']);
         }
 
         if ($attendance) {
-            return back()->with('info', $member['name'] . ' sudah tercatat check-in untuk sesi/event ini.');
+            return back()->with('info', $member['name'].' sudah tercatat check-in untuk sesi/event ini.');
         }
 
         $session = $sessionId ? $event->sessions()->find($sessionId) : null;
@@ -519,8 +752,8 @@ class AttendanceController extends Controller
         ]);
 
         $message = $status === 'Late'
-            ? 'Absensi berhasil dicatat untuk ' . $member['name'] . ' (Terlambat).'
-            : 'Kehadiran berhasil dicatat untuk ' . $member['name'];
+            ? 'Absensi berhasil dicatat untuk '.$member['name'].' (Terlambat).'
+            : 'Kehadiran berhasil dicatat untuk '.$member['name'];
 
         return back()->with('success', $message);
     }

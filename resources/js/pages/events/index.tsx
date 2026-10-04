@@ -1,38 +1,3 @@
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Calendar } from '@/components/ui/calendar';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-    Collapsible,
-    CollapsibleContent,
-} from '@/components/ui/collapsible';
-import {
-    Dialog,
-    DialogClose,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from '@/components/ui/popover';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
 import { Head, router, useForm } from '@inertiajs/react';
 import { format } from 'date-fns';
 import { id } from 'date-fns/locale';
@@ -68,6 +33,41 @@ import {
 import { QRCodeSVG as QRCodeComponent } from 'qrcode.react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+    Collapsible,
+    CollapsibleContent,
+} from '@/components/ui/collapsible';
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 
 interface ExternalMember {
     idjemaat: string | number;
@@ -215,7 +215,9 @@ interface Song {
 }
 
 const getEventImageUrl = (path: string | null) => {
-    if (!path) return null;
+    if (!path) {
+return null;
+}
 
     return path.startsWith('/storage/')
         ? `/event-images/${path.slice('/storage/'.length)}`
@@ -225,15 +227,25 @@ const getEventImageUrl = (path: string | null) => {
 type EventTiming = 'upcoming' | 'ongoing' | 'past' | 'unknown';
 
 const getEventTiming = (event: Event, now: Date): EventTiming => {
-    if (!event.date) return 'unknown';
+    if (!event.date) {
+return 'unknown';
+}
 
     const startTime = event.time || '00:00:00';
     const start = new Date(`${event.date}T${startTime}`);
     const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
 
-    if (Number.isNaN(start.getTime())) return 'unknown';
-    if (now < start) return 'upcoming';
-    if (now <= end) return 'ongoing';
+    if (Number.isNaN(start.getTime())) {
+return 'unknown';
+}
+
+    if (now < start) {
+return 'upcoming';
+}
+
+    if (now <= end) {
+return 'ongoing';
+}
 
     return 'past';
 };
@@ -334,6 +346,7 @@ function SearchableSelect({
                     {filteredMembers.map((member) => {
                         const mId = member.idjemaat ?? member.id;
                         const mName = member.namalengkap || member.name || `Member #${mId}`;
+
                         return (
                             <Button
                                 key={mId}
@@ -436,6 +449,7 @@ export default function Events({
                 ...current,
                 { id: Date.now(), title: '', date: '', start_time: '', end_time: '' },
             ]);
+
             return;
         }
 
@@ -455,6 +469,7 @@ export default function Events({
             setTrainingSchedules((current) =>
                 current.map((item) => (item.id === id ? { ...item, [field]: value } : item)),
             );
+
             return;
         }
 
@@ -466,6 +481,7 @@ export default function Events({
     const removeScheduleItem = (type: 'training' | 'other', id: number) => {
         if (type === 'training') {
             setTrainingSchedules((current) => current.filter((item) => item.id !== id));
+
             return;
         }
 
@@ -505,6 +521,7 @@ export default function Events({
             setClientErrors((current) => {
                 const next = { ...current };
                 delete next[field];
+
                 return next;
             });
         }
@@ -512,12 +529,19 @@ export default function Events({
 
     const volunteerGroups = useMemo(() => {
         const selectedCategory = categories.find((c) => c.name === data.category);
-        if (!selectedCategory) return [];
+
+        if (!selectedCategory) {
+return [];
+}
 
         const groups: Record<string, CategoryRole[]> = {};
         selectedCategory.roles.forEach((role) => {
             const dept = role.department.name;
-            if (!groups[dept]) groups[dept] = [];
+
+            if (!groups[dept]) {
+groups[dept] = [];
+}
+
             groups[dept].push(role);
         });
 
@@ -539,6 +563,7 @@ export default function Events({
         const v = data.volunteers.find(
             (v) => (v.role_id === roleId) || (v.role_category === category && v.role_name === roleName && !v.role_id),
         );
+
         return v ? v.member_id : null;
     };
 
@@ -569,10 +594,12 @@ export default function Events({
 
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
+
         if (file) {
             if (file.size > 2 * 1024 * 1024) {
                 toast.error('Ukuran gambar maksimal 2 MB.');
                 e.target.value = '';
+
                 return;
             }
 
@@ -639,6 +666,7 @@ export default function Events({
 
     const minutesToSeconds = (val: string) => {
         const num = parseFloat(val);
+
         return isNaN(num) ? 0 : Math.round(num * 60);
     };
 
@@ -650,8 +678,15 @@ export default function Events({
         const h = Math.floor(seconds / 3600);
         const m = Math.floor((seconds % 3600) / 60);
         const s = seconds % 60;
-        if (h > 0) return `${h}j ${m}m`;
-        if (m > 0) return `${m}m ${s > 0 ? s + 'd' : ''}`;
+
+        if (h > 0) {
+return `${h}j ${m}m`;
+}
+
+        if (m > 0) {
+return `${m}m ${s > 0 ? s + 'd' : ''}`;
+}
+
         return `${s}d`;
     };
 
@@ -670,19 +705,40 @@ export default function Events({
         setData('other_schedules', otherSchedules.map(({ id: _id, ...rest }) => rest));
 
         const requiredErrors: Record<string, string> = {};
-        if (!data.title.trim()) requiredErrors.title = 'Nama event wajib diisi.';
-        if (!data.category) requiredErrors.category = 'Kategori wajib dipilih.';
-        if (!data.date) requiredErrors.date = 'Tanggal wajib dipilih.';
-        if (!data.time) requiredErrors.time = 'Waktu mulai wajib diisi.';
-        if (!data.location.trim()) requiredErrors.location = 'Lokasi wajib diisi.';
-        if (!data.address.trim()) requiredErrors.address = 'Alamat lengkap wajib diisi.';
+
+        if (!data.title.trim()) {
+requiredErrors.title = 'Nama event wajib diisi.';
+}
+
+        if (!data.category) {
+requiredErrors.category = 'Kategori wajib dipilih.';
+}
+
+        if (!data.date) {
+requiredErrors.date = 'Tanggal wajib dipilih.';
+}
+
+        if (!data.time) {
+requiredErrors.time = 'Waktu mulai wajib diisi.';
+}
+
+        if (!data.location.trim()) {
+requiredErrors.location = 'Lokasi wajib diisi.';
+}
+
+        if (!data.address.trim()) {
+requiredErrors.address = 'Alamat lengkap wajib diisi.';
+}
+
         if (data.expected === undefined || data.expected === null || Number.isNaN(data.expected)) {
             requiredErrors.expected = 'Target peserta wajib diisi.';
         }
 
         setClientErrors(requiredErrors);
+
         if (Object.keys(requiredErrors).length > 0) {
             toast.error('Lengkapi semua field wajib sebelum membuat event.');
+
             return;
         }
 
@@ -690,7 +746,11 @@ export default function Events({
 
         const formData = new FormData();
         formData.append('title', data.title);
-        if (data.date) formData.append('date', format(data.date, 'yyyy-MM-dd'));
+
+        if (data.date) {
+formData.append('date', format(data.date, 'yyyy-MM-dd'));
+}
+
         formData.append('time', data.time);
         formData.append('attendance_start_time', data.attendance_start_time);
         formData.append('location', data.location);
@@ -699,7 +759,10 @@ export default function Events({
         formData.append('attendance_type', data.attendance_type);
         formData.append('total_sessions', data.total_sessions.toString());
         formData.append('expected', data.expected.toString());
-        if (data.image) formData.append('image', data.image);
+
+        if (data.image) {
+formData.append('image', data.image);
+}
 
         // JSON-stringify arrays to prevent FormData duplication
         formData.append('volunteers', JSON.stringify(data.volunteers));
@@ -715,7 +778,9 @@ export default function Events({
         formData.append('rundown_segments', JSON.stringify(segmentsPayload));
 
         // Spoof PUT method for updates
-        if (editingEvent) formData.append('_method', 'PUT');
+        if (editingEvent) {
+formData.append('_method', 'PUT');
+}
 
         router.post(url, formData, {
             onSuccess: () => {
@@ -728,6 +793,7 @@ export default function Events({
             onError: (formErrors) => {
                 setClientErrors(formErrors as Record<string, string>);
                 const imageError = formErrors.image;
+
                 if (imageError) {
                     toast.error(imageError);
                 }
@@ -829,9 +895,12 @@ export default function Events({
     }, []);
 
     useEffect(() => {
-        if (!rundownEvent) return;
+        if (!rundownEvent) {
+return;
+}
 
         const refreshedEvent = events.find((event) => event.id === rundownEvent.id);
+
         if (refreshedEvent && refreshedEvent !== rundownEvent) {
             setRundownEvent(refreshedEvent);
         }
@@ -867,6 +936,7 @@ export default function Events({
             const startsAt = currentTime;
             const endsAt = startsAt + s.duration_seconds;
             currentTime = endsAt;
+
             return {
                 ...s,
                 index: i,
@@ -993,9 +1063,11 @@ export default function Events({
         reset();
         setImagePreview(null);
         setActiveTab('basic');
+
         if (categoryName) {
             setData('category', categoryName);
         }
+
         setIsAddModalOpen(true);
     };
 
@@ -1004,7 +1076,9 @@ export default function Events({
         today.setHours(0, 0, 0, 0);
 
         return events.filter((event) => {
-            if (!event.date) return false;
+            if (!event.date) {
+return false;
+}
 
             return new Date(`${event.date}T00:00:00`) >= today;
         }).length;
@@ -1061,7 +1135,9 @@ export default function Events({
                                 )}
                             </div>
                             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 xl:w-[560px]">
-                                <Select value={eventGroup} onValueChange={(value) => { setEventGroup(value); setEventCategory('all'); }}>
+                                <Select value={eventGroup} onValueChange={(value) => {
+ setEventGroup(value); setEventCategory('all'); 
+}}>
                                     <SelectTrigger className="h-11 w-full rounded-xl bg-background">
                                         <SelectValue placeholder="Semua group" />
                                     </SelectTrigger>
@@ -1395,6 +1471,7 @@ export default function Events({
                                             onClick={() => {
                                                 if (isEventOngoing) {
                                                     router.get('/live-events', { event_id: event.id });
+
                                                     return;
                                                 }
 
@@ -1488,7 +1565,10 @@ export default function Events({
                                 formData.append('event_id', String(messageEvent.id));
                                 formData.append('title', messageTitle);
                                 formData.append('body', messageBody);
-                                if (messageAttachment) formData.append('attachment', messageAttachment);
+
+                                if (messageAttachment) {
+formData.append('attachment', messageAttachment);
+}
 
                                 router.post('/event-messages', formData, {
                                     preserveScroll: true,
@@ -1614,11 +1694,16 @@ export default function Events({
                                             type="button"
                                             disabled={!selectedMemberToEnroll}
                                             onClick={() => {
-                                                if (!selectedMemberToEnroll) return;
+                                                if (!selectedMemberToEnroll) {
+return;
+}
+
                                                 if (data.participants.some(p => String(p.member_id) === String(selectedMemberToEnroll))) {
                                                     toast.error('Member ini sudah ada dalam daftar.');
+
                                                     return;
                                                 }
+
                                                 const memberObj = external_members.find(m => String(m.idjemaat) === String(selectedMemberToEnroll));
                                                 const updated = [
                                                     ...data.participants,
@@ -1641,6 +1726,7 @@ export default function Events({
                                     <div className="divide-y rounded-2xl border bg-background overflow-hidden">
                                         {data.participants.map((p, idx) => {
                                             const mName = p.member?.namalengkap || external_members.find(m => String(m.idjemaat) === String(p.member_id))?.namalengkap || `Member #${p.member_id}`;
+
                                             return (
                                                 <div key={idx} className="flex items-center justify-between p-4 text-xs">
                                                     <div className="flex items-center gap-3">
@@ -1710,6 +1796,7 @@ export default function Events({
                                                             type="button"
                                                             onClick={() => {
                                                                 setData('attendance_type', 'class_participant');
+
                                                                 if (data.sessions.length === 0) {
                                                                     setData('sessions', [{
                                                                         session_number: 1,
@@ -1845,7 +1932,9 @@ export default function Events({
                                                         <Input
                                                             id="title"
                                                             value={data.title}
-                                                            onChange={(e) => { clearFieldError('title'); setData('title', e.target.value); }}
+                                                            onChange={(e) => {
+ clearFieldError('title'); setData('title', e.target.value); 
+}}
                                                             aria-invalid={!!fieldError('title')}
                                                             placeholder="Sunday Service"
                                                             className={cn("h-12 bg-muted/20 border-border/40 focus:bg-background transition-all rounded-xl px-4", fieldError('title') && 'border-destructive focus-visible:ring-destructive')}
@@ -1854,7 +1943,9 @@ export default function Events({
                                                     </div>
                                                     <div className="space-y-2.5">
                                                         <Label htmlFor="category" className="text-xs font-bold text-foreground/70 ml-1">Kategori <span className="text-destructive">Wajib</span></Label>
-                                                        <Select value={data.category} onValueChange={(val) => { clearFieldError('category'); setData('category', val); }}>
+                                                        <Select value={data.category} onValueChange={(val) => {
+ clearFieldError('category'); setData('category', val); 
+}}>
                                                             <SelectTrigger aria-invalid={!!fieldError('category')} className={cn("h-12 bg-muted/20 border-border/40 focus:bg-background transition-all rounded-xl px-4", fieldError('category') && 'border-destructive focus:ring-destructive')}>
                                                                 <SelectValue placeholder="Pilih Kategori" />
                                                             </SelectTrigger>
@@ -1922,7 +2013,9 @@ export default function Events({
                                                                         <Calendar
                                                                             mode="single"
                                                                             selected={data.date}
-                                                                            onSelect={(date: Date | undefined) => { clearFieldError('date'); setData('date', date); }}
+                                                                            onSelect={(date: Date | undefined) => {
+ clearFieldError('date'); setData('date', date); 
+}}
                                                                             initialFocus
                                                                         />
                                                                     </PopoverContent>
@@ -1936,7 +2029,9 @@ export default function Events({
                                                                         id="time"
                                                                         type="time"
                                                                         value={data.time}
-                                                                        onChange={(e) => { clearFieldError('time'); setData('time', e.target.value); }}
+                                                                        onChange={(e) => {
+ clearFieldError('time'); setData('time', e.target.value); 
+}}
                                                                         aria-invalid={!!fieldError('time')}
                                                                         className={cn("h-12 bg-muted/20 border-border/40 focus:bg-background transition-all rounded-xl", fieldError('time') && 'border-destructive focus-visible:ring-destructive')}
                                                                     />
@@ -2040,7 +2135,9 @@ export default function Events({
                                                                 id="expected"
                                                                 type="number"
                                                                 value={data.expected}
-                                                                onChange={(e) => { clearFieldError('expected'); setData('expected', e.target.value === '' ? 0 : parseInt(e.target.value)); }}
+                                                                onChange={(e) => {
+ clearFieldError('expected'); setData('expected', e.target.value === '' ? 0 : parseInt(e.target.value)); 
+}}
                                                                 aria-invalid={!!fieldError('expected')}
                                                                 className={cn("h-12 bg-muted/20 border-border/40 focus:bg-background transition-all rounded-xl pl-11", fieldError('expected') && 'border-destructive focus-visible:ring-destructive')}
                                                             />
@@ -2054,7 +2151,9 @@ export default function Events({
                                                             <Input
                                                                 id="location"
                                                                 value={data.location}
-                                                                onChange={(e) => { clearFieldError('location'); setData('location', e.target.value); }}
+                                                                onChange={(e) => {
+ clearFieldError('location'); setData('location', e.target.value); 
+}}
                                                                 aria-invalid={!!fieldError('location')}
                                                                 placeholder="Gereja ESC"
                                                                 className={cn("h-12 bg-muted/20 border-border/40 focus:bg-background transition-all rounded-xl pl-11", fieldError('location') && 'border-destructive focus-visible:ring-destructive')}
@@ -2068,7 +2167,9 @@ export default function Events({
                                                     <Textarea
                                                         id="address"
                                                         value={data.address}
-                                                        onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => { clearFieldError('address'); setData('address', e.target.value); }}
+                                                        onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
+ clearFieldError('address'); setData('address', e.target.value); 
+}}
                                                         aria-invalid={!!fieldError('address')}
                                                         placeholder="Jl. Raya..."
                                                         className={cn("min-h-[100px] bg-muted/20 border-border/40 focus:bg-background transition-all rounded-xl p-4", fieldError('address') && 'border-destructive focus-visible:ring-destructive')}

@@ -105,7 +105,7 @@ const mainNavItems: NavItem[] = [
         roles: ['admin', 'superadmin'],
     },
     {
-        title: 'Attendance History',
+        title: 'Laporan Absensi',
         href: '/attendance-history',
         icon: History,
         roles: ['admin', 'superadmin'],

@@ -1,3 +1,7 @@
+import { Head, useForm } from '@inertiajs/react';
+import { Copy, Edit2, Plus, Trash2, Users } from 'lucide-react';
+import { useState } from 'react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -11,10 +15,6 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Head, useForm } from '@inertiajs/react';
-import { Copy, Edit2, Plus, Trash2, Users } from 'lucide-react';
-import { useState } from 'react';
-import { toast } from 'sonner';
 
 interface CategoryRole {
     id: number;
@@ -100,9 +100,14 @@ export default function CategoryIndex({ categories, departments, groups }: { cat
         const groups: { [key: string]: CategoryRole[] } = {};
         roles.forEach(role => {
             const deptName = role.department?.name || 'Unknown';
-            if (!groups[deptName]) groups[deptName] = [];
+
+            if (!groups[deptName]) {
+groups[deptName] = [];
+}
+
             groups[deptName].push(role);
         });
+
         return groups;
     };
 
@@ -343,9 +348,17 @@ export default function CategoryIndex({ categories, departments, groups }: { cat
                         <DialogTitle>Kelola Group Event</DialogTitle>
                         <DialogDescription>Buat group terlebih dahulu, lalu pilih group saat membuat kategori.</DialogDescription>
                     </DialogHeader>
-                    <form onSubmit={event => { event.preventDefault(); groupForm.post('/event-groups', { onSuccess: () => { groupForm.reset(); setIsGroupModalOpen(false); } }); }} className="space-y-4">
+                    <form onSubmit={event => {
+ event.preventDefault(); groupForm.post('/event-groups', { onSuccess: () => {
+ groupForm.reset(); setIsGroupModalOpen(false); 
+} }); 
+}} className="space-y-4">
                         <div className="space-y-2"><Label htmlFor="new-group-name">Nama Group</Label><Input id="new-group-name" value={groupForm.data.name} onChange={event => groupForm.setData('name', event.target.value)} placeholder="Contoh: Ibadah Mingguan" required />{groupForm.errors.name && <p className="text-xs text-destructive">{groupForm.errors.name}</p>}</div>
-                        <div className="space-y-2"><p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Group tersedia</p>{groups.length > 0 ? groups.map(group => <div key={group.id} className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm"><span>{group.name}</span><Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => { if (confirm(`Hapus group ${group.name}?`)) destroy(`/event-groups/${group.id}`); }}><Trash2 className="h-3.5 w-3.5" /></Button></div>) : <p className="text-sm text-muted-foreground">Belum ada group.</p>}</div>
+                        <div className="space-y-2"><p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Group tersedia</p>{groups.length > 0 ? groups.map(group => <div key={group.id} className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm"><span>{group.name}</span><Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => {
+ if (confirm(`Hapus group ${group.name}?`)) {
+destroy(`/event-groups/${group.id}`);
+} 
+}}><Trash2 className="h-3.5 w-3.5" /></Button></div>) : <p className="text-sm text-muted-foreground">Belum ada group.</p>}</div>
                         <DialogFooter><Button type="button" variant="outline" onClick={() => setIsGroupModalOpen(false)}>Tutup</Button><Button type="submit" disabled={groupForm.processing}>Buat Group</Button></DialogFooter>
                     </form>
                 </DialogContent>

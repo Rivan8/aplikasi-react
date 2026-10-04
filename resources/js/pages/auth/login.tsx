@@ -1,4 +1,9 @@
 import { Form, Head, Link } from '@inertiajs/react';
+import {
+    CalendarCheck,
+    QrCode,
+    Users,
+} from 'lucide-react';
 import AppLogoIcon from '@/components/app-logo-icon';
 import InputError from '@/components/input-error';
 import PasswordInput from '@/components/password-input';
@@ -11,11 +16,6 @@ import { Spinner } from '@/components/ui/spinner';
 import { home } from '@/routes';
 import { store } from '@/routes/login';
 import { request } from '@/routes/password';
-import {
-    CalendarCheck,
-    QrCode,
-    Users,
-} from 'lucide-react';
 
 type Props = {
     status?: string;
@@ -92,6 +92,7 @@ export default function Login({
                         <div className="mt-8 space-y-4">
                             {highlights.map((item) => {
                                 const Icon = item.icon;
+
                                 return (
                                     <div
                                         key={item.title}

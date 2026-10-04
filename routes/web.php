@@ -1,7 +1,7 @@
 <?php
 
-use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\ArticleController;
+use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\EventController;
@@ -9,8 +9,8 @@ use App\Http\Controllers\EventMessageController;
 use App\Http\Controllers\LiveEventController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\SongController;
-use App\Models\Attendance;
 use App\Models\Article;
+use App\Models\Attendance;
 use App\Models\Category;
 use App\Models\CategoryRole;
 use App\Models\Department;
@@ -25,8 +25,8 @@ use App\Notifications\VolunteerScheduledNotification;
 use App\Services\MemberApiService;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
-use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 
 Route::inertia('/', 'welcome')->name('home');
@@ -559,6 +559,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('scan-qr', [AttendanceController::class, 'showAdminScan'])->middleware('role:admin,superadmin')->name('scan-qr');
     Route::get('attendance-monitor', [AttendanceController::class, 'showAttendanceMonitor'])->middleware('role:admin,superadmin')->name('attendance-monitor');
     Route::get('attendance-history', [AttendanceController::class, 'history'])->middleware('role:admin,superadmin')->name('attendance-history');
+    Route::get('attendance-history/detail', [AttendanceController::class, 'reportDetail'])->middleware('role:admin,superadmin')->name('attendance-history.detail');
+    Route::get('attendance-history/detail/export/pdf', [AttendanceController::class, 'exportDetailPdf'])->middleware('role:admin,superadmin')->name('attendance-history.detail.export.pdf');
     Route::get('attendance-history/export/pdf', [AttendanceController::class, 'exportPdf'])->middleware('role:admin,superadmin')->name('attendance-history.export.pdf');
     Route::get('attendance-history/export/excel', [AttendanceController::class, 'exportExcel'])->middleware('role:admin,superadmin')->name('attendance-history.export.excel');
 

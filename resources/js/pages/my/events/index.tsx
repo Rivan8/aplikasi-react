@@ -96,11 +96,14 @@ export default function MyEvents({
 
     useEffect(() => {
         const timer = window.setInterval(() => setNow(Date.now()), 1000);
+
         return () => window.clearInterval(timer);
     }, []);
 
     useEffect(() => {
-        if (!selectedRundownEvent) return;
+        if (!selectedRundownEvent) {
+return;
+}
 
         const refresh = window.setInterval(() => {
             router.reload({ only: ['events'] });
@@ -111,16 +114,22 @@ export default function MyEvents({
 
     useEffect(() => {
         setSelectedRundownEvent((current) => {
-            if (!current) return null;
+            if (!current) {
+return null;
+}
 
             return events.find((event) => event.id === current.id) ?? current;
         });
     }, [events]);
 
     const isEventLive = (event: UserEvent) => {
-        if (event.live_session?.status === 'running') return true;
+        if (event.live_session?.status === 'running') {
+return true;
+}
+
         const start = new Date(`${event.date}T${event.time || '00:00:00'}`);
         const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
+
         return !Number.isNaN(start.getTime()) && new Date() >= start && new Date() <= end;
     };
 
@@ -154,6 +163,7 @@ export default function MyEvents({
                         {events.map((event) => {
                             const isAssigned = assignedEventIds.includes(event.id);
                             const isLive = isEventLive(event);
+
                             return (
                                 <Card key={event.id} className={`overflow-hidden ${isLive ? 'border-amber-400/70 shadow-lg shadow-amber-500/10' : ''}`}>
                                     <CardContent className="space-y-5 p-5">

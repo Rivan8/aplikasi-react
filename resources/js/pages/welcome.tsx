@@ -1,5 +1,3 @@
-import AppLogoIcon from '@/components/app-logo-icon';
-import { dashboard, login } from '@/routes';
 import { Head, Link, usePage } from '@inertiajs/react';
 import {
     CalendarCheck,
@@ -14,6 +12,8 @@ import {
     Sparkles,
     Users,
 } from 'lucide-react';
+import AppLogoIcon from '@/components/app-logo-icon';
+import { dashboard, login } from '@/routes';
 
 const features = [
     {

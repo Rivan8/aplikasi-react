@@ -1,3 +1,7 @@
+import { router, useForm } from '@inertiajs/react';
+import { Head } from '@inertiajs/react';
+import { Search } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -8,6 +12,8 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
     Select,
     SelectContent,
@@ -15,12 +21,6 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
-import { router, useForm } from '@inertiajs/react';
-import { useEffect, useMemo, useState } from 'react';
-import { Search } from 'lucide-react';
-import { Input } from '@/components/ui/input';
-import { Head } from '@inertiajs/react';
 
 interface Category {
     id: number;
@@ -73,8 +73,12 @@ export default function RoleManagement({
     }, [searchUser, users]);
 
     const availableRoles = useMemo(() => {
-        if (!selectedCategory) return [];
+        if (!selectedCategory) {
+return [];
+}
+
         const category = categories.find(c => c.id === selectedCategory);
+
         return category ? category.roles : [];
     }, [selectedCategory, categories]);
 
