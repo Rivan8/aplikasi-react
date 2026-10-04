@@ -1,0 +1,1 @@
+import{t as e}from"./createLucideIcon-DWdCuR_G.js";var t=e(`Check`,[[`path`,{d:`M20 6 9 17l-5-5`,key:`1gmf2c`}]]);export{t};

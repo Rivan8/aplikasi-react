@@ -9,7 +9,7 @@ A **monolithic Laravel + React** application for member attendance tracking and 
 
 ---
 
-## 1. Tech Stack Overview!!!
+## 1. Tech Stack Overview!!
 
 - **Backend**: Laravel 13 (PHP 8.3+) – uses Eloquent ORM, Inertia.js v3, Laravel Fortify for auth.
 - **Database**: MySQL (`attendance_pro`), MySQL (`myesc_db`, external read‑only).
