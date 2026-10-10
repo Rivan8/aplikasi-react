@@ -390,13 +390,19 @@ export default function Events({
     categories = [],
     groups = [],
     songs = [],
+    can_manage_events = false,
+    authorized_department_ids = [],
 }: {
     events: Event[];
     external_members: ExternalMember[];
     categories: Category[];
     groups: EventGroup[];
     songs: Song[];
+    can_manage_events: boolean;
+    authorized_department_ids: number[];
 }) {
+    const isDepartmentScheduler = !can_manage_events;
+    const authorizedDepartmentIds = new Set(authorized_department_ids);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [editingEvent, setEditingEvent] = useState<Event | null>(null);
     const [viewingEvent, setViewingEvent] = useState<Event | null>(null);
@@ -420,6 +426,7 @@ export default function Events({
     const [messageBody, setMessageBody] = useState('');
     const [messageAttachment, setMessageAttachment] = useState<File | null>(null);
     const [messageProcessing, setMessageProcessing] = useState(false);
+    const [departmentScheduleProcessing, setDepartmentScheduleProcessing] = useState(false);
     const [clientErrors, setClientErrors] = useState<Record<string, string>>({});
     const [timeScheduleTab, setTimeScheduleTab] = useState<'worship' | 'training' | 'other'>('worship');
     const [trainingSchedules, setTrainingSchedules] = useState<Array<{ id: number; title: string; date: string; start_time: string; end_time: string }>>([
@@ -428,20 +435,6 @@ export default function Events({
     const [otherSchedules, setOtherSchedules] = useState<Array<{ id: number; title: string; date: string; start_time: string; end_time: string }>>([
         { id: 1, title: '', date: '', start_time: '', end_time: '' },
     ]);
-
-    useEffect(() => {
-        setData(
-            'training_schedules',
-            trainingSchedules.map(({ id: _id, ...rest }) => rest),
-        );
-    }, [trainingSchedules]);
-
-    useEffect(() => {
-        setData(
-            'other_schedules',
-            otherSchedules.map(({ id: _id, ...rest }) => rest),
-        );
-    }, [otherSchedules]);
 
     const addScheduleItem = (type: 'training' | 'other') => {
         if (type === 'training') {
@@ -494,7 +487,7 @@ export default function Events({
         return () => window.clearInterval(timer);
     }, []);
 
-    const { data, setData, post, reset, processing, errors } = useForm({
+    const { data, setData, reset, processing, errors } = useForm({
         title: '',
         date: undefined as Date | undefined,
         time: '',
@@ -513,6 +506,30 @@ export default function Events({
         training_schedules: [] as EventScheduleItem[],
         other_schedules: [] as EventScheduleItem[],
     });
+
+    useEffect(() => {
+        setData(
+            'training_schedules',
+            trainingSchedules.map(({ title, date, start_time, end_time }) => ({
+                title,
+                date,
+                start_time,
+                end_time,
+            })),
+        );
+    }, [trainingSchedules, setData]);
+
+    useEffect(() => {
+        setData(
+            'other_schedules',
+            otherSchedules.map(({ title, date, start_time, end_time }) => ({
+                title,
+                date,
+                start_time,
+                end_time,
+            })),
+        );
+    }, [otherSchedules, setData]);
 
     const fieldError = (field: string) => clientErrors[field] || errors[field as keyof typeof errors];
 
@@ -535,29 +552,23 @@ return [];
 }
 
         const groups: Record<string, CategoryRole[]> = {};
-        selectedCategory.roles.forEach((role) => {
-            const dept = role.department.name;
+        selectedCategory.roles
+.filter((role) => can_manage_events || authorized_department_ids.includes(role.department.id))
+.forEach((role) => {
+    const dept = role.department.name;
 
-            if (!groups[dept]) {
-groups[dept] = [];
-}
+    if (!groups[dept]) {
+        groups[dept] = [];
+    }
 
-            groups[dept].push(role);
-        });
+    groups[dept].push(role);
+});
 
         return Object.entries(groups).map(([category, roles]) => ({
-            category,
-            roles,
+category,
+roles,
         }));
-    }, [data.category, categories]);
-
-    const toggleCategory = (category: string) => {
-        setOpenCategories((prev) =>
-            prev.includes(category)
-                ? prev.filter((c) => c !== category)
-                : [...prev, category],
-        );
-    };
+    }, [data.category, categories, can_manage_events, authorized_department_ids]);
 
     const getVolunteerValue = (category: string, roleName: string, roleId: number) => {
         const v = data.volunteers.find(
@@ -639,17 +650,31 @@ groups[dept] = [];
     };
 
     const addRundownItem = (segmentIndex: number) => {
-        const newSegments = [...data.rundown_segments];
-        newSegments[segmentIndex].items.push({ title: '', duration_seconds: 0 });
-        setData('rundown_segments', newSegments);
+        setData(
+            'rundown_segments',
+            data.rundown_segments.map((segment, index) =>
+                index === segmentIndex
+                    ? {
+                          ...segment,
+                          items: [...segment.items, { title: '', duration_seconds: 0 }],
+                      }
+                    : segment,
+            ),
+        );
     };
 
     const removeRundownItem = (segmentIndex: number, itemIndex: number) => {
-        const newSegments = [...data.rundown_segments];
-        newSegments[segmentIndex].items = newSegments[segmentIndex].items.filter(
-            (_, i) => i !== itemIndex,
+        setData(
+            'rundown_segments',
+            data.rundown_segments.map((segment, index) =>
+                index === segmentIndex
+                    ? {
+                          ...segment,
+                          items: segment.items.filter((_, item) => item !== itemIndex),
+                      }
+                    : segment,
+            ),
         );
-        setData('rundown_segments', newSegments);
     };
 
     const updateRundownItem = (
@@ -657,11 +682,19 @@ groups[dept] = [];
         itemIndex: number,
         updates: Partial<EventRundownItem>,
     ) => {
-        const newSegments = [...data.rundown_segments];
-        newSegments[segmentIndex].items = newSegments[segmentIndex].items.map(
-            (item, i) => (i === itemIndex ? { ...item, ...updates } : item),
+        setData(
+            'rundown_segments',
+            data.rundown_segments.map((segment, index) =>
+                index === segmentIndex
+                    ? {
+                          ...segment,
+                          items: segment.items.map((item, index) =>
+                              index === itemIndex ? { ...item, ...updates } : item,
+                          ),
+                      }
+                    : segment,
+            ),
         );
-        setData('rundown_segments', newSegments);
     };
 
     const minutesToSeconds = (val: string) => {
@@ -698,11 +731,59 @@ return `${m}m ${s > 0 ? s + 'd' : ''}`;
         return segments.reduce((acc, s) => acc + getItemTotalSeconds(s), 0);
     };
 
+    const handleDepartmentScheduleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+
+        if (!editingEvent) {
+            toast.error('Event tidak ditemukan untuk penjadwalan.');
+
+            return;
+        }
+
+        const category = categories.find((item) => item.name === editingEvent.category);
+        const permittedRoleIds = new Set(
+            (category?.roles ?? [])
+                .filter((role) => authorizedDepartmentIds.has(role.department.id))
+                .map((role) => role.id),
+        );
+        const assignments = data.volunteers.filter(
+            (volunteer) => volunteer.role_id !== undefined && permittedRoleIds.has(volunteer.role_id),
+        );
+
+        router.post(`/events/${editingEvent.id}/volunteers`, {
+            volunteers: JSON.stringify(assignments),
+        }, {
+            preserveScroll: true,
+            onStart: () => setDepartmentScheduleProcessing(true),
+            onSuccess: () => {
+                setClientErrors({});
+                setIsAddModalOpen(false);
+                setEditingEvent(null);
+                reset();
+            },
+            onError: (formErrors) => {
+                setClientErrors(formErrors as Record<string, string>);
+                toast.error('Penjadwalan gagal disimpan. Periksa kembali hak akses dan data anggota.');
+            },
+            onFinish: () => setDepartmentScheduleProcessing(false),
+        });
+    };
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
-        setData('training_schedules', trainingSchedules.map(({ id: _id, ...rest }) => rest));
-        setData('other_schedules', otherSchedules.map(({ id: _id, ...rest }) => rest));
+        setData('training_schedules', trainingSchedules.map(({ title, date, start_time, end_time }) => ({
+            title,
+            date,
+            start_time,
+            end_time,
+        })));
+        setData('other_schedules', otherSchedules.map(({ title, date, start_time, end_time }) => ({
+            title,
+            date,
+            start_time,
+            end_time,
+        })));
 
         const requiredErrors: Record<string, string> = {};
 
@@ -863,8 +944,18 @@ formData.append('_method', 'PUT');
                 volunteers: rehydratedVolunteers,
                 sessions: editingEvent.sessions || [],
                 participants: editingEvent.participants || [],
-                training_schedules: trainingData.map(({ id: _id, ...rest }) => rest),
-                other_schedules: otherData.map(({ id: _id, ...rest }) => rest),
+                training_schedules: trainingData.map(({ title, date, start_time, end_time }) => ({
+                    title,
+                    date,
+                    start_time,
+                    end_time,
+                })),
+                other_schedules: otherData.map(({ title, date, start_time, end_time }) => ({
+                    title,
+                    date,
+                    start_time,
+                    end_time,
+                })),
                 rundown_segments:
                     editingEvent.rundown_segments?.map((segment) => ({
                         title: segment.title,
@@ -1100,13 +1191,15 @@ return false;
                             Kelola jadwal pelayanan dan absensi jemaat Anda.
                         </p>
                     </div>
-                    <Button
-                        onClick={() => openAddEventForCategory()}
-                        className="h-11 gap-2 px-6 shadow-lg shadow-primary/20 hover:shadow-primary/40 transition-all duration-300 active:scale-95"
-                    >
-                        <Plus className="h-5 w-5" />
-                        Tambah Event Baru
-                    </Button>
+                    {can_manage_events && (
+                        <Button
+                            onClick={() => openAddEventForCategory()}
+                            className="h-11 gap-2 px-6 shadow-lg shadow-primary/20 hover:shadow-primary/40 transition-all duration-300 active:scale-95"
+                        >
+                            <Plus className="h-5 w-5" />
+                            Tambah Event Baru
+                        </Button>
+                    )}
                 </div>
 
                 <section className="space-y-4" aria-label="Filter daftar event">
@@ -1264,26 +1357,28 @@ return false;
                                         <div>
                                             <p className="text-sm font-semibold text-foreground/70">Belum ada event di kategori ini</p>
                                             <p className="mt-1 text-xs text-muted-foreground">Event baru dengan kategori ini akan tampil di sini.</p>
-                                            <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                    <Button
-                                                        type="button"
-                                                        size="icon"
-                                                        aria-label={`Tambah event untuk kategori ${category}`}
-                                                        title={`Tambah event untuk kategori ${category}`}
-                                                        className="mx-auto mt-4 h-9 w-9 rounded-lg shadow-sm"
-                                                        onClick={(event) => {
-                                                            event.stopPropagation();
-                                                            openAddEventForCategory(category);
-                                                        }}
-                                                    >
-                                                        <Plus className="h-4 w-4" />
-                                                    </Button>
-                                                </TooltipTrigger>
-                                                <TooltipContent>
-                                                    <p>Tambah event</p>
-                                                </TooltipContent>
-                                            </Tooltip>
+                                            {can_manage_events && (
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <Button
+                                                            type="button"
+                                                            size="icon"
+                                                            aria-label={`Tambah event untuk kategori ${category}`}
+                                                            title={`Tambah event untuk kategori ${category}`}
+                                                            className="mx-auto mt-4 h-9 w-9 rounded-lg shadow-sm"
+                                                            onClick={(event) => {
+                                                                event.stopPropagation();
+                                                                openAddEventForCategory(category);
+                                                            }}
+                                                        >
+                                                            <Plus className="h-4 w-4" />
+                                                        </Button>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>
+                                                        <p>Tambah event</p>
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            )}
                                         </div>
                                     </div>
                                 ) : (
@@ -1291,6 +1386,9 @@ return false;
                     {categoryEvents.map((event) => {
                         const eventTiming = getEventTiming(event, currentTime);
                         const isEventOngoing = eventTiming === 'ongoing';
+                        const canScheduleEvent = can_manage_events || categories
+                            .find((category) => category.name === event.category)
+                            ?.roles.some((role) => authorizedDepartmentIds.has(role.department.id)) === true;
 
                         return (
                             <Card
@@ -1330,55 +1428,62 @@ return false;
                                 })()}
 
                                 <div className="pointer-events-auto absolute top-16 right-4 z-30 flex gap-2 opacity-100 transition-all duration-300 md:translate-y-[-10px] md:opacity-0 md:group-hover:translate-y-0 md:group-hover:opacity-100">
-                                    <Button
-                                        variant="secondary"
-                                        size="icon"
-                                        aria-label={`Edit ${event.title}`}
-                                        title="Edit event"
-                                        className="h-9 w-9 rounded-full bg-background/80 shadow-2xl backdrop-blur-md border border-white/20 hover:bg-primary hover:text-white"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setEditingEvent(event);
-                                        }}
-                                    >
-                                        <Pencil className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                        variant="destructive"
-                                        size="icon"
-                                        aria-label={`Hapus ${event.title}`}
-                                        title="Hapus event"
-                                        className="h-9 w-9 rounded-full bg-background/80 text-destructive shadow-2xl backdrop-blur-md border border-white/20 hover:bg-destructive hover:text-white"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
+                                    {canScheduleEvent && (
+                                        <Button
+                                            variant="secondary"
+                                            size="icon"
+                                            aria-label={`Edit ${event.title}`}
+                                            title={isDepartmentScheduler ? 'Atur penjadwalan departemen' : 'Edit event'}
+                                            className="h-9 w-9 rounded-full bg-background/80 shadow-2xl backdrop-blur-md border border-white/20 hover:bg-primary hover:text-white"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setActiveTab(isDepartmentScheduler ? 'volunteers' : 'basic');
+                                                setEditingEvent(event);
+                                            }}
+                                        >
+                                            <Pencil className="h-4 w-4" />
+                                        </Button>
+                                    )}
+                                    {can_manage_events && (
+                                        <>
+                                            <Button
+                                                variant="destructive"
+                                                size="icon"
+                                                aria-label={`Hapus ${event.title}`}
+                                                title="Hapus event"
+                                                className="h-9 w-9 rounded-full bg-background/80 text-destructive shadow-2xl backdrop-blur-md border border-white/20 hover:bg-destructive hover:text-white"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
 
-                                            if (!window.confirm(`Hapus event "${event.title}"? Data rundown, volunteer, dan absensi terkait juga akan dihapus.`)) {
-                                                return;
-                                            }
+                                                    if (!window.confirm(`Hapus event "${event.title}"? Data rundown, volunteer, dan absensi terkait juga akan dihapus.`)) {
+                                                        return;
+                                                    }
 
-                                            router.delete(`/events/${event.id}`, {
-                                                preserveScroll: true,
-                                            });
-                                        }}
-                                    >
-                                        <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                        variant="secondary"
-                                        size="icon"
-                                        aria-label={`Kirim pesan untuk ${event.title}`}
-                                        title="Kirim pesan ke volunteer"
-                                        className="h-9 w-9 rounded-full bg-background/80 text-primary shadow-2xl backdrop-blur-md border border-white/20 hover:bg-primary hover:text-white"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setMessageEvent(event);
-                                            setMessageTitle('');
-                                            setMessageBody('');
-                                            setMessageAttachment(null);
-                                        }}
-                                    >
-                                        <MessageSquare className="h-4 w-4" />
-                                    </Button>
+                                                    router.delete(`/events/${event.id}`, {
+                                                        preserveScroll: true,
+                                                    });
+                                                }}
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                            <Button
+                                                variant="secondary"
+                                                size="icon"
+                                                aria-label={`Kirim pesan untuk ${event.title}`}
+                                                title="Kirim pesan ke volunteer"
+                                                className="h-9 w-9 rounded-full bg-background/80 text-primary shadow-2xl backdrop-blur-md border border-white/20 hover:bg-primary hover:text-white"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setMessageEvent(event);
+                                                    setMessageTitle('');
+                                                    setMessageBody('');
+                                                    setMessageAttachment(null);
+                                                }}
+                                            >
+                                                <MessageSquare className="h-4 w-4" />
+                                            </Button>
+                                        </>
+                                    )}
                                 </div>
                             </div>
 
@@ -1469,7 +1574,7 @@ return false;
                                                     : 'border-white/20 bg-black/35 text-white hover:bg-white/20 hover:text-white'
                                             }`}
                                             onClick={() => {
-                                                if (isEventOngoing) {
+                                                if (isEventOngoing && can_manage_events) {
                                                     router.get('/live-events', { event_id: event.id });
 
                                                     return;
@@ -1485,7 +1590,7 @@ return false;
                                                 </>
                                             )}
                                             <span className="relative z-10">
-                                                {isEventOngoing ? 'Kelola Event' : 'Detail'}
+                                                {isEventOngoing && can_manage_events ? 'Kelola Event' : 'Detail'}
                                             </span>
                                         </Button>
                                     </div>
@@ -1517,14 +1622,16 @@ return false;
                         <p className="mt-2 max-w-sm text-sm text-muted-foreground leading-relaxed">
                             Mulai atur jadwal pelayanan gereja Anda hari ini. Semua data absensi dan volunteer akan muncul di sini.
                         </p>
-                        <Button
-                            variant="default"
-                            className="mt-8 h-12 gap-2 rounded-2xl px-8 shadow-xl shadow-primary/20"
-                            onClick={() => setIsAddModalOpen(true)}
-                        >
-                            <Plus className="h-5 w-5" />
-                            Buat Event Sekarang
-                        </Button>
+                        {can_manage_events && (
+                            <Button
+                                variant="default"
+                                className="mt-8 h-12 gap-2 rounded-2xl px-8 shadow-xl shadow-primary/20"
+                                onClick={() => setIsAddModalOpen(true)}
+                            >
+                                <Plus className="h-5 w-5" />
+                                Buat Event Sekarang
+                            </Button>
+                        )}
                     </div>
                 )}
 
@@ -1623,10 +1730,12 @@ formData.append('attachment', messageAttachment);
                         <div className="flex items-center justify-between">
                             <div className="space-y-1">
                                 <DialogTitle className="text-3xl font-black tracking-tight text-foreground/90">
-                                    {editingEvent ? 'Edit Event' : 'Buat Event Baru'}
+                                    {isDepartmentScheduler ? 'Penjadwalan Departemen' : editingEvent ? 'Edit Event' : 'Buat Event Baru'}
                                 </DialogTitle>
                                 <DialogDescription className="text-sm font-medium text-muted-foreground/80">
-                                    {editingEvent
+                                    {isDepartmentScheduler
+                                        ? 'Atur jadwal volunteer untuk departemen yang menjadi hak akses Anda.'
+                                        : editingEvent
                                         ? 'Perbarui detail event dan jadwal pelayanan Anda.'
                                         : 'Lengkapi detail untuk menjadwalkan pelayanan gereja Anda.'}
                                 </DialogDescription>
@@ -1635,14 +1744,17 @@ formData.append('attachment', messageAttachment);
 
                         {/* Tab Switcher */}
                         <div className="mt-8 flex gap-1 p-1.5 bg-muted/40 rounded-2xl w-fit border border-border/40 backdrop-blur-md">
-                            {[
-                                { id: 'basic', label: 'Informasi Dasar', icon: Info },
-                                ...(data.attendance_type === 'class_participant'
-                                    ? [{ id: 'participants', label: `Peserta Kelas (${data.participants.length})`, icon: Users }]
-                                    : []),
-                                { id: 'rundown', label: 'Rundown & Lagu', icon: ListChecks },
-                                { id: 'volunteers', label: 'Tim Volunteer', icon: Users },
-                            ].map((tab) => (
+                            {(isDepartmentScheduler
+                                ? [{ id: 'volunteers', label: 'Tim Volunteer', icon: Users }]
+                                : [
+                                      { id: 'basic', label: 'Informasi Dasar', icon: Info },
+                                      ...(data.attendance_type === 'class_participant'
+                                          ? [{ id: 'participants', label: `Peserta Kelas (${data.participants.length})`, icon: Users }]
+                                          : []),
+                                      { id: 'rundown', label: 'Rundown & Lagu', icon: ListChecks },
+                                      { id: 'volunteers', label: 'Tim Volunteer', icon: Users },
+                                  ]
+                            ).map((tab) => (
                                 <button
                                     key={tab.id}
                                     type="button"
@@ -1662,7 +1774,7 @@ formData.append('attachment', messageAttachment);
                     </DialogHeader>
 
                     <form
-                        onSubmit={handleSubmit}
+                        onSubmit={isDepartmentScheduler ? handleDepartmentScheduleSubmit : handleSubmit}
                         className="flex min-h-0 flex-1 flex-col overflow-hidden"
                     >
                         <div className="min-h-0 flex-1 overflow-y-auto scrollbar-hide">
@@ -2487,7 +2599,11 @@ return;
                                     <div className="flex items-center justify-between">
                                         <div className="space-y-1">
                                             <h3 className="text-lg font-bold text-foreground/90">Penugasan Tim Pelayanan</h3>
-                                            <p className="text-xs text-muted-foreground font-medium">Tentukan volunteer yang akan bertugas.</p>
+                                            <p className="text-xs text-muted-foreground font-medium">
+                                                {isDepartmentScheduler
+                                                    ? 'Anda hanya dapat mengatur penugasan untuk departemen yang menjadi hak akses Anda.'
+                                                    : 'Tentukan volunteer yang akan bertugas.'}
+                                            </p>
                                         </div>
                                         <Badge variant="outline" className="px-4 py-2 rounded-xl bg-primary/5 border-primary/10 text-primary font-bold text-[10px] uppercase tracking-widest">
                                             {data.volunteers.filter(v => v.member_id).length} Posisi Terisi
@@ -2564,10 +2680,16 @@ return;
                                 </DialogClose>
                                 <Button
                                     type="submit"
-                                    disabled={processing}
+                                    disabled={processing || departmentScheduleProcessing}
                                     className="h-14 px-10 rounded-[20px] font-bold shadow-2xl shadow-primary/20 hover:shadow-primary/40 transition-all duration-500 active:scale-95"
                                 >
-                                    {processing ? 'Menyimpan...' : (editingEvent ? 'Simpan Perubahan' : 'Buat Event')}
+                                    {processing || departmentScheduleProcessing
+                                        ? 'Menyimpan...'
+                                        : isDepartmentScheduler
+                                          ? 'Simpan Penjadwalan'
+                                          : editingEvent
+                                            ? 'Simpan Perubahan'
+                                            : 'Buat Event'}
                                 </Button>
                             </div>
                         </div>

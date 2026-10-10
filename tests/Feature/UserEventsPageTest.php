@@ -3,6 +3,7 @@
 use App\Models\Event;
 use App\Models\EventVolunteer;
 use App\Models\User;
+use Inertia\Testing\AssertableInertia as Assert;
 
 it('shows only events assigned to the logged-in user on the user events page', function () {
     $user = User::factory()->create([
@@ -45,4 +46,10 @@ it('shows only events assigned to the logged-in user on the user events page', f
     $response->assertOk();
     $response->assertSee('Assigned Event');
     $response->assertDontSee('Unassigned Event');
+    $response->assertInertia(fn (Assert $page) => $page
+        ->component('my/events/index')
+        ->where('events.0.my_volunteer_assignments.0.role_name', 'Vocal')
+        ->where('events.0.my_volunteer_assignments.0.role_category', 'worship')
+        ->where('events.0.my_volunteer_assignments.0.response_status', 'pending')
+    );
 });

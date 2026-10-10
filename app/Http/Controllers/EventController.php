@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Category;
+use App\Models\CategoryRole;
 use App\Models\Event;
 use App\Models\EventGroup;
 use App\Models\EventParticipant;
@@ -13,6 +14,7 @@ use App\Notifications\VolunteerScheduledNotification;
 use App\Services\MemberApiService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
@@ -41,13 +43,30 @@ class EventController extends Controller
             'liveSession.runs',
             'liveSession.itemRuns',
         ])
-            ->when($memberId, fn ($query) => $query->whereIn('id', $assignedEventIds))
+            ->whereIn('id', $assignedEventIds)
             ->orderBy('date')
             ->orderBy('time')
             ->get();
 
         return Inertia::render('my/events/index', [
-            'events' => $events->map(fn (Event $event) => $liveEventController->serializeEvent($event))->values(),
+            'events' => $events->map(function (Event $event) use ($liveEventController, $memberId): array {
+                return [
+                    ...$liveEventController->serializeEvent($event),
+                    'my_volunteer_assignments' => $event->volunteers
+                        ->filter(fn (EventVolunteer $assignment): bool => (string) $assignment->member_id === (string) $memberId)
+                        ->map(fn (EventVolunteer $assignment): array => [
+                            'id' => $assignment->id,
+                            'role_category' => $assignment->role_category,
+                            'role_name' => $assignment->role_name,
+                            'response_status' => in_array($assignment->response_status, [null, 'read'], true)
+                                ? 'pending'
+                                : $assignment->response_status,
+                            'response_reason' => $assignment->response_reason,
+                        ])
+                        ->values()
+                        ->all(),
+                ];
+            })->values(),
             'assignedEventIds' => $assignedEventIds,
         ]);
     }
@@ -56,6 +75,8 @@ class EventController extends Controller
     {
         $user = request()->user();
         $memberId = $user?->member_id;
+
+        abort_unless($memberId, 403, 'Akun ini belum terhubung dengan data anggota.');
 
         if ($memberId) {
             $isAssigned = EventVolunteer::where('event_id', $event->id)
@@ -75,7 +96,22 @@ class EventController extends Controller
         ]);
 
         return Inertia::render('my/events/show', [
-            'event' => $liveEventController->serializeEvent($event),
+            'event' => [
+                ...$liveEventController->serializeEvent($event),
+                'my_volunteer_assignments' => $event->volunteers
+                    ->filter(fn (EventVolunteer $assignment): bool => (string) $assignment->member_id === (string) $memberId)
+                    ->map(fn (EventVolunteer $assignment): array => [
+                        'id' => $assignment->id,
+                        'role_category' => $assignment->role_category,
+                        'role_name' => $assignment->role_name,
+                        'response_status' => in_array($assignment->response_status, [null, 'read'], true)
+                            ? 'pending'
+                            : $assignment->response_status,
+                        'response_reason' => $assignment->response_reason,
+                    ])
+                    ->values()
+                    ->all(),
+            ],
             'eventData' => [
                 'worship' => [
                     'date' => $event->date,
@@ -90,6 +126,10 @@ class EventController extends Controller
 
     public function index(MemberApiService $memberApi)
     {
+        $user = request()->user();
+        $departmentIds = $user->schedulingDepartments()->pluck('departments.id')->map(fn ($id) => (int) $id)->all();
+        abort_unless($user->isAdmin() || $departmentIds !== [], 403);
+
         $externalMembers = $memberApi->listAll();
         $membersById = collect($externalMembers)->keyBy(fn (array $member) => (string) $member['idjemaat']);
         $events = Event::with([
@@ -117,8 +157,50 @@ class EventController extends Controller
             'groups' => EventGroup::orderBy('name')->get(),
             'songs' => Song::with('arrangements')->orderBy('title')->get(),
             'external_members' => $externalMembers,
+            'can_manage_events' => $user->isAdmin(),
+            'authorized_department_ids' => $departmentIds,
             'breadcrumbs' => [
                 ['title' => 'Event Dashboard', 'href' => '/events'],
+            ],
+        ]);
+    }
+
+    public function scheduling(MemberApiService $memberApi)
+    {
+        $user = request()->user();
+        $departmentIds = $user->schedulingDepartments()
+            ->pluck('departments.id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        abort_unless($user->isAdmin() || $departmentIds !== [], 403);
+
+        $externalMembers = $memberApi->listAll();
+        $membersById = collect($externalMembers)
+            ->keyBy(fn (array $member) => (string) $member['idjemaat']);
+        $events = Event::with('volunteers')
+            ->orderByDesc('date')
+            ->orderByDesc('time')
+            ->get();
+
+        $events->each(function (Event $event) use ($membersById): void {
+            $event->volunteers->each(function (EventVolunteer $volunteer) use ($membersById): void {
+                $volunteer->setAttribute('member', $membersById->get((string) $volunteer->member_id));
+            });
+        });
+
+        return Inertia::render('event-scheduling/index', [
+            'events' => $events,
+            'categories' => Category::with('roles.department')->get(),
+            'external_members' => collect($externalMembers)->map(fn (array $member) => [
+                'idjemaat' => (string) $member['idjemaat'],
+                'namalengkap' => $member['namalengkap'] ?? $member['name'] ?? 'Anggota',
+                'email' => $member['email'] ?? null,
+            ])->values(),
+            'can_manage_events' => $user->isAdmin(),
+            'authorized_department_ids' => $departmentIds,
+            'breadcrumbs' => [
+                ['title' => 'Penjadwalan Event', 'href' => '/event-scheduling'],
             ],
         ]);
     }
@@ -276,6 +358,126 @@ class EventController extends Controller
         return back()->with('success', 'Event berhasil diperbarui');
     }
 
+    public function updateVolunteers(Request $request, Event $event, MemberApiService $memberApi)
+    {
+        $user = $request->user();
+        $departmentIds = $user->schedulingDepartments()->pluck('departments.id')->map(fn ($id) => (int) $id)->all();
+        abort_unless($user->isAdmin() || $departmentIds !== [], 403);
+
+        $validated = $request->validate([
+            'volunteers' => 'required|string',
+        ]);
+        $assignments = json_decode($validated['volunteers'], true);
+
+        if (! is_array($assignments)) {
+            throw ValidationException::withMessages([
+                'volunteers' => 'Data penjadwalan tidak valid.',
+            ]);
+        }
+
+        validator(['volunteers' => $assignments], [
+            'volunteers' => 'array',
+            'volunteers.*.member_id' => 'required',
+            'volunteers.*.role_category' => 'required|string|max:255',
+            'volunteers.*.role_name' => 'required|string|max:255',
+        ])->validate();
+
+        $categoryRolesQuery = CategoryRole::query()
+            ->whereHas('category', fn ($query) => $query->where('name', $event->category))
+            ->with('department');
+
+        if (! $user->isAdmin()) {
+            $categoryRolesQuery->whereIn('department_id', $departmentIds);
+        }
+
+        $categoryRoles = $categoryRolesQuery->get();
+        $roleKeys = $categoryRoles->mapWithKeys(fn (CategoryRole $role) => [
+            $role->department->name.'|'.$role->role_name => true,
+        ]);
+        $authorizedRoleKeys = $categoryRoles->map(fn (CategoryRole $role) => [
+            'role_category' => $role->department->name,
+            'role_name' => $role->role_name,
+        ])->unique(fn (array $role) => $role['role_category'].'|'.$role['role_name'])->values()->all();
+        $availableRoleCounts = $categoryRoles->countBy(
+            fn (CategoryRole $role) => $role->department->name.'|'.$role->role_name,
+        );
+
+        $submittedRoleCounts = [];
+        foreach ($assignments as $assignment) {
+            $memberId = $assignment['member_id'] ?? null;
+            if ((! is_string($memberId) && ! is_int($memberId))
+                || (string) $memberId === 'none'
+                || strlen((string) $memberId) > 255) {
+                throw ValidationException::withMessages([
+                    'volunteers' => 'ID anggota tidak valid.',
+                ]);
+            }
+
+            $roleKey = ($assignment['role_category'] ?? '').'|'.($assignment['role_name'] ?? '');
+
+            if (! $roleKeys->has($roleKey)) {
+                throw ValidationException::withMessages([
+                    'volunteers' => 'Anda tidak memiliki hak untuk menjadwalkan posisi departemen ini.',
+                ]);
+            }
+
+            $submittedRoleCounts[$roleKey] = ($submittedRoleCounts[$roleKey] ?? 0) + 1;
+            if ($submittedRoleCounts[$roleKey] > $availableRoleCounts->get($roleKey, 0)) {
+                throw ValidationException::withMessages([
+                    'volunteers' => 'Jumlah penjadwalan melebihi posisi yang tersedia di departemen.',
+                ]);
+            }
+        }
+
+        $previousMemberIds = [];
+        if ($authorizedRoleKeys !== []) {
+            $previousMemberIds = $event->volunteers()
+                ->where(function ($query) use ($authorizedRoleKeys) {
+                    foreach ($authorizedRoleKeys as $role) {
+                        $query->orWhere(fn ($roleQuery) => $roleQuery
+                            ->where('role_category', $role['role_category'])
+                            ->where('role_name', $role['role_name']));
+                    }
+                })
+                ->pluck('member_id')
+                ->map(fn ($id) => (string) $id)
+                ->all();
+        }
+
+        $newAssignments = DB::transaction(function () use ($event, $assignments, $authorizedRoleKeys, $previousMemberIds) {
+            if ($authorizedRoleKeys !== []) {
+                $event->volunteers()
+                    ->where(function ($query) use ($authorizedRoleKeys) {
+                        foreach ($authorizedRoleKeys as $role) {
+                            $query->orWhere(fn ($roleQuery) => $roleQuery
+                                ->where('role_category', $role['role_category'])
+                                ->where('role_name', $role['role_name']));
+                        }
+                    })
+                    ->delete();
+            }
+            $createdAssignments = [];
+
+            foreach ($assignments as $assignment) {
+                $volunteer = $event->volunteers()->create([
+                    'member_id' => (string) $assignment['member_id'],
+                    'role_category' => $assignment['role_category'],
+                    'role_name' => $assignment['role_name'],
+                ]);
+
+                if (! in_array((string) $assignment['member_id'], $previousMemberIds, true)) {
+                    $createdAssignments[] = array_merge($assignment, ['assignment_id' => $volunteer->id]);
+                }
+            }
+
+            return $createdAssignments;
+        });
+
+        $this->notifyScheduledUsers($event, $newAssignments, $memberApi);
+
+        return back()->with('success', 'Penjadwalan departemen berhasil diperbarui.');
+    }
+
     public function enrollParticipant(Request $request, Event $event)
     {
         $validated = $request->validate([
@@ -374,7 +576,7 @@ class EventController extends Controller
 
     private function syncRundown(Event $event, ?string $payload): void
     {
-        if (! auth()->user()->isSuperAdmin()) {
+        if (! auth()->user()->isAdmin()) {
             return;
         }
 

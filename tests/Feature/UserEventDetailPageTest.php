@@ -42,6 +42,8 @@ it('shows a user event detail page with worship and schedule data from the event
         ->assertInertia(fn (Assert $page) => $page
             ->component('my/events/show')
             ->where('event.title', 'Ibadah Minggu')
+            ->where('event.my_volunteer_assignments.0.role_name', 'Vocal')
+            ->where('event.my_volunteer_assignments.0.response_status', 'accepted')
             ->where('eventData.worship.start_time', '08:30:00')
             ->where('eventData.training.0.title', 'Latihan Paduan Suara')
             ->where('eventData.other.0.title', 'Persiapan Acara')

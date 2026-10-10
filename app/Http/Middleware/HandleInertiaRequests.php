@@ -74,7 +74,11 @@ class HandleInertiaRequests extends Middleware
             ...parent::share($request),
             'name' => config('app.name'),
             'auth' => [
-                'user' => $user ? [...$user->toArray(), 'avatar' => $avatar] : null,
+                'user' => $user ? [
+                    ...$user->toArray(),
+                    'avatar' => $avatar,
+                    'can_manage_event_scheduling' => $user->isAdmin() || $user->schedulingDepartments()->exists(),
+                ] : null,
             ],
             'notifications' => [
                 'pending_assignments' => $pendingAssignments,

@@ -29,7 +29,11 @@ const sidebarNavItems: NavItem[] = [
 ];
 
 export default function SettingsLayout({ children }: PropsWithChildren) {
-    const { isCurrentOrParentUrl } = useCurrentUrl();
+    const { currentUrl, isCurrentOrParentUrl } = useCurrentUrl();
+
+    if (currentUrl === '/settings/roles') {
+        return <div className="w-full min-w-0">{children}</div>;
+    }
 
     return (
         <div className="px-4 py-6">

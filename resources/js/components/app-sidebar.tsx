@@ -1,6 +1,7 @@
 import { Link, usePage } from '@inertiajs/react';
 import {
     CalendarDays,
+    ClipboardList,
     FileText,
     HelpCircle,
     History,
@@ -72,7 +73,13 @@ const mainNavItems: NavItem[] = [
         title: 'Management Event',
         href: '/events',
         icon: CalendarDays,
-        roles: ['admin', 'superadmin'],
+        roles: ['admin', 'superadmin', 'user'],
+    },
+    {
+        title: 'Penjadwalan Event',
+        href: '/event-scheduling',
+        icon: ClipboardList,
+        roles: ['admin', 'superadmin', 'user'],
     },
     {
         title: 'Kalender Event',
@@ -132,7 +139,7 @@ const mainNavItems: NavItem[] = [
         title: 'Kelola Hak Akses',
         href: '/settings/roles',
         icon: ShieldCheck,
-        roles: ['superadmin'],
+        roles: ['admin', 'superadmin'],
     },
 ];
 
@@ -149,6 +156,13 @@ export function AppSidebar() {
     const userRole = auth.user?.role || 'jemaat';
 
     const filteredNavItems = mainNavItems.filter((item) => {
+        if (
+            (item.href === '/events' || item.href === '/event-scheduling') &&
+            !auth.user?.can_manage_event_scheduling
+        ) {
+            return false;
+        }
+
         if (!item.roles) {
             return true;
         }
@@ -157,14 +171,18 @@ export function AppSidebar() {
     });
 
     return (
-        <Sidebar collapsible="icon" variant="inset" className="border-r border-orange-100 shadow-sm shadow-orange-900/5">
+        <Sidebar
+            collapsible="icon"
+            variant="inset"
+            className="border-r border-orange-100 shadow-sm shadow-orange-900/5"
+        >
             <SidebarHeader>
                 <SidebarMenu>
                     <SidebarMenuItem>
                         <SidebarMenuButton size="lg" asChild>
                             <Link
                                 href={
-                                    userRole === 'admin' || userRole === 'superadmin'
+                                    auth.user?.can_manage_event_scheduling
                                         ? '/events'
                                         : '/my/scan'
                                 }

@@ -541,7 +541,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::resource('departments', DepartmentController::class)->except(['create', 'edit', 'show'])->middleware('role:admin,superadmin');
 
     Route::get('event-calendar', [EventController::class, 'calendar'])->name('event-calendar');
-    Route::resource('events', EventController::class)->except(['create', 'edit', 'show'])->middleware('role:admin,superadmin');
+    Route::get('events', [EventController::class, 'index'])->name('events.index');
+    Route::get('event-scheduling', [EventController::class, 'scheduling'])->name('event-scheduling.index');
+    Route::resource('events', EventController::class)->except(['index', 'create', 'edit', 'show'])->middleware('role:admin,superadmin');
+    Route::post('events/{event}/volunteers', [EventController::class, 'updateVolunteers'])->name('events.volunteers.update');
     Route::post('event-messages', [EventMessageController::class, 'store'])->middleware('role:admin,superadmin')->name('event-messages.store');
     Route::post('event-messages/{eventMessage}/read', [EventMessageController::class, 'markRead'])->name('event-messages.read');
     Route::post('events/{event}/participants', [EventController::class, 'enrollParticipant'])->middleware('role:admin,superadmin')->name('events.participants.enroll');
@@ -599,12 +602,24 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
 // Settings Routes
 Route::get('/settings/roles', [SettingsController::class, 'roles'])
-    ->middleware(['auth', 'verified', 'role:superadmin'])
+    ->middleware(['auth', 'verified', 'role:admin,superadmin'])
     ->name('settings.roles');
+
+Route::post('/settings/roles', [SettingsController::class, 'storeRole'])
+    ->middleware(['auth', 'verified', 'role:admin,superadmin'])
+    ->name('settings.roles.store');
 
 Route::post('/settings/roles/assign', [SettingsController::class, 'assignRole'])
     ->middleware(['auth', 'verified', 'role:superadmin'])
     ->name('settings.roles.assign');
+
+Route::post('/settings/department-access', [SettingsController::class, 'assignDepartmentAccess'])
+    ->middleware(['auth', 'verified', 'role:superadmin'])
+    ->name('settings.department-access.assign');
+
+Route::delete('/settings/users/{user}/departments/{department}', [SettingsController::class, 'removeDepartmentAccess'])
+    ->middleware(['auth', 'verified', 'role:superadmin'])
+    ->name('settings.department-access.remove');
 
 Route::patch('/settings/users/{user}/role', [SettingsController::class, 'updateUserRole'])
     ->middleware(['auth', 'verified', 'role:superadmin'])

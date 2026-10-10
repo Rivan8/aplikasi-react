@@ -11,7 +11,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 
-#[Fillable(['name', 'email', 'phone', 'password', 'member_id', 'role', 'expo_push_token', 'fcm_token'])]
+#[Fillable(['name', 'email', 'phone', 'password', 'member_id', 'role', 'role_id', 'expo_push_token', 'fcm_token'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -58,6 +58,11 @@ class User extends Authenticatable
     public function categoryRoles()
     {
         return $this->belongsToMany(CategoryRole::class, 'user_category_roles');
+    }
+
+    public function schedulingDepartments()
+    {
+        return $this->belongsToMany(Department::class, 'user_department_accesses');
     }
 
     /**
