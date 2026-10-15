@@ -61,7 +61,7 @@ const mainNavItems: NavItem[] = [
         title: 'Event Saya',
         href: '/my/events',
         icon: CalendarDays,
-        roles: ['user', 'jemaat'],
+        roles: ['user', 'jemaat', 'admin', 'superadmin'],
     },
     {
         title: 'Riwayat Saya',

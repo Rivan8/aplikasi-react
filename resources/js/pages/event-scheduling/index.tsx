@@ -31,6 +31,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { cn } from '@/lib/utils';
 
 interface Department {
     id: number;
@@ -60,8 +61,28 @@ interface Volunteer {
     member_id: string | number;
     role_category: string;
     role_name: string;
+    response_status?: string | null;
+    response_reason?: string | null;
     member?: Member | null;
 }
+
+const RESPONSE_STATUS_META: Record<
+    string,
+    { label: string; badgeClass: string }
+> = {
+    pending: {
+        label: 'Menunggu Konfirmasi',
+        badgeClass: 'border-amber-300 bg-amber-100 text-amber-800',
+    },
+    accepted: {
+        label: 'Confirm',
+        badgeClass: 'border-emerald-300 bg-emerald-100 text-emerald-800',
+    },
+    declined: {
+        label: 'Decline',
+        badgeClass: 'border-red-300 bg-red-100 text-red-800',
+    },
+};
 
 interface Event {
     id: number;
@@ -372,7 +393,7 @@ export default function EventScheduling({
                             Pilih event untuk melihat jadwal
                         </h2>
                         <p className="mt-2 max-w-md text-sm text-muted-foreground">
-                            Setelah event dipilih, daftar departemen dan posisi
+                            Setelah event dipilih, papan departemen dan posisi
                             pelayanan yang sesuai dengan kategori event akan
                             ditampilkan di sini.
                         </p>
@@ -456,301 +477,379 @@ export default function EventScheduling({
                         </Card>
                     )}
 
-                    {departmentGroups.map((group) => {
-                        const groupAssigned = group.roles.filter(
-                            (role) => assignments[role.id],
-                        ).length;
-                        const canScheduleDepartment =
-                            can_manage_events ||
-                            authorizedDepartments.has(group.department.id);
+                    {departmentGroups.length > 0 && (
+                        <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                            {departmentGroups.map((group) => {
+                                const groupAssigned = group.roles.filter(
+                                    (role) => assignments[role.id],
+                                ).length;
+                                const canScheduleDepartment =
+                                    can_manage_events ||
+                                    authorizedDepartments.has(
+                                        group.department.id,
+                                    );
+                                const isGroupComplete =
+                                    groupAssigned === group.roles.length;
 
-                        return (
-                            <Card
-                                key={group.department.id}
-                                className="w-full overflow-visible rounded-3xl border-border/70 shadow-sm"
-                            >
-                                <CardHeader className="border-b border-border/60 bg-muted/15 px-5 py-4 sm:px-7">
-                                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                                                <Users className="size-5" />
-                                            </div>
-                                            <div>
-                                                <CardTitle className="text-base font-bold">
+                                return (
+                                    <div
+                                        key={group.department.id}
+                                        className="flex flex-col rounded-2xl border bg-muted/20 p-3"
+                                    >
+                                        <div className="flex items-center justify-between gap-2 px-1 pb-3">
+                                            <span className="flex min-w-0 items-center gap-2 text-sm font-bold">
+                                                <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                                                    <Users className="size-4" />
+                                                </span>
+                                                <span className="truncate">
                                                     {group.department.name}
-                                                </CardTitle>
-                                                <CardDescription>
-                                                    {group.roles.length} posisi
-                                                    pelayanan
-                                                </CardDescription>
+                                                </span>
+                                            </span>
+                                            <div className="flex shrink-0 items-center gap-1.5">
+                                                {!canScheduleDepartment && (
+                                                    <Badge variant="outline">
+                                                        Hanya lihat
+                                                    </Badge>
+                                                )}
+                                                <Badge
+                                                    variant={
+                                                        isGroupComplete
+                                                            ? 'default'
+                                                            : 'secondary'
+                                                    }
+                                                >
+                                                    {groupAssigned}/
+                                                    {group.roles.length} terisi
+                                                </Badge>
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-2">
-                                            {!canScheduleDepartment && (
-                                                <Badge variant="outline">
-                                                    Hanya lihat
-                                                </Badge>
-                                            )}
-                                            <Badge
-                                                variant={
-                                                    groupAssigned ===
-                                                    group.roles.length
-                                                        ? 'default'
-                                                        : 'secondary'
-                                                }
-                                            >
-                                                {groupAssigned}/
-                                                {group.roles.length} terisi
-                                            </Badge>
-                                        </div>
-                                    </div>
-                                </CardHeader>
-                                <CardContent className="space-y-3 p-4 sm:p-6">
-                                    {group.roles.map((role, index) => {
-                                        const selectedMember =
-                                            external_members.find(
-                                                (member) =>
-                                                    member.idjemaat ===
-                                                    assignments[role.id],
-                                            );
-                                        const searchQuery = (
-                                            memberQueries[role.id] ?? ''
-                                        )
-                                            .trim()
-                                            .toLocaleLowerCase();
-                                        const memberOptions = external_members
-                                            .filter((member) => {
-                                                const name =
-                                                    member.namalengkap.toLocaleLowerCase();
-                                                const email =
-                                                    member.email?.toLocaleLowerCase() ??
-                                                    '';
+                                        <div className="flex-1 space-y-3">
+                                            {group.roles.map((role) => {
+                                                const selectedMember =
+                                                    external_members.find(
+                                                        (member) =>
+                                                            member.idjemaat ===
+                                                            assignments[
+                                                                role.id
+                                                            ],
+                                                    );
+                                                const isEditing =
+                                                    activeRoleId === role.id &&
+                                                    canScheduleDepartment;
+                                                const searchQuery = (
+                                                    memberQueries[role.id] ?? ''
+                                                )
+                                                    .trim()
+                                                    .toLocaleLowerCase();
+                                                const memberOptions = isEditing
+                                                    ? external_members
+                                                          .filter(
+                                                              (member) => {
+                                                                  const name =
+                                                                      member.namalengkap.toLocaleLowerCase();
+                                                                  const email =
+                                                                      member.email?.toLocaleLowerCase() ??
+                                                                      '';
+
+                                                                  return (
+                                                                      !searchQuery ||
+                                                                      name.includes(
+                                                                          searchQuery,
+                                                                      ) ||
+                                                                      email.includes(
+                                                                          searchQuery,
+                                                                      ) ||
+                                                                      member.idjemaat.includes(
+                                                                          searchQuery,
+                                                                      )
+                                                                  );
+                                                              },
+                                                          )
+                                                          .slice(0, 8)
+                                                    : [];
+                                                const assignedLabel =
+                                                    selectedMember?.namalengkap ??
+                                                    (assignments[role.id]
+                                                        ? `Anggota #${assignments[role.id]}`
+                                                        : null);
+                                                const assignedSub =
+                                                    selectedMember
+                                                        ? selectedMember.email ||
+                                                          `ID ${selectedMember.idjemaat}`
+                                                        : null;
+                                                const initial =
+                                                    assignedLabel
+                                                        ?.trim()
+                                                        .charAt(0)
+                                                        .toLocaleUpperCase() ??
+                                                    '?';
+                                                const volunteerAssignment =
+                                                    selectedEvent?.volunteers.find(
+                                                        (volunteer) =>
+                                                            volunteer.role_category ===
+                                                                group
+                                                                    .department
+                                                                    .name &&
+                                                            volunteer.role_name ===
+                                                                role.role_name &&
+                                                            String(
+                                                                volunteer.member_id,
+                                                            ) ===
+                                                                String(
+                                                                    assignments[
+                                                                        role.id
+                                                                    ],
+                                                                ),
+                                                    );
+                                                const responseStatus =
+                                                    volunteerAssignment?.response_status ??
+                                                    'pending';
+                                                const statusMeta =
+                                                    RESPONSE_STATUS_META[
+                                                        responseStatus
+                                                    ] ??
+                                                    RESPONSE_STATUS_META
+                                                        .pending;
+                                                const declineReason =
+                                                    responseStatus === 'declined'
+                                                        ? (volunteerAssignment?.response_reason ??
+                                                          null)
+                                                        : null;
 
                                                 return (
-                                                    !searchQuery ||
-                                                    name.includes(
-                                                        searchQuery,
-                                                    ) ||
-                                                    email.includes(
-                                                        searchQuery,
-                                                    ) ||
-                                                    member.idjemaat.includes(
-                                                        searchQuery,
-                                                    )
-                                                );
-                                            })
-                                            .slice(0, 8);
-                                        const showSuggestions =
-                                            activeRoleId === role.id &&
-                                            canScheduleDepartment;
-
-                                        return (
-                                            <div
-                                                key={role.id}
-                                                className="grid gap-3 rounded-2xl border bg-background p-4 sm:grid-cols-[minmax(0,0.85fr)_minmax(16rem,1.15fr)] sm:items-center sm:px-5"
-                                            >
-                                                <div className="flex min-w-0 items-center gap-3">
-                                                    <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-muted text-sm font-bold text-muted-foreground">
-                                                        {String(
-                                                            index + 1,
-                                                        ).padStart(2, '0')}
-                                                    </span>
-                                                    <div className="min-w-0">
-                                                        <p className="font-semibold">
-                                                            {role.role_name}
-                                                        </p>
-                                                        <p className="text-xs text-muted-foreground">
-                                                            Posisi pelayanan
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                                <div className="relative">
-                                                    <div className="relative">
-                                                        <UserRound className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-                                                        <Input
-                                                            type="search"
-                                                            autoComplete="off"
-                                                            disabled={
+                                                    <div
+                                                        key={role.id}
+                                                        onClick={() => {
+                                                            if (
                                                                 !canScheduleDepartment
+                                                            ) {
+                                                                return;
                                                             }
-                                                            aria-label={`Cari anggota untuk posisi ${role.role_name} di ${group.department.name}`}
-                                                            placeholder={
-                                                                canScheduleDepartment
-                                                                    ? 'Cari nama, email, atau ID anggota...'
-                                                                    : 'Anda tidak memiliki akses untuk mengubah posisi ini'
-                                                            }
-                                                            value={
-                                                                showSuggestions
-                                                                    ? (memberQueries[
-                                                                          role
-                                                                              .id
-                                                                      ] ?? '')
-                                                                    : (selectedMember?.namalengkap ??
-                                                                      (assignments[
-                                                                          role
-                                                                              .id
-                                                                      ]
-                                                                          ? `Anggota #${assignments[role.id]}`
-                                                                          : ''))
-                                                            }
-                                                            onFocus={() => {
-                                                                setActiveRoleId(
-                                                                    role.id,
-                                                                );
-                                                                setMemberQueries(
-                                                                    (
-                                                                        current,
-                                                                    ) => ({
-                                                                        ...current,
-                                                                        [role.id]:
-                                                                            '',
-                                                                    }),
-                                                                );
-                                                            }}
-                                                            onChange={(
-                                                                inputEvent,
-                                                            ) =>
-                                                                setMemberQueries(
-                                                                    (
-                                                                        current,
-                                                                    ) => ({
-                                                                        ...current,
-                                                                        [role.id]:
-                                                                            inputEvent
-                                                                                .target
-                                                                                .value,
-                                                                    }),
-                                                                )
-                                                            }
-                                                            onKeyDown={(
-                                                                keyEvent,
-                                                            ) => {
-                                                                if (
-                                                                    keyEvent.key ===
-                                                                        'Enter' &&
-                                                                    memberOptions[0]
-                                                                ) {
-                                                                    keyEvent.preventDefault();
-                                                                    setRoleMember(
-                                                                        role.id,
-                                                                        memberOptions[0]
-                                                                            .idjemaat,
-                                                                    );
-                                                                }
 
-                                                                if (
-                                                                    keyEvent.key ===
-                                                                    'Escape'
-                                                                ) {
-                                                                    setActiveRoleId(
-                                                                        null,
-                                                                    );
-                                                                }
-                                                            }}
-                                                            onBlur={() =>
-                                                                setActiveRoleId(
-                                                                    (
-                                                                        current,
-                                                                    ) =>
-                                                                        current ===
-                                                                        role.id
-                                                                            ? null
-                                                                            : current,
-                                                                )
-                                                            }
-                                                            className="h-11 bg-background pr-10 pl-9"
-                                                        />
-                                                        {selectedMember &&
-                                                            canScheduleDepartment && (
-                                                                <Button
-                                                                    type="button"
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    aria-label={`Hapus penugasan ${selectedMember.namalengkap} dari ${role.role_name}`}
-                                                                    className="absolute top-1/2 right-1 size-8 -translate-y-1/2 text-muted-foreground"
-                                                                    onClick={() =>
-                                                                        clearRoleMember(
-                                                                            role.id,
-                                                                        )
+                                                            setActiveRoleId(
+                                                                role.id,
+                                                            );
+                                                            setMemberQueries(
+                                                                (current) => ({
+                                                                    ...current,
+                                                                    [role.id]:
+                                                                        '',
+                                                                }),
+                                                            );
+                                                        }}
+                                                        className={cn(
+                                                            'rounded-2xl border bg-background p-3 shadow-sm transition',
+                                                            canScheduleDepartment &&
+                                                                'cursor-pointer hover:border-primary/60 hover:shadow-md',
+                                                            isEditing &&
+                                                                'border-primary ring-2 ring-primary/20',
+                                                        )}
+                                                    >
+                                                        <div className="flex items-start justify-between gap-2">
+                                                            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                                                                {role.role_name}
+                                                            </p>
+                                                            {assignedLabel && (
+                                                                <span
+                                                                    title={
+                                                                        declineReason
+                                                                            ? `Alasan: ${declineReason}`
+                                                                            : undefined
                                                                     }
+                                                                    className={cn(
+                                                                        'shrink-0 rounded-full border px-2 py-0.5 text-[9px] font-bold',
+                                                                        statusMeta.badgeClass,
+                                                                    )}
                                                                 >
-                                                                    <X className="size-4" />
-                                                                </Button>
-                                                            )}
-                                                    </div>
-                                                    {showSuggestions && (
-                                                        <div className="absolute top-full right-0 left-0 z-30 mt-1 max-h-72 overflow-y-auto rounded-xl border bg-popover p-1 text-popover-foreground shadow-lg">
-                                                            {memberOptions.map(
-                                                                (member) => (
-                                                                    <button
-                                                                        key={
-                                                                            member.idjemaat
-                                                                        }
-                                                                        type="button"
-                                                                        className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left hover:bg-accent"
-                                                                        onMouseDown={(
-                                                                            mouseEvent,
-                                                                        ) =>
-                                                                            mouseEvent.preventDefault()
-                                                                        }
-                                                                        onClick={() =>
-                                                                            setRoleMember(
-                                                                                role.id,
-                                                                                member.idjemaat,
-                                                                            )
-                                                                        }
-                                                                    >
-                                                                        <span className="min-w-0">
-                                                                            <span className="block truncate text-sm font-medium">
-                                                                                {
-                                                                                    member.namalengkap
-                                                                                }
-                                                                            </span>
-                                                                            <span className="block truncate text-xs text-muted-foreground">
-                                                                                {member.email ||
-                                                                                    `ID ${member.idjemaat}`}
-                                                                            </span>
-                                                                        </span>
-                                                                        {assignments[
-                                                                            role
-                                                                                .id
-                                                                        ] ===
-                                                                            member.idjemaat && (
-                                                                            <Check className="size-4 shrink-0 text-primary" />
-                                                                        )}
-                                                                    </button>
-                                                                ),
-                                                            )}
-                                                            {memberOptions.length ===
-                                                                0 &&
-                                                                external_members.length >
-                                                                    0 && (
-                                                                    <p className="px-3 py-4 text-center text-sm text-muted-foreground">
-                                                                        Tidak
-                                                                        ada
-                                                                        anggota
-                                                                        yang
-                                                                        cocok.
-                                                                    </p>
-                                                                )}
-                                                            {external_members.length ===
-                                                                0 && (
-                                                                <p className="px-3 py-4 text-center text-sm text-muted-foreground">
-                                                                    Data anggota
-                                                                    belum
-                                                                    tersedia.
-                                                                </p>
+                                                                    {
+                                                                        statusMeta.label
+                                                                    }
+                                                                </span>
                                                             )}
                                                         </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </CardContent>
-                            </Card>
-                        );
-                    })}
+                                                        {assignedLabel ? (
+                                                            <div className="mt-2 flex items-center gap-2.5">
+                                                                <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
+                                                                    {initial}
+                                                                </span>
+                                                                <div className="min-w-0 flex-1">
+                                                                    <p className="truncate text-sm font-semibold">
+                                                                        {
+                                                                            assignedLabel
+                                                                        }
+                                                                    </p>
+                                                                    {assignedSub && (
+                                                                        <p className="truncate text-[11px] text-muted-foreground">
+                                                                            {
+                                                                                assignedSub
+                                                                            }
+                                                                        </p>
+                                                                    )}
+                                                                </div>
+                                                                {canScheduleDepartment && (
+                                                                    <Button
+                                                                        type="button"
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        aria-label={`Hapus penugasan ${assignedLabel} dari ${role.role_name}`}
+                                                                        className="size-8 shrink-0 text-muted-foreground"
+                                                                        onClick={(
+                                                                            clickEvent,
+                                                                        ) => {
+                                                                            clickEvent.stopPropagation();
+                                                                            clearRoleMember(
+                                                                                role.id,
+                                                                            );
+                                                                        }}
+                                                                    >
+                                                                        <X className="size-4" />
+                                                                    </Button>
+                                                                )}
+                                                            </div>
+                                                        ) : (
+                                                            <p className="mt-2 rounded-xl border border-dashed px-3 py-2.5 text-xs text-muted-foreground">
+                                                                {canScheduleDepartment
+                                                                    ? 'Ketuk untuk menugaskan anggota'
+                                                                    : 'Belum ada anggota'}
+                                                            </p>
+                                                        )}
+                                                        {isEditing && (
+                                                            <div className="relative mt-2">
+                                                                <UserRound className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+                                                                <Input
+                                                                    type="search"
+                                                                    autoComplete="off"
+                                                                    autoFocus
+                                                                    aria-label={`Cari anggota untuk posisi ${role.role_name} di ${group.department.name}`}
+                                                                    placeholder="Cari nama, email, atau ID anggota..."
+                                                                    value={
+                                                                        memberQueries[
+                                                                            role
+                                                                                .id
+                                                                        ] ?? ''
+                                                                    }
+                                                                    onChange={(
+                                                                        inputEvent,
+                                                                    ) =>
+                                                                        setMemberQueries(
+                                                                            (
+                                                                                current,
+                                                                            ) => ({
+                                                                                ...current,
+                                                                                [role
+                                                                                    .id]:
+                                                                                    inputEvent
+                                                                                        .target
+                                                                                        .value,
+                                                                            }),
+                                                                        )
+                                                                    }
+                                                                    onKeyDown={(
+                                                                        keyEvent,
+                                                                    ) => {
+                                                                        if (
+                                                                            keyEvent
+                                                                                .key ===
+                                                                                'Enter' &&
+                                                                            memberOptions[0]
+                                                                        ) {
+                                                                            keyEvent.preventDefault();
+                                                                            setRoleMember(
+                                                                                role.id,
+                                                                                memberOptions[0]
+                                                                                    .idjemaat,
+                                                                            );
+                                                                        }
+
+                                                                        if (
+                                                                            keyEvent
+                                                                                .key ===
+                                                                            'Escape'
+                                                                        ) {
+                                                                            setActiveRoleId(
+                                                                                null,
+                                                                            );
+                                                                        }
+                                                                    }}
+                                                                    onBlur={() =>
+                                                                        setActiveRoleId(
+                                                                            (
+                                                                                current,
+                                                                            ) =>
+                                                                                current ===
+                                                                                role.id
+                                                                                    ? null
+                                                                                    : current,
+                                                                        )
+                                                                    }
+                                                                    className="h-10 bg-background pr-4 pl-9"
+                                                                />
+                                                                <div className="absolute top-full right-0 left-0 z-30 mt-1 max-h-60 overflow-y-auto rounded-xl border bg-popover p-1 text-popover-foreground shadow-lg">
+                                                                    {memberOptions.map(
+                                                                        (
+                                                                            member,
+                                                                        ) => (
+                                                                            <button
+                                                                                key={
+                                                                                    member.idjemaat
+                                                                                }
+                                                                                type="button"
+                                                                                className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left hover:bg-accent"
+                                                                                onMouseDown={(
+                                                                                    mouseEvent,
+                                                                                ) =>
+                                                                                    mouseEvent.preventDefault()
+                                                                                }
+                                                                                onClick={() =>
+                                                                                    setRoleMember(
+                                                                                        role.id,
+                                                                                        member.idjemaat,
+                                                                                    )
+                                                                                }
+                                                                            >
+                                                                                <span className="min-w-0">
+                                                                                    <span className="block truncate text-sm font-medium">
+                                                                                        {
+                                                                                            member.namalengkap
+                                                                                        }
+                                                                                    </span>
+                                                                                    <span className="block truncate text-xs text-muted-foreground">
+                                                                                        {member.email ||
+                                                                                            `ID ${member.idjemaat}`}
+                                                                                    </span>
+                                                                                </span>
+                                                                                {assignments[
+                                                                                    role
+                                                                                        .id
+                                                                                ] ===
+                                                                                    member.idjemaat && (
+                                                                                    <Check className="size-4 shrink-0 text-primary" />
+                                                                                )}
+                                                                            </button>
+                                                                        ),
+                                                                    )}
+                                                                    {memberOptions.length ===
+                                                                        0 && (
+                                                                        <p className="px-3 py-4 text-center text-sm text-muted-foreground">
+                                                                            Tidak
+                                                                            ada
+                                                                            anggota
+                                                                            yang
+                                                                            cocok.
+                                                                        </p>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
 
                     {selectedCategory && eventRoles.length > 0 && (
                         <div className="sticky bottom-3 z-20 flex flex-col gap-3 rounded-2xl border bg-background/95 p-4 shadow-lg backdrop-blur sm:flex-row sm:items-center sm:justify-between sm:px-6">

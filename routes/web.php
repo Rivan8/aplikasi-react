@@ -157,7 +157,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
         if ($user?->member_id) {
             $assignments = EventVolunteer::with('event')
                 ->where('member_id', $user->member_id)
-                ->whereHas('event', fn ($query) => $query->whereDate('date', '>=', $today->toDateString()))
                 ->orderBy(
                     Event::select('date')
                         ->whereColumn('events.id', 'event_volunteers.event_id')

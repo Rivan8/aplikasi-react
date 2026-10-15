@@ -430,8 +430,9 @@ class EventController extends Controller
         }
 
         $previousMemberIds = [];
+        $previousVolunteers = collect();
         if ($authorizedRoleKeys !== []) {
-            $previousMemberIds = $event->volunteers()
+            $previousVolunteers = $event->volunteers()
                 ->where(function ($query) use ($authorizedRoleKeys) {
                     foreach ($authorizedRoleKeys as $role) {
                         $query->orWhere(fn ($roleQuery) => $roleQuery
@@ -439,12 +440,14 @@ class EventController extends Controller
                             ->where('role_name', $role['role_name']));
                     }
                 })
+                ->get();
+            $previousMemberIds = $previousVolunteers
                 ->pluck('member_id')
                 ->map(fn ($id) => (string) $id)
                 ->all();
         }
 
-        $newAssignments = DB::transaction(function () use ($event, $assignments, $authorizedRoleKeys, $previousMemberIds) {
+        $newAssignments = DB::transaction(function () use ($event, $assignments, $authorizedRoleKeys, $previousVolunteers, $previousMemberIds) {
             if ($authorizedRoleKeys !== []) {
                 $event->volunteers()
                     ->where(function ($query) use ($authorizedRoleKeys) {
@@ -459,10 +462,20 @@ class EventController extends Controller
             $createdAssignments = [];
 
             foreach ($assignments as $assignment) {
+                $memberKey = (string) $assignment['member_id'];
+                $previous = $previousVolunteers->first(
+                    fn (EventVolunteer $volunteer) => $volunteer->role_category === $assignment['role_category']
+                        && $volunteer->role_name === $assignment['role_name']
+                        && (string) $volunteer->member_id === $memberKey,
+                );
+
                 $volunteer = $event->volunteers()->create([
-                    'member_id' => (string) $assignment['member_id'],
+                    'member_id' => $memberKey,
                     'role_category' => $assignment['role_category'],
                     'role_name' => $assignment['role_name'],
+                    'response_status' => $previous?->response_status ?? 'pending',
+                    'response_reason' => $previous?->response_reason,
+                    'responded_at' => $previous?->responded_at,
                 ]);
 
                 if (! in_array((string) $assignment['member_id'], $previousMemberIds, true)) {

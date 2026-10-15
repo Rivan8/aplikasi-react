@@ -298,6 +298,157 @@ function getResponseBadge(status: string) {
     };
 }
 
+function AdminMyScheduleCard({
+    assignments,
+    messages,
+}: {
+    assignments: UserAssignment[];
+    messages: UserMessage[];
+}) {
+    const [activeTab, setActiveTab] = useState<'schedules' | 'messages'>('schedules');
+    const [decliningAssignment, setDecliningAssignment] = useState<UserAssignment | null>(null);
+    const [declineReason, setDeclineReason] = useState('');
+    const [processingId, setProcessingId] = useState<number | null>(null);
+    const pendingAssignments = assignments.filter((assignment) => assignment.response_status === 'pending').length;
+    const unreadMessages = messages.filter((message) => !message.is_read).length;
+
+    const formatShortDate = (date: string) => {
+        if (!date || Number.isNaN(Date.parse(date))) {
+            return '-';
+        }
+
+        return new Date(date).toLocaleDateString('id-ID', {
+            weekday: 'short',
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+        });
+    };
+
+    const markMessageRead = (message: UserMessage) => {
+        if (!message.is_read) {
+            router.post(`/event-messages/${message.id}/read`, {}, { preserveScroll: true });
+        }
+    };
+
+    const respondToAssignment = (assignment: UserAssignment, action: 'accept' | 'decline') => {
+        setProcessingId(assignment.id);
+        router.post(`/dashboard/volunteer-assignments/${assignment.id}/${action}`, action === 'decline' ? { reason: declineReason } : {}, {
+            preserveScroll: true,
+            onSuccess: () => {
+                if (action === 'decline') {
+                    setDecliningAssignment(null);
+                    setDeclineReason('');
+                }
+            },
+            onFinish: () => setProcessingId(null),
+        });
+    };
+
+    return (
+        <>
+            <Card className="border-border/60 bg-card shadow-sm">
+                <CardHeader className="border-b px-6 py-5">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <CardTitle className="text-lg">Jadwal Pelayanan Saya</CardTitle>
+                            <p className="mt-1 text-xs text-muted-foreground">Penugasan pelayanan dan pesan event untuk akun Anda.</p>
+                        </div>
+                        <div className="flex rounded-xl bg-muted/70 p-1">
+                            <button type="button" onClick={() => setActiveTab('schedules')} className={cn('rounded-lg px-3 py-2 text-xs font-semibold', activeTab === 'schedules' ? 'bg-background text-primary shadow-sm' : 'text-muted-foreground')}>
+                                Jadwal {pendingAssignments > 0 && <span className="ml-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">{pendingAssignments}</span>}
+                            </button>
+                            <button type="button" onClick={() => setActiveTab('messages')} className={cn('rounded-lg px-3 py-2 text-xs font-semibold', activeTab === 'messages' ? 'bg-background text-primary shadow-sm' : 'text-muted-foreground')}>
+                                Pesan {unreadMessages > 0 && <span className="ml-1 rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">{unreadMessages}</span>}
+                            </button>
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent className="p-5">
+                    {activeTab === 'messages' ? (
+                        <div className="space-y-3">
+                            {messages.length === 0 ? (
+                                <div className="rounded-2xl border border-dashed p-7 text-center text-sm text-muted-foreground">Belum ada pesan untuk Anda.</div>
+                            ) : (
+                                messages.map((message) => (
+                                    <button key={message.id} type="button" onClick={() => markMessageRead(message)} className={cn('w-full rounded-2xl border p-4 text-left transition hover:border-primary/30', message.is_read ? 'border-border/50 bg-background/60' : 'border-primary/25 bg-primary/5')}>
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="min-w-0">
+                                                <p className="truncate text-sm font-bold">{message.title}</p>
+                                                <p className="mt-1 text-xs font-medium text-primary">{message.event.title}</p>
+                                            </div>
+                                            <Badge variant={message.is_read ? 'outline' : 'default'} className="shrink-0 text-[10px]">{message.is_read ? 'Dibaca' : 'Baru'}</Badge>
+                                        </div>
+                                        <p className="mt-3 line-clamp-3 whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">{message.body}</p>
+                                    </button>
+                                ))
+                            )}
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            {assignments.length === 0 ? (
+                                <div className="rounded-2xl border border-dashed p-7 text-center text-sm text-muted-foreground">Belum ada jadwal pelayanan.</div>
+                            ) : (
+                                assignments.map((assignment) => {
+                                    const badge = getResponseBadge(assignment.response_status);
+
+                                    return (
+                                        <div key={assignment.id} className="rounded-2xl border border-border/60 bg-background/60 p-4">
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div className="min-w-0">
+                                                    <h3 className="truncate text-sm font-bold">{assignment.event.title}</h3>
+                                                    <p className="mt-1 text-xs font-medium text-primary">{assignment.role_name} · {assignment.role_category}</p>
+                                                    <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
+                                                        <span className="flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5" />{formatShortDate(assignment.event.date ?? '')}</span>
+                                                        <span className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" />{assignment.event.time ?? '-'}</span>
+                                                        <span className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5" />{assignment.event.location ?? '-'}</span>
+                                                    </div>
+                                                    {assignment.response_status === 'declined' && assignment.response_reason && (
+                                                        <p className="mt-2 text-xs italic text-rose-600">Alasan: {assignment.response_reason}</p>
+                                                    )}
+                                                </div>
+                                                <Badge variant="outline" className={badge.className}>{badge.label}</Badge>
+                                            </div>
+                                            {assignment.response_status === 'pending' && (
+                                                <div className="mt-4 flex gap-2">
+                                                    <Button size="sm" className="flex-1 gap-1.5" disabled={processingId === assignment.id} onClick={() => respondToAssignment(assignment, 'accept')}>
+                                                        <CheckCircle2 className="h-4 w-4" />Terima
+                                                    </Button>
+                                                    <Button size="sm" variant="outline" className="flex-1 gap-1.5 text-rose-700" disabled={processingId === assignment.id} onClick={() => setDecliningAssignment(assignment)}>
+                                                        <XCircle className="h-4 w-4" />Tolak
+                                                    </Button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+            <Dialog open={!!decliningAssignment} onOpenChange={(open) => {
+                if (!open) {
+                    setDecliningAssignment(null);
+                    setDeclineReason('');
+                }
+            }}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Tolak jadwal pelayanan</DialogTitle>
+                        <DialogDescription>Berikan alasan singkat agar admin dapat mengatur ulang jadwal.</DialogDescription>
+                    </DialogHeader>
+                    <textarea value={declineReason} onChange={(event) => setDeclineReason(event.target.value)} rows={4} placeholder="Tulis alasan penolakan..." className="w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => setDecliningAssignment(null)}>Batal</Button>
+                        <Button type="button" variant="destructive" disabled={!declineReason.trim() || processingId === decliningAssignment?.id} onClick={() => decliningAssignment && respondToAssignment(decliningAssignment, 'decline')}>Kirim Penolakan</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </>
+    );
+}
+
 function formatDuration(seconds: number): string {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
@@ -1095,9 +1246,12 @@ export default function Dashboard({
     dashboard?: DashboardData;
 }) {
     const { auth } = usePage().props as {
-        auth?: { user?: { role?: string } };
+        auth?: { user?: { role?: string; member_id?: string | number | null } };
     };
     const userRole = auth?.user?.role ?? 'jemaat';
+    const authMemberId = auth?.user?.member_id
+        ? String(auth.user.member_id)
+        : null;
     const stats = dashboard?.stats ?? emptyStats;
     const upcomingServices = dashboard?.upcoming_services ?? [];
     const adminAssignments = dashboard?.admin_assignments ?? [];
@@ -1811,12 +1965,19 @@ return;
                 )}
 
                 {activeTab === 'activity' && (
-                    <Card className="border bg-card shadow-sm">
-                        <CardHeader className="border-b px-6 py-5">
-                            <div className="flex items-center justify-between">
-                                <CardTitle className="text-lg">
-                                    Live Check-in
-                                </CardTitle>
+                    <>
+                        {authMemberId && (userAssignments.length > 0 || userMessages.length > 0) && (
+                            <AdminMyScheduleCard
+                                assignments={userAssignments}
+                                messages={userMessages}
+                            />
+                        )}
+                        <Card className="border bg-card shadow-sm">
+                            <CardHeader className="border-b px-6 py-5">
+                                <div className="flex items-center justify-between">
+                                    <CardTitle className="text-lg">
+                                        Live Check-in
+                                    </CardTitle>
                                 <Button
                                     asChild
                                     variant="ghost"
@@ -1893,6 +2054,7 @@ return;
                             </div>
                         </CardContent>
                     </Card>
+                    </>
                 )}
             </div>
 
