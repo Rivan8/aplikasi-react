@@ -14,7 +14,7 @@ class Department extends Model
      */
     protected $connection = 'mysql';
 
-    protected $fillable = ['name'];
+    protected $fillable = ['name', 'sort_order'];
 
     public function memberDetails()
     {

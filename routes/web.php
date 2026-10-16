@@ -542,6 +542,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('event-calendar', [EventController::class, 'calendar'])->name('event-calendar');
     Route::get('events', [EventController::class, 'index'])->name('events.index');
     Route::get('event-scheduling', [EventController::class, 'scheduling'])->name('event-scheduling.index');
+    Route::post('event-scheduling/department-order', [EventController::class, 'updateDepartmentOrder'])->middleware('role:admin,superadmin')->name('event-scheduling.department-order');
     Route::resource('events', EventController::class)->except(['index', 'create', 'edit', 'show'])->middleware('role:admin,superadmin');
     Route::post('events/{event}/volunteers', [EventController::class, 'updateVolunteers'])->name('events.volunteers.update');
     Route::post('event-messages', [EventMessageController::class, 'store'])->middleware('role:admin,superadmin')->name('event-messages.store');

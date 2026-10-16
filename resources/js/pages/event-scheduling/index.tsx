@@ -43,6 +43,7 @@ import { cn } from '@/lib/utils';
 interface Department {
     id: number;
     name: string;
+    sort_order?: number;
 }
 
 interface CategoryRole {
@@ -238,9 +239,17 @@ export default function EventScheduling({
             }
         });
 
-        return Array.from(groups.values()).sort((first, second) =>
-            first.department.name.localeCompare(second.department.name),
-        );
+        return Array.from(groups.values()).sort((first, second) => {
+            const orderDiff =
+                (first.department.sort_order ?? 0) -
+                (second.department.sort_order ?? 0);
+
+            if (orderDiff !== 0) {
+                return orderDiff;
+            }
+
+            return first.department.name.localeCompare(second.department.name);
+        });
     }, [eventRoles]);
     const orderedDepartmentGroups = useMemo(() => {
         if (!departmentOrder) {
@@ -357,22 +366,35 @@ export default function EventScheduling({
             return;
         }
 
-        setDepartmentOrder((current) => {
-            const base = current ?? departmentGroups.map((group) => group.department.id);
-            const from = base.indexOf(sourceId);
-            const to = base.indexOf(departmentId);
+        const base =
+            departmentOrder ??
+            departmentGroups.map((group) => group.department.id);
+        const from = base.indexOf(sourceId);
+        const to = base.indexOf(departmentId);
 
-            if (from === -1 || to === -1) {
-                return base;
-            }
+        if (from === -1 || to === -1) {
+            return;
+        }
 
-            const next = [...base];
+        const next = [...base];
 
-            next.splice(from, 1);
-            next.splice(to, 0, sourceId);
+        next.splice(from, 1);
+        next.splice(to, 0, sourceId);
+        setDepartmentOrder(next);
 
-            return next;
-        });
+        if (can_manage_events) {
+            router.post(
+                '/event-scheduling/department-order',
+                { order: next },
+                {
+                    preserveState: true,
+                    preserveScroll: true,
+                    onError: () => {
+                        toast.error('Urutan papan gagal disimpan.');
+                    },
+                },
+            );
+        }
     };
 
     const saveSchedule = (event: React.FormEvent) => {

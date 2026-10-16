@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Category;
 use App\Models\CategoryRole;
+use App\Models\Department;
 use App\Models\Event;
 use App\Models\EventGroup;
 use App\Models\EventParticipant;
@@ -191,7 +192,9 @@ class EventController extends Controller
 
         return Inertia::render('event-scheduling/index', [
             'events' => $events,
-            'categories' => Category::with('roles.department')->get(),
+            'categories' => Category::with([
+                'roles.department' => fn ($query) => $query->orderBy('sort_order')->orderBy('name'),
+            ])->get(),
             'external_members' => collect($externalMembers)->map(fn (array $member) => [
                 'idjemaat' => (string) $member['idjemaat'],
                 'namalengkap' => $member['namalengkap'] ?? $member['name'] ?? 'Anggota',
@@ -204,6 +207,22 @@ class EventController extends Controller
                 ['title' => 'Penjadwalan Event', 'href' => '/event-scheduling'],
             ],
         ]);
+    }
+
+    public function updateDepartmentOrder(Request $request)
+    {
+        $data = $request->validate([
+            'order' => ['required', 'array', 'min:1'],
+            'order.*' => ['integer', 'distinct', 'exists:departments,id'],
+        ]);
+
+        DB::transaction(function () use ($data): void {
+            foreach ($data['order'] as $index => $departmentId) {
+                Department::where('id', $departmentId)->update(['sort_order' => $index]);
+            }
+        });
+
+        return back();
     }
 
     public function calendar()
