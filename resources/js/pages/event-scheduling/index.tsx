@@ -11,8 +11,13 @@ import {
     Users,
     X,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import {
+    Avatar,
+    AvatarFallback,
+    AvatarImage,
+} from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -27,7 +32,9 @@ import { Label } from '@/components/ui/label';
 import {
     Select,
     SelectContent,
+    SelectGroup,
     SelectItem,
+    SelectLabel,
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
@@ -54,6 +61,7 @@ interface Member {
     idjemaat: string;
     namalengkap: string;
     email?: string | null;
+    foto_url?: string | null;
 }
 
 interface Volunteer {
@@ -159,6 +167,18 @@ export default function EventScheduling({
         {},
     );
     const [processing, setProcessing] = useState(false);
+    const [dragOverRoleId, setDragOverRoleId] = useState<number | null>(null);
+    const [departmentOrder, setDepartmentOrder] = useState<number[] | null>(
+        null,
+    );
+    const [columnDragOverId, setColumnDragOverId] = useState<number | null>(
+        null,
+    );
+    const dragSourceRef = useRef<{
+        roleId: number;
+        departmentId: number;
+    } | null>(null);
+    const columnDragRef = useRef<number | null>(null);
     const authorizedDepartments = useMemo(
         () => new Set(authorized_department_ids),
         [authorized_department_ids],
@@ -173,6 +193,27 @@ export default function EventScheduling({
                 event.category.toLocaleLowerCase().includes(query),
         );
     }, [eventSearch, events]);
+    const todayString = new Date().toLocaleDateString('en-CA');
+    const upcomingEvents = useMemo(
+        () =>
+            visibleEvents
+                .filter(
+                    (event) =>
+                        !event.date || event.date.slice(0, 10) >= todayString,
+                )
+                .sort((a, b) => (a.date ?? '').localeCompare(b.date ?? '')),
+        [visibleEvents, todayString],
+    );
+    const pastEvents = useMemo(
+        () =>
+            visibleEvents
+                .filter(
+                    (event) =>
+                        !!event.date && event.date.slice(0, 10) < todayString,
+                )
+                .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? '')),
+        [visibleEvents, todayString],
+    );
     const selectedEvent = events.find((event) => event.id === selectedEventId);
     const selectedCategory = categories.find(
         (category) => category.name === selectedEvent?.category,
@@ -201,6 +242,23 @@ export default function EventScheduling({
             first.department.name.localeCompare(second.department.name),
         );
     }, [eventRoles]);
+    const orderedDepartmentGroups = useMemo(() => {
+        if (!departmentOrder) {
+            return departmentGroups;
+        }
+
+        const groupsById = new Map(
+            departmentGroups.map((group) => [group.department.id, group]),
+        );
+        const ordered = departmentOrder
+            .map((id) => groupsById.get(id))
+            .filter((group) => group !== undefined);
+        const missing = departmentGroups.filter(
+            (group) => !departmentOrder.includes(group.department.id),
+        );
+
+        return [...ordered, ...missing];
+    }, [departmentGroups, departmentOrder]);
     const scheduledCount = Object.values(assignments).filter(Boolean).length;
     const allowedRolesCount = eventRoles.filter(
         (role) =>
@@ -224,6 +282,8 @@ export default function EventScheduling({
         setEventSearch('');
         setMemberQueries({});
         setActiveRoleId(null);
+        setDepartmentOrder(null);
+        setColumnDragOverId(null);
     };
 
     const setRoleMember = (roleId: number, memberId: string) => {
@@ -240,6 +300,79 @@ export default function EventScheduling({
             return next;
         });
         setMemberQueries((current) => ({ ...current, [roleId]: '' }));
+    };
+
+    const handleColumnDragStart = (
+        columnDragEvent: React.DragEvent<HTMLDivElement>,
+        departmentId: number,
+    ) => {
+        if (dragSourceRef.current) {
+            return;
+        }
+
+        columnDragRef.current = departmentId;
+        columnDragEvent.dataTransfer.effectAllowed = 'move';
+        columnDragEvent.dataTransfer.setData('text/plain', 'department');
+    };
+
+    const handleColumnDragEnd = () => {
+        columnDragRef.current = null;
+        setColumnDragOverId(null);
+    };
+
+    const handleColumnDragOver = (
+        columnDragEvent: React.DragEvent<HTMLDivElement>,
+        departmentId: number,
+    ) => {
+        if (!columnDragRef.current || columnDragRef.current === departmentId) {
+            return;
+        }
+
+        columnDragEvent.preventDefault();
+        columnDragEvent.dataTransfer.dropEffect = 'move';
+
+        if (columnDragOverId !== departmentId) {
+            setColumnDragOverId(departmentId);
+        }
+    };
+
+    const handleColumnDragLeave = (departmentId: number) => {
+        if (columnDragOverId === departmentId) {
+            setColumnDragOverId(null);
+        }
+    };
+
+    const handleColumnDrop = (
+        columnDragEvent: React.DragEvent<HTMLDivElement>,
+        departmentId: number,
+    ) => {
+        columnDragEvent.preventDefault();
+
+        const sourceId = columnDragRef.current;
+
+        columnDragRef.current = null;
+        setColumnDragOverId(null);
+
+        if (!sourceId || sourceId === departmentId) {
+            return;
+        }
+
+        setDepartmentOrder((current) => {
+            const base = current ?? departmentGroups.map((group) => group.department.id);
+            const from = base.indexOf(sourceId);
+            const to = base.indexOf(departmentId);
+
+            if (from === -1 || to === -1) {
+                return base;
+            }
+
+            const next = [...base];
+
+            next.splice(from, 1);
+            next.splice(to, 0, sourceId);
+
+            return next;
+        });
     };
 
     const saveSchedule = (event: React.FormEvent) => {
@@ -363,15 +496,52 @@ export default function EventScheduling({
                                 <SelectValue placeholder="Pilih event untuk mulai menjadwalkan" />
                             </SelectTrigger>
                             <SelectContent>
-                                {visibleEvents.map((event) => (
-                                    <SelectItem
-                                        key={event.id}
-                                        value={event.id.toString()}
-                                    >
-                                        {event.title} — {event.category} —{' '}
-                                        {formatEventDate(event.date)}
-                                    </SelectItem>
-                                ))}
+                                {upcomingEvents.length > 0 && (
+                                    <SelectGroup>
+                                        <SelectLabel className="text-[11px] font-bold tracking-[0.08em] uppercase">
+                                            Akan Datang (
+                                            {upcomingEvents.length})
+                                        </SelectLabel>
+                                        {upcomingEvents.map((event) => (
+                                            <SelectItem
+                                                key={event.id}
+                                                value={event.id.toString()}
+                                            >
+                                                <span>
+                                                    <span className="mr-1.5 inline-block size-1.5 shrink-0 rounded-full bg-emerald-500" />
+                                                    {event.title} —{' '}
+                                                    {event.category} —{' '}
+                                                    {formatEventDate(
+                                                        event.date,
+                                                    )}
+                                                </span>
+                                            </SelectItem>
+                                        ))}
+                                    </SelectGroup>
+                                )}
+                                {pastEvents.length > 0 && (
+                                    <SelectGroup>
+                                        <SelectLabel className="text-[11px] font-bold tracking-[0.08em] uppercase">
+                                            Sudah Lewat ({pastEvents.length})
+                                        </SelectLabel>
+                                        {pastEvents.map((event) => (
+                                            <SelectItem
+                                                key={event.id}
+                                                value={event.id.toString()}
+                                                className="text-muted-foreground"
+                                            >
+                                                <span>
+                                                    <span className="mr-1.5 inline-block size-1.5 shrink-0 rounded-full bg-muted-foreground/40" />
+                                                    {event.title} —{' '}
+                                                    {event.category} —{' '}
+                                                    {formatEventDate(
+                                                        event.date,
+                                                    )}
+                                                </span>
+                                            </SelectItem>
+                                        ))}
+                                    </SelectGroup>
+                                )}
                                 {visibleEvents.length === 0 && (
                                     <SelectItem value="no-events" disabled>
                                         Tidak ada event yang cocok.
@@ -478,8 +648,8 @@ export default function EventScheduling({
                     )}
 
                     {departmentGroups.length > 0 && (
-                        <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-                            {departmentGroups.map((group) => {
+                        <div className="flex items-start gap-4 overflow-x-auto pb-4">
+                            {orderedDepartmentGroups.map((group) => {
                                 const groupAssigned = group.roles.filter(
                                     (role) => assignments[role.id],
                                 ).length;
@@ -494,10 +664,41 @@ export default function EventScheduling({
                                 return (
                                     <div
                                         key={group.department.id}
-                                        className="flex flex-col rounded-2xl border bg-muted/20 p-3"
+                                        draggable
+                                        title="Tarik untuk memindahkan urutan papan"
+                                        onDragStart={(dragEvent) =>
+                                            handleColumnDragStart(
+                                                dragEvent,
+                                                group.department.id,
+                                            )
+                                        }
+                                        onDragEnd={handleColumnDragEnd}
+                                        onDragOver={(dragEvent) =>
+                                            handleColumnDragOver(
+                                                dragEvent,
+                                                group.department.id,
+                                            )
+                                        }
+                                        onDragLeave={() =>
+                                            handleColumnDragLeave(
+                                                group.department.id,
+                                            )
+                                        }
+                                        onDrop={(dragEvent) =>
+                                            handleColumnDrop(
+                                                dragEvent,
+                                                group.department.id,
+                                            )
+                                        }
+                                        className={cn(
+                                            'flex w-80 shrink-0 flex-col rounded-2xl border bg-muted/20 p-3',
+                                            columnDragOverId ===
+                                                group.department.id &&
+                                                'border-primary ring-2 ring-primary/40',
+                                        )}
                                     >
                                         <div className="flex items-center justify-between gap-2 px-1 pb-3">
-                                            <span className="flex min-w-0 items-center gap-2 text-sm font-bold">
+                                            <span className="flex min-w-0 cursor-grab items-center gap-2 text-sm font-bold active:cursor-grabbing">
                                                 <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                                                     <Users className="size-4" />
                                                 </span>
@@ -615,6 +816,128 @@ export default function EventScheduling({
                                                         ? (volunteerAssignment?.response_reason ??
                                                           null)
                                                         : null;
+                                                const handleMemberDragStart = (
+                                                    dragEvent: React.DragEvent<HTMLDivElement>,
+                                                ) => {
+                                                    dragSourceRef.current = {
+                                                        roleId: role.id,
+                                                        departmentId:
+                                                            group.department
+                                                                .id,
+                                                    };
+                                                    dragEvent.dataTransfer.effectAllowed =
+                                                        'move';
+                                                    dragEvent.dataTransfer.setData(
+                                                        'text/plain',
+                                                        assignedLabel ?? '',
+                                                    );
+                                                };
+                                                const handleMemberDragEnd =
+                                                    () => {
+                                                        dragSourceRef.current =
+                                                            null;
+                                                        setDragOverRoleId(
+                                                            null,
+                                                        );
+                                                    };
+                                                const handleCardDragOver = (
+                                                    dragEvent: React.DragEvent<HTMLDivElement>,
+                                                ) => {
+                                                    const source =
+                                                        dragSourceRef.current;
+
+                                                    if (
+                                                        !source ||
+                                                        !canScheduleDepartment ||
+                                                        source.departmentId !==
+                                                            group.department.id
+                                                    ) {
+                                                        return;
+                                                    }
+
+                                                    dragEvent.preventDefault();
+                                                    dragEvent.dataTransfer.dropEffect =
+                                                        'move';
+
+                                                    if (
+                                                        dragOverRoleId !==
+                                                        role.id
+                                                    ) {
+                                                        setDragOverRoleId(
+                                                            role.id,
+                                                        );
+                                                    }
+                                                };
+                                                const handleCardDragLeave =
+                                                    () => {
+                                                        if (
+                                                            dragOverRoleId ===
+                                                            role.id
+                                                        ) {
+                                                            setDragOverRoleId(
+                                                                null,
+                                                            );
+                                                        }
+                                                    };
+                                                const handleCardDrop = (
+                                                    dragEvent: React.DragEvent<HTMLDivElement>,
+                                                ) => {
+                                                    dragEvent.preventDefault();
+
+                                                    const source =
+                                                        dragSourceRef.current;
+
+                                                    dragSourceRef.current = null;
+                                                    setDragOverRoleId(null);
+
+                                                    if (
+                                                        !source ||
+                                                        source.roleId ===
+                                                            role.id ||
+                                                        !canScheduleDepartment ||
+                                                        source.departmentId !==
+                                                            group.department.id
+                                                    ) {
+                                                        return;
+                                                    }
+
+                                                    const draggedMember =
+                                                        assignments[
+                                                            source.roleId
+                                                        ];
+
+                                                    if (!draggedMember) {
+                                                        return;
+                                                    }
+
+                                                    setAssignments(
+                                                        (current) => {
+                                                            const next = {
+                                                                ...current,
+                                                            };
+                                                            const targetMember =
+                                                                next[role.id];
+
+                                                            if (
+                                                                targetMember
+                                                            ) {
+                                                                next[
+                                                                    source.roleId
+                                                                ] =
+                                                                    targetMember;
+                                                            } else {
+                                                                delete next[
+                                                                    source.roleId
+                                                                ];
+                                                            }
+
+                                                            next[role.id] =
+                                                                draggedMember;
+
+                                                            return next;
+                                                        },
+                                                    );
+                                                };
 
                                                 return (
                                                     <div
@@ -643,7 +966,17 @@ export default function EventScheduling({
                                                                 'cursor-pointer hover:border-primary/60 hover:shadow-md',
                                                             isEditing &&
                                                                 'border-primary ring-2 ring-primary/20',
+                                                            dragOverRoleId ===
+                                                                role.id &&
+                                                                'border-primary ring-2 ring-primary/40',
                                                         )}
+                                                        onDragOver={
+                                                            handleCardDragOver
+                                                        }
+                                                        onDragLeave={
+                                                            handleCardDragLeave
+                                                        }
+                                                        onDrop={handleCardDrop}
                                                     >
                                                         <div className="flex items-start justify-between gap-2">
                                                             <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
@@ -668,10 +1001,44 @@ export default function EventScheduling({
                                                             )}
                                                         </div>
                                                         {assignedLabel ? (
-                                                            <div className="mt-2 flex items-center gap-2.5">
-                                                                <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
-                                                                    {initial}
-                                                                </span>
+                                                            <div
+                                                                className={cn(
+                                                                    'mt-2 flex items-center gap-2.5',
+                                                                    canScheduleDepartment &&
+                                                                        'cursor-grab active:cursor-grabbing',
+                                                                )}
+                                                                draggable={
+                                                                    canScheduleDepartment
+                                                                }
+                                                                onDragStart={
+                                                                    handleMemberDragStart
+                                                                }
+                                                                onDragEnd={
+                                                                    handleMemberDragEnd
+                                                                }
+                                                                title={
+                                                                    canScheduleDepartment
+                                                                        ? 'Tarik untuk memindahkan ke posisi lain'
+                                                                        : undefined
+                                                                }
+                                                            >
+                                                                <Avatar className="size-9 border">
+                                                                    {selectedMember?.foto_url && (
+                                                                        <AvatarImage
+                                                                            src={
+                                                                                selectedMember.foto_url
+                                                                            }
+                                                                            alt={
+                                                                                assignedLabel
+                                                                            }
+                                                                        />
+                                                                    )}
+                                                                    <AvatarFallback className="bg-primary/10 text-sm font-bold text-primary">
+                                                                        {
+                                                                            initial
+                                                                        }
+                                                                    </AvatarFallback>
+                                                                </Avatar>
                                                                 <div className="min-w-0 flex-1">
                                                                     <p className="truncate text-sm font-semibold">
                                                                         {
@@ -807,15 +1174,37 @@ export default function EventScheduling({
                                                                                     )
                                                                                 }
                                                                             >
-                                                                                <span className="min-w-0">
-                                                                                    <span className="block truncate text-sm font-medium">
-                                                                                        {
-                                                                                            member.namalengkap
-                                                                                        }
-                                                                                    </span>
-                                                                                    <span className="block truncate text-xs text-muted-foreground">
-                                                                                        {member.email ||
-                                                                                            `ID ${member.idjemaat}`}
+                                                                                <span className="flex min-w-0 flex-1 items-center gap-2.5">
+                                                                                    <Avatar className="size-8 border">
+                                                                                        {member.foto_url && (
+                                                                                            <AvatarImage
+                                                                                                src={
+                                                                                                    member.foto_url
+                                                                                                }
+                                                                                                alt={
+                                                                                                    member.namalengkap
+                                                                                                }
+                                                                                            />
+                                                                                        )}
+                                                                                        <AvatarFallback className="bg-primary/10 text-xs font-bold text-primary">
+                                                                                            {member.namalengkap
+                                                                                                .trim()
+                                                                                                .charAt(
+                                                                                                    0,
+                                                                                                )
+                                                                                                .toLocaleUpperCase()}
+                                                                                        </AvatarFallback>
+                                                                                    </Avatar>
+                                                                                    <span className="min-w-0 flex-1">
+                                                                                        <span className="block truncate text-sm font-medium">
+                                                                                            {
+                                                                                                member.namalengkap
+                                                                                            }
+                                                                                        </span>
+                                                                                        <span className="block truncate text-xs text-muted-foreground">
+                                                                                            {member.email ||
+                                                                                                `ID ${member.idjemaat}`}
+                                                                                        </span>
                                                                                     </span>
                                                                                 </span>
                                                                                 {assignments[

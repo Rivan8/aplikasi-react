@@ -196,6 +196,7 @@ class EventController extends Controller
                 'idjemaat' => (string) $member['idjemaat'],
                 'namalengkap' => $member['namalengkap'] ?? $member['name'] ?? 'Anggota',
                 'email' => $member['email'] ?? null,
+                'foto_url' => $member['foto_url'] ?? null,
             ])->values(),
             'can_manage_events' => $user->isAdmin(),
             'authorized_department_ids' => $departmentIds,
