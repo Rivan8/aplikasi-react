@@ -8,11 +8,14 @@ use App\Models\Department;
 use App\Models\Event;
 use App\Models\EventGroup;
 use App\Models\EventParticipant;
+use App\Models\EventRundownItem;
 use App\Models\EventVolunteer;
 use App\Models\Song;
 use App\Models\User;
 use App\Notifications\VolunteerScheduledNotification;
 use App\Services\MemberApiService;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -164,6 +167,111 @@ class EventController extends Controller
                 ['title' => 'Event Dashboard', 'href' => '/events'],
             ],
         ]);
+    }
+
+    public function rundownReport(Event $event)
+    {
+        $this->authorizeEventReports();
+
+        return Inertia::render('events/rundown-report', [
+            'event' => [
+                'id' => $event->id,
+                'title' => $event->title,
+                'date' => $event->date,
+                'time' => $event->time,
+                'location' => $event->location,
+                'category' => $event->category,
+            ],
+            'report' => $this->buildRundownReportData($event),
+            'breadcrumbs' => [
+                ['title' => 'Event Dashboard', 'href' => '/events'],
+                ['title' => 'Laporan Rundown', 'href' => '/events/'.$event->id.'/rundown-report'],
+            ],
+        ]);
+    }
+
+    public function rundownReportPdf(Event $event)
+    {
+        $this->authorizeEventReports();
+
+        $pdf = Pdf::loadView('exports.event-rundown', [
+            'event' => [
+                'title' => $event->title,
+                'date' => $event->date,
+                'time' => $event->time,
+                'location' => $event->location,
+                'category' => $event->category,
+            ],
+            'report' => $this->buildRundownReportData($event),
+            'generatedAt' => now()->format('d M Y, H:i'),
+        ])->setPaper('a4', 'portrait');
+
+        return $pdf->stream('laporan-rundown-event-'.$event->id.'.pdf');
+    }
+
+    private function authorizeEventReports(): void
+    {
+        $user = request()->user();
+        $departmentIds = $user->schedulingDepartments()->pluck('departments.id')->map(fn ($id) => (int) $id)->all();
+
+        abort_unless($user->isAdmin() || $departmentIds !== [], 403);
+    }
+
+    private function buildRundownReportData(Event $event): array
+    {
+        $event->load([
+            'rundownSegments' => fn ($query) => $query->orderBy('sort_order'),
+            'rundownSegments.items' => fn ($query) => $query->orderBy('sort_order'),
+            'rundownSegments.items.song',
+            'rundownSegments.items.arrangement',
+        ]);
+
+        $start = $event->date && $event->time
+            ? Carbon::parse($event->date.' '.$event->time)
+            : null;
+        $cursor = $start?->copy();
+
+        $segments = [];
+        $totalSeconds = 0;
+        $totalItems = 0;
+
+        foreach ($event->rundownSegments as $index => $segment) {
+            $items = $segment->items
+                ->map(fn (EventRundownItem $item): array => [
+                    'title' => $item->title,
+                    'song_title' => $item->song?->title,
+                    'song_artist' => $item->song?->artist,
+                    'arrangement_name' => $item->arrangement?->name,
+                    'duration_seconds' => (int) $item->duration_seconds,
+                ])
+                ->values()
+                ->all();
+
+            $duration = (int) $segment->duration_seconds;
+            $segmentStart = $cursor?->format('H:i');
+            $cursor?->addSeconds($duration);
+
+            $totalSeconds += $duration;
+            $totalItems += count($items);
+
+            $segments[] = [
+                'index' => $index + 1,
+                'title' => $segment->title,
+                'start' => $segmentStart,
+                'end' => $cursor?->format('H:i'),
+                'duration_seconds' => $duration,
+                'items' => $items,
+            ];
+        }
+
+        return [
+            'segments' => $segments,
+            'total_segments' => count($segments),
+            'total_items' => $totalItems,
+            'total_seconds' => $totalSeconds,
+            'start_time' => $start?->format('H:i'),
+            'end_time' => $cursor?->format('H:i'),
+        ];
     }
 
     public function scheduling(MemberApiService $memberApi)

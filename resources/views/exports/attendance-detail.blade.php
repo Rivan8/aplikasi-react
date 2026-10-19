@@ -290,7 +290,7 @@
                         <div class="eyebrow">Sistem Absensi Jemaat • Laporan Rekapitulasi</div>
                         <div class="header-title">LAPORAN DETAIL KEHADIRAN JEMAAT</div>
                         <div class="header-subtitle">
-                            Rekapitulasi pekanan kehadiran jemaat (Januari – Desember {{ $year }}) &nbsp;|&nbsp; Dibuat: {{ $generatedAt }}
+                            Rekapitulasi pekanan kehadiran jemaat (Januari – Desember {{ $year }}) &nbsp;|&nbsp; Group Event: {{ $groupLabel }} &nbsp;|&nbsp; Dibuat: {{ $generatedAt }}
                             @if($search)
                                 &nbsp;|&nbsp; Filter: &quot;{{ $search }}&quot;
                             @endif

@@ -545,6 +545,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('event-scheduling/department-order', [EventController::class, 'updateDepartmentOrder'])->middleware('role:admin,superadmin')->name('event-scheduling.department-order');
     Route::resource('events', EventController::class)->except(['index', 'create', 'edit', 'show'])->middleware('role:admin,superadmin');
     Route::post('events/{event}/volunteers', [EventController::class, 'updateVolunteers'])->name('events.volunteers.update');
+    Route::get('events/{event}/rundown-report', [EventController::class, 'rundownReport'])->name('events.rundown-report');
+    Route::get('events/{event}/rundown-report/pdf', [EventController::class, 'rundownReportPdf'])->name('events.rundown-report.pdf');
     Route::post('event-messages', [EventMessageController::class, 'store'])->middleware('role:admin,superadmin')->name('event-messages.store');
     Route::post('event-messages/{eventMessage}/read', [EventMessageController::class, 'markRead'])->name('event-messages.read');
     Route::post('events/{event}/participants', [EventController::class, 'enrollParticipant'])->middleware('role:admin,superadmin')->name('events.participants.enroll');
@@ -566,6 +568,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('attendance-history/detail/export/pdf', [AttendanceController::class, 'exportDetailPdf'])->middleware('role:admin,superadmin')->name('attendance-history.detail.export.pdf');
     Route::get('attendance-history/export/pdf', [AttendanceController::class, 'exportPdf'])->middleware('role:admin,superadmin')->name('attendance-history.export.pdf');
     Route::get('attendance-history/export/excel', [AttendanceController::class, 'exportExcel'])->middleware('role:admin,superadmin')->name('attendance-history.export.excel');
+    Route::get('manual-attendance', [AttendanceController::class, 'showManualAttendance'])->middleware('role:admin,superadmin')->name('manual-attendance');
+    Route::post('manual-attendance', [AttendanceController::class, 'storeManualAttendance'])->middleware('role:admin,superadmin')->name('manual-attendance.store');
 
     // Song Bank Routes
     Route::resource('songs', SongController::class)->except(['create', 'edit', 'show'])->middleware('role:admin,superadmin');

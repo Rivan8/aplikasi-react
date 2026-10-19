@@ -13,6 +13,7 @@ import {
     Radio,
     Settings,
     ShieldCheck,
+    UserCheck,
     Users,
 } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
@@ -50,6 +51,12 @@ const mainNavItems: NavItem[] = [
         icon: MonitorPlay,
         roles: ['admin', 'superadmin'],
         newTab: true,
+    },
+    {
+        title: 'Absensi Manual',
+        href: '/manual-attendance',
+        icon: UserCheck,
+        roles: ['admin', 'superadmin'],
     },
     {
         title: 'Absensi Mandiri',

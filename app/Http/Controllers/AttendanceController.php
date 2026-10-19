@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Exports\AttendanceHistoryExport;
 use App\Models\Attendance;
+use App\Models\Category;
 use App\Models\Event;
+use App\Models\EventGroup;
 use App\Models\EventSession;
 use App\Services\MemberApiService;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -12,6 +14,7 @@ use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -154,9 +157,11 @@ class AttendanceController extends Controller
             ],
             'year' => $data['year'],
             'availableYears' => $this->reportDetailAvailableYears(),
+            'groups' => $data['groups'],
             'filters' => [
                 'year' => (string) $data['year'],
                 'search' => $data['search'],
+                'group' => $data['selectedGroup'],
             ],
         ]);
     }
@@ -192,6 +197,7 @@ class AttendanceController extends Controller
             'rows' => $data['rows'],
             'year' => $data['year'],
             'search' => $data['search'],
+            'groupLabel' => $data['selectedGroup'] !== '' ? $data['selectedGroup'] : 'Semua Group',
             'totalJemaat' => $data['rows']->count(),
             'totalHadir' => $data['rows']->sum('hadir'),
             'totalTerlambat' => $data['rows']->sum('terlambat'),
@@ -199,7 +205,9 @@ class AttendanceController extends Controller
             'generatedAt' => now()->format('d M Y, H:i'),
         ])->setPaper('a4', 'landscape');
 
-        return $pdf->download('laporan-detail-absensi-'.$data['year'].'.pdf');
+        $suffix = $data['selectedGroup'] !== '' ? '-'.Str::slug($data['selectedGroup']) : '';
+
+        return $pdf->download('laporan-detail-absensi-'.$data['year'].$suffix.'.pdf');
     }
 
     private function reportDetailAvailableYears()
@@ -227,10 +235,44 @@ class AttendanceController extends Controller
             $year = $currentYear;
         }
 
+        // Peta kategori event ke group event (categories.group_name -> event_groups.name)
+        $categoryGroups = Category::query()
+            ->whereNotNull('group_name')
+            ->where('group_name', '!=', '')
+            ->pluck('group_name', 'name');
+
+        $groups = EventGroup::query()
+            ->orderBy('name')
+            ->pluck('name')
+            ->filter()
+            ->values();
+
+        if (! $groups->contains('Umum')) {
+            $groups->push('Umum');
+        }
+
+        $groups = $groups->unique()->sort()->values();
+
+        $selectedGroup = trim((string) $request->input('group', ''));
+
+        if ($selectedGroup === 'all' || ($selectedGroup !== '' && ! $groups->contains($selectedGroup))) {
+            $selectedGroup = '';
+        }
+
         $attendances = Attendance::with('event')
             ->whereYear('scan_time', $year)
             ->orderBy('scan_time')
-            ->get();
+            ->get()
+            ->filter(function (Attendance $attendance) use ($selectedGroup, $categoryGroups): bool {
+                if ($selectedGroup === '') {
+                    return true;
+                }
+
+                $group = $categoryGroups->get($attendance->event?->category) ?: 'Umum';
+
+                return $group === $selectedGroup;
+            })
+            ->values();
 
         // Kolom: tanggal event unik (per minggu ibadah) tahun terpilih + nama eventnya
         $dateTitles = [];
@@ -329,6 +371,8 @@ class AttendanceController extends Controller
             'months' => $months,
             'rows' => $rows,
             'search' => $search,
+            'groups' => $groups,
+            'selectedGroup' => $selectedGroup,
         ];
     }
 
@@ -526,6 +570,154 @@ class AttendanceController extends Controller
                 'event_session_id' => $selectedSessionId,
             ],
         ]);
+    }
+
+    /**
+     * Halaman absensi manual: admin mencatatkan kehadiran untuk jemaat
+     * yang lupa atau tidak bisa melakukan absen mandiri.
+     */
+    public function showManualAttendance(Request $request)
+    {
+        $events = Event::with('sessions')
+            ->whereDate('date', '>=', now()->subDays(30)->toDateString())
+            ->whereDate('date', '<=', now()->toDateString())
+            ->orderByDesc('date')
+            ->orderByDesc('time')
+            ->get();
+
+        $selectedEventId = $request->input('event_id');
+
+        if ($selectedEventId && ! $events->firstWhere('id', $selectedEventId)) {
+            return redirect()->route('manual-attendance', $events->isNotEmpty() ? ['event_id' => $events->first()->id] : []);
+        }
+
+        if (! $selectedEventId && $events->isNotEmpty()) {
+            return redirect()->route('manual-attendance', ['event_id' => $events->first()->id]);
+        }
+
+        $selectedEvent = $events->firstWhere('id', $selectedEventId);
+        $selectedSessionId = $request->input('event_session_id');
+
+        if ($selectedSessionId && (! $selectedEvent || ! $selectedEvent->sessions->firstWhere('id', (int) $selectedSessionId))) {
+            $selectedSessionId = null;
+        }
+
+        $recentAttendances = [];
+        $markedMemberIds = [];
+
+        if ($selectedEvent) {
+            $query = Attendance::where('event_id', $selectedEvent->id);
+
+            if ($selectedSessionId) {
+                $query->where('event_session_id', $selectedSessionId);
+            } else {
+                $query->whereNull('event_session_id');
+            }
+
+            $attendances = (clone $query)->orderByDesc('scan_time')->get();
+            $markedMemberIds = $attendances->pluck('member_id')->map(fn ($id) => (string) $id)->values();
+
+            $members = [];
+            if ($attendances->isNotEmpty()) {
+                try {
+                    $members = $this->memberApi->findMany($attendances->pluck('member_id')->unique());
+                } catch (\Throwable) {
+                    // Jika external DB gagal, tampilkan member_id saja
+                }
+            }
+
+            $recentAttendances = $attendances->take(30)->map(function (Attendance $attendance) use ($members): array {
+                $member = $members[(string) $attendance->member_id] ?? null;
+
+                return [
+                    'id' => $attendance->id,
+                    'member_id' => (string) $attendance->member_id,
+                    'name' => $member['name'] ?? 'Member #'.$attendance->member_id,
+                    'foto_url' => $member['foto_url'] ?? null,
+                    'time' => $attendance->scan_time?->format('H:i'),
+                    'date' => $attendance->scan_time?->format('d M Y'),
+                    'status' => $attendance->status,
+                ];
+            })->values();
+        }
+
+        $members = collect($this->memberApi->listAll())
+            ->map(fn (array $member): array => [
+                'idjemaat' => (string) $member['idjemaat'],
+                'name' => $member['name'] ?? $member['namalengkap'] ?? 'Anggota',
+                'nik' => $member['nik'] ?? null,
+                'foto_url' => $member['foto_url'] ?? null,
+            ])
+            ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values();
+
+        return Inertia::render('manual-attendance/index', [
+            'events' => $events,
+            'members' => $members,
+            'recentAttendances' => $recentAttendances,
+            'markedMemberIds' => $markedMemberIds,
+            'filters' => [
+                'event_id' => (string) ($selectedEvent?->id ?? ''),
+                'event_session_id' => (string) ($selectedSessionId ?? ''),
+            ],
+            'breadcrumbs' => [
+                ['title' => 'Absensi Manual', 'href' => '/manual-attendance'],
+            ],
+        ]);
+    }
+
+    public function storeManualAttendance(Request $request)
+    {
+        $data = $request->validate([
+            'event_id' => ['required', 'exists:events,id'],
+            'event_session_id' => ['nullable', 'exists:event_sessions,id'],
+            'member_id' => ['required', 'string'],
+            'status' => ['required', 'in:Present,Late'],
+            'scan_time' => ['nullable', 'date_format:H:i'],
+        ]);
+
+        $event = Event::findOrFail($data['event_id']);
+        $sessionId = $data['event_session_id'] ?? null;
+        $session = $sessionId ? $event->sessions()->find($sessionId) : null;
+
+        if ($sessionId && ! $session) {
+            return back()->with('error', 'Sesi tidak sesuai dengan event yang dipilih.');
+        }
+
+        $attendanceDate = $session?->date ?? $event->date ?? now()->toDateString();
+        $attendanceTime = $data['scan_time'] ?? now()->format('H:i');
+        $scanTime = Carbon::parse($attendanceDate.' '.$attendanceTime);
+
+        $member = $this->memberApi->findById($data['member_id']);
+
+        if (! $member) {
+            return back()->with('error', 'Data member tidak ditemukan. Periksa kembali data jemaat.');
+        }
+
+        $query = Attendance::where('event_id', $event->id)
+            ->where('member_id', $member['idjemaat']);
+
+        if ($sessionId) {
+            $query->where('event_session_id', $sessionId);
+        } else {
+            $query->whereNull('event_session_id');
+        }
+
+        if ($query->exists()) {
+            return back()->with('info', $member['name'].' sudah tercatat absen untuk event/sesi ini.');
+        }
+
+        Attendance::create([
+            'event_id' => $event->id,
+            'event_session_id' => $sessionId,
+            'member_id' => $member['idjemaat'],
+            'scan_time' => $scanTime,
+            'status' => $data['status'],
+        ]);
+
+        $statusLabel = $data['status'] === 'Late' ? 'Terlambat' : 'Hadir';
+
+        return back()->with('success', 'Absensi manual dicatat untuk '.$member['name'].' ('.$statusLabel.', '.$scanTime->format('H:i').').');
     }
 
     public function showAttendanceMonitor(Request $request)

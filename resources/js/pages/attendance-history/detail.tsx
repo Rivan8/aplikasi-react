@@ -8,8 +8,8 @@ import {
     ChevronRight,
     Clock,
     Download,
-    FileText,
     Filter,
+    Layers,
     RotateCcw,
     Search,
     Sparkles,
@@ -65,6 +65,7 @@ interface RekapRow {
 interface DetailFilters {
     year: string;
     search: string;
+    group: string;
 }
 
 interface PaginationLink {
@@ -95,6 +96,7 @@ interface Props {
     summary?: AttendanceSummary;
     year: number;
     availableYears: number[];
+    groups: string[];
     filters: DetailFilters;
 }
 
@@ -145,16 +147,19 @@ export default function AttendanceReportDetail({
     summary,
     year = new Date().getFullYear(),
     availableYears = [],
-    filters = { year: '', search: '' },
+    groups = [],
+    filters = { year: '', search: '', group: '' },
 }: Props) {
     const safeMonths = useMemo(() => (Array.isArray(months) ? months : []), [months]);
     const safeAvailableYears = useMemo(
         () => (Array.isArray(availableYears) ? availableYears : []),
         [availableYears],
     );
+    const safeGroups = useMemo(() => (Array.isArray(groups) ? groups : []), [groups]);
 
     const [filterYear, setFilterYear] = useState(filters?.year || String(year));
     const [searchQuery, setSearchQuery] = useState(filters?.search || '');
+    const [filterGroup, setFilterGroup] = useState(filters?.group || 'all');
     const [sortColumn, setSortColumn] = useState<'name' | 'hadir' | 'terlambat'>('name');
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
     const [quickFilter, setQuickFilter] = useState<'all' | 'present' | 'late' | 'perfect'>('all');
@@ -198,6 +203,8 @@ export default function AttendanceReportDetail({
     const totalJemaat = summary?.total_members ?? paginatedRows.total;
     const totalHadir = summary?.total_present ?? pageTotalHadir;
     const totalTerlambat = summary?.total_late ?? pageTotalTerlambat;
+    const activeGroup = filters?.group || '';
+    const activeGroupLabel = activeGroup || 'Semua Group';
 
     const monthMap = useMemo(() => {
         const map = new Map<number, RekapMonth>();
@@ -338,6 +345,33 @@ export default function AttendanceReportDetail({
             params.search = searchQuery;
         }
 
+        if (filterGroup && filterGroup !== 'all') {
+            params.group = filterGroup;
+        }
+
+        router.get('/attendance-history/detail', params, {
+            preserveState: true,
+            preserveScroll: true,
+        });
+    };
+
+    const applyGroupFilter = (group: string) => {
+        setFilterGroup(group);
+
+        const params: Record<string, string> = {};
+
+        if (filterYear) {
+            params.year = filterYear;
+        }
+
+        if (searchQuery) {
+            params.search = searchQuery;
+        }
+
+        if (group !== 'all') {
+            params.group = group;
+        }
+
         router.get('/attendance-history/detail', params, {
             preserveState: true,
             preserveScroll: true,
@@ -347,6 +381,7 @@ export default function AttendanceReportDetail({
     const resetFilters = () => {
         setFilterYear(String(year));
         setSearchQuery('');
+        setFilterGroup('all');
         setQuickFilter('all');
         setSortColumn('name');
         setSortDirection('asc');
@@ -371,6 +406,10 @@ export default function AttendanceReportDetail({
 
         if (filters.search) {
             params.search = filters.search;
+        }
+
+        if (filters.group) {
+            params.group = filters.group;
         }
 
         const queryString = new URLSearchParams(params).toString();
@@ -411,6 +450,10 @@ export default function AttendanceReportDetail({
                         </div>
 
                         <div className="flex flex-wrap items-center gap-3">
+                            <div className="flex items-center gap-2 rounded-2xl border border-white/20 bg-white/15 px-4 py-2 text-xs font-bold text-white shadow-inner backdrop-blur-md">
+                                <Layers className="h-4 w-4 text-sky-200" />
+                                <span>{activeGroupLabel}</span>
+                            </div>
                             <div className="flex items-center gap-2 rounded-2xl border border-white/20 bg-white/15 px-4 py-2 text-xs font-bold text-white shadow-inner backdrop-blur-md">
                                 <Calendar className="h-4 w-4 text-sky-200" />
                                 <span>Tahun {year}</span>
@@ -688,6 +731,58 @@ export default function AttendanceReportDetail({
                                 <span className="text-xs">Belum / Tidak Absen</span>
                             </span>
                         </div>
+                    </div>
+                </div>
+
+                {/* Event Group Segments */}
+                <div className="flex flex-col gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-indigo-100 bg-indigo-50 text-indigo-600">
+                                <Layers className="h-4 w-4" />
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-bold tracking-wider text-slate-500 uppercase">
+                                    Rekap Berdasarkan Group Event
+                                </p>
+                                <p className="text-sm font-extrabold text-slate-900">
+                                    {activeGroupLabel}
+                                </p>
+                            </div>
+                        </div>
+                        <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-500">
+                            {safeGroups.length} group event
+                        </span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-1.5">
+                        <button
+                            type="button"
+                            onClick={() => applyGroupFilter('all')}
+                            className={cn(
+                                'rounded-xl border px-3 py-1.5 text-xs font-bold transition-all',
+                                filterGroup === 'all'
+                                    ? 'border-indigo-600 bg-indigo-600 text-white shadow-xs'
+                                    : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700',
+                            )}
+                        >
+                            Semua Group
+                        </button>
+                        {safeGroups.map((group) => (
+                            <button
+                                key={group}
+                                type="button"
+                                onClick={() => applyGroupFilter(group)}
+                                className={cn(
+                                    'rounded-xl border px-3 py-1.5 text-xs font-bold transition-all',
+                                    filterGroup === group
+                                        ? 'border-indigo-600 bg-indigo-600 text-white shadow-xs'
+                                        : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700',
+                                )}
+                            >
+                                {group}
+                            </button>
+                        ))}
                     </div>
                 </div>
 
