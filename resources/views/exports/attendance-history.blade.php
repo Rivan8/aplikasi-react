@@ -95,13 +95,21 @@
             padding: 24px;
             text-align: center;
         }
+        .dept-section td {
+            background: #eef2ff;
+            color: #3730a3;
+            font-size: 9px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
     </style>
 </head>
 <body>
     <div class="header">
         <div class="eyebrow">Attendance Report</div>
         <h1>{{ $title }}</h1>
-        <div class="meta">Dibuat pada {{ $generatedAt }} &nbsp; | &nbsp; Sumber: Sistem Absensi</div>
+        <div class="meta">Dibuat pada {{ $generatedAt }} &nbsp; | &nbsp; Dikelompokkan: per Departemen &nbsp; | &nbsp; Sumber: Sistem Absensi</div>
     </div>
 
     <table class="summary">
@@ -127,7 +135,15 @@
             </tr>
         </thead>
         <tbody>
+            @php($previousDepartment = null)
             @forelse($rows as $row)
+                @php($currentDepartment = $row['Departemen'] ?? 'Tanpa Departemen')
+                @if($currentDepartment !== $previousDepartment)
+                    @php($previousDepartment = $currentDepartment)
+                    <tr class="dept-section">
+                        <td colspan="9">Departemen: {{ $currentDepartment }}</td>
+                    </tr>
+                @endif
                 <tr>
                     <td>{{ $row['ID'] }}</td>
                     <td>{{ $row['Nama Jemaat'] }}</td>

@@ -3,7 +3,10 @@ import {
     ArrowDown,
     ArrowUp,
     ArrowUpDown,
+    Building2,
     Calendar,
+    CalendarDays,
+    ChevronDown,
     ChevronLeft,
     ChevronRight,
     Clock,
@@ -18,11 +21,13 @@ import {
     Users,
     X,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
     Select,
     SelectContent,
@@ -55,8 +60,10 @@ interface RekapMonth {
 interface RekapRow {
     member_id: string;
     name: string;
-    nik: string | null;
+    email?: string | null;
+    phone?: string | null;
     foto_url?: string | null;
+    department?: string | null;
     cells: Record<string, 'Present' | 'Late'>;
     hadir: number;
     terlambat: number;
@@ -64,8 +71,11 @@ interface RekapRow {
 
 interface DetailFilters {
     year: string;
+    month: string;
+    sort: string;
     search: string;
     group: string;
+    departments: string[];
 }
 
 interface PaginationLink {
@@ -97,6 +107,7 @@ interface Props {
     year: number;
     availableYears: number[];
     groups: string[];
+    availableDepartments?: string[];
     filters: DetailFilters;
 }
 
@@ -148,7 +159,8 @@ export default function AttendanceReportDetail({
     year = new Date().getFullYear(),
     availableYears = [],
     groups = [],
-    filters = { year: '', search: '', group: '' },
+    availableDepartments = [],
+    filters = { year: '', month: '0', sort: 'abjad', search: '', group: '', departments: [] },
 }: Props) {
     const safeMonths = useMemo(() => (Array.isArray(months) ? months : []), [months]);
     const safeAvailableYears = useMemo(
@@ -156,8 +168,19 @@ export default function AttendanceReportDetail({
         [availableYears],
     );
     const safeGroups = useMemo(() => (Array.isArray(groups) ? groups : []), [groups]);
+    const safeDepartments = useMemo(
+        () => (Array.isArray(availableDepartments) ? availableDepartments : []),
+        [availableDepartments],
+    );
 
     const [filterYear, setFilterYear] = useState(filters?.year || String(year));
+    const [filterMonth, setFilterMonth] = useState(filters?.month || '0');
+    const [sortMode, setSortMode] = useState<'abjad' | 'departemen'>(
+        filters?.sort === 'departemen' ? 'departemen' : 'abjad',
+    );
+    const [selectedDepartments, setSelectedDepartments] = useState<string[]>(
+        Array.isArray(filters?.departments) ? filters.departments : [],
+    );
     const [searchQuery, setSearchQuery] = useState(filters?.search || '');
     const [filterGroup, setFilterGroup] = useState(filters?.group || 'all');
     const [sortColumn, setSortColumn] = useState<'name' | 'hadir' | 'terlambat'>('name');
@@ -205,6 +228,11 @@ export default function AttendanceReportDetail({
     const totalTerlambat = summary?.total_late ?? pageTotalTerlambat;
     const activeGroup = filters?.group || '';
     const activeGroupLabel = activeGroup || 'Semua Group';
+    const selectedMonthNumber = Number(filterMonth);
+    const isMonthly = selectedMonthNumber >= 1 && selectedMonthNumber <= 12;
+    const periodLabel = isMonthly
+        ? `${MONTH_FULL_NAMES[selectedMonthNumber - 1]} ${year}`
+        : `Tahun ${year}`;
 
     const monthMap = useMemo(() => {
         const map = new Map<number, RekapMonth>();
@@ -237,10 +265,14 @@ export default function AttendanceReportDetail({
 
     // Display months filtered dynamically by starting month or full 12 months
     const displayMonthNumbers = useMemo(() => {
+        if (isMonthly) {
+            return [selectedMonthNumber];
+        }
+
         const start = startFromFirstMonth ? firstEventMonthIndex : 1;
 
         return ALL_MONTH_NUMBERS.filter((m) => m >= start);
-    }, [startFromFirstMonth, firstEventMonthIndex]);
+    }, [isMonthly, selectedMonthNumber, startFromFirstMonth, firstEventMonthIndex]);
 
     const getMonthWeeks = (mNum: number): RekapWeek[] => {
         const mData = monthMap.get(mNum);
@@ -287,6 +319,13 @@ export default function AttendanceReportDetail({
             result = result.filter((r) => r.hadir > 0 && r.terlambat === 0);
         }
 
+        const keepServerOrder =
+            sortMode === 'departemen' && sortColumn === 'name' && sortDirection === 'asc';
+
+        if (keepServerOrder) {
+            return result;
+        }
+
         result.sort((a, b) => {
             let valA: string | number = a.name;
             let valB: string | number = b.name;
@@ -311,7 +350,7 @@ export default function AttendanceReportDetail({
         });
 
         return result;
-    }, [paginatedRows.data, quickFilter, sortColumn, sortDirection]);
+    }, [paginatedRows.data, quickFilter, sortColumn, sortDirection, sortMode]);
 
     const toggleSort = (column: 'name' | 'hadir' | 'terlambat') => {
         if (sortColumn === column) {
@@ -334,22 +373,41 @@ export default function AttendanceReportDetail({
         );
     };
 
-    const applyFilters = () => {
-        const params: Record<string, string> = {};
+    const buildFilterParams = (
+        group = filterGroup,
+        month = filterMonth,
+        departments = selectedDepartments,
+        sort = sortMode,
+    ): Record<string, string | string[]> => {
+        const params: Record<string, string | string[]> = { sort };
 
         if (filterYear) {
             params.year = filterYear;
+        }
+
+        const selected = Number(month);
+
+        if (selected >= 1 && selected <= 12) {
+            params.month = String(selected);
         }
 
         if (searchQuery) {
             params.search = searchQuery;
         }
 
-        if (filterGroup && filterGroup !== 'all') {
-            params.group = filterGroup;
+        if (group && group !== 'all') {
+            params.group = group;
         }
 
-        router.get('/attendance-history/detail', params, {
+        if (sort === 'departemen' && departments.length > 0) {
+            params.departments = departments;
+        }
+
+        return params;
+    };
+
+    const applyFilters = () => {
+        router.get('/attendance-history/detail', buildFilterParams(), {
             preserveState: true,
             preserveScroll: true,
         });
@@ -358,30 +416,77 @@ export default function AttendanceReportDetail({
     const applyGroupFilter = (group: string) => {
         setFilterGroup(group);
 
-        const params: Record<string, string> = {};
-
-        if (filterYear) {
-            params.year = filterYear;
-        }
-
-        if (searchQuery) {
-            params.search = searchQuery;
-        }
-
-        if (group !== 'all') {
-            params.group = group;
-        }
-
-        router.get('/attendance-history/detail', params, {
+        router.get('/attendance-history/detail', buildFilterParams(group), {
             preserveState: true,
             preserveScroll: true,
         });
     };
 
+    const applyPeriodMode = (mode: 'tahun' | 'bulan') => {
+        const nextMonth = mode === 'tahun' ? '0' : (isMonthly ? filterMonth : String(new Date().getMonth() + 1));
+
+        setFilterMonth(nextMonth);
+
+        router.get('/attendance-history/detail', buildFilterParams(filterGroup, nextMonth), {
+            preserveState: true,
+            preserveScroll: true,
+        });
+    };
+
+    const applySortMode = (mode: 'abjad' | 'departemen') => {
+        setSortMode(mode);
+
+        const nextDepartments = mode === 'departemen' ? selectedDepartments : [];
+
+        if (mode === 'abjad') {
+            setSelectedDepartments([]);
+        }
+
+        router.get(
+            '/attendance-history/detail',
+            buildFilterParams(filterGroup, filterMonth, nextDepartments, mode),
+            {
+                preserveState: true,
+                preserveScroll: true,
+            },
+        );
+    };
+
+    const applyDepartmentFilter = (departments: string[]) => {
+        setSelectedDepartments(departments);
+
+        router.get(
+            '/attendance-history/detail',
+            buildFilterParams(filterGroup, filterMonth, departments, 'departemen'),
+            {
+                preserveState: true,
+                preserveScroll: true,
+            },
+        );
+    };
+
+    const toggleDepartment = (department: string) => {
+        applyDepartmentFilter(
+            selectedDepartments.includes(department)
+                ? selectedDepartments.filter((selected) => selected !== department)
+                : [...selectedDepartments, department],
+        );
+    };
+
+    const departmentFilterLabel =
+        selectedDepartments.length === 0
+            ? 'Semua Departemen'
+            : selectedDepartments.length === 1
+              ? selectedDepartments[0]
+              : `${selectedDepartments.length} Departemen`;
+
     const resetFilters = () => {
         setFilterYear(String(year));
+        setFilterMonth('0');
+        setSortMode('abjad');
         setSearchQuery('');
         setFilterGroup('all');
+        setSelectedDepartments([]);
         setQuickFilter('all');
         setSortColumn('name');
         setSortDirection('asc');
@@ -398,21 +503,30 @@ export default function AttendanceReportDetail({
     };
 
     const buildExportUrl = () => {
-        const params: Record<string, string> = {};
+        const params = new URLSearchParams();
+        params.set('sort', filters.sort || 'abjad');
 
         if (filters.year) {
-            params.year = filters.year;
+            params.set('year', filters.year);
+        }
+
+        if (filters.month && filters.month !== '0') {
+            params.set('month', filters.month);
         }
 
         if (filters.search) {
-            params.search = filters.search;
+            params.set('search', filters.search);
         }
 
         if (filters.group) {
-            params.group = filters.group;
+            params.set('group', filters.group);
         }
 
-        const queryString = new URLSearchParams(params).toString();
+        if (filters.sort === 'departemen' && Array.isArray(filters.departments)) {
+            filters.departments.forEach((department) => params.append('departments[]', department));
+        }
+
+        const queryString = params.toString();
 
         return `/attendance-history/detail/export/pdf${queryString ? `?${queryString}` : ''}`;
     };
@@ -444,7 +558,7 @@ export default function AttendanceReportDetail({
                             <p className="max-w-2xl text-xs sm:text-sm text-sky-100 leading-relaxed font-medium">
                                 Rekapitulasi kehadiran jemaat &amp; volunteers per pekan dalam periode{' '}
                                 <span className="font-bold text-white underline underline-offset-4 decoration-white/30">
-                                    {MONTH_FULL_NAMES[displayMonthNumbers[0] - 1]} – {MONTH_FULL_NAMES[displayMonthNumbers[displayMonthNumbers.length - 1] - 1]} {year}
+                                    {periodLabel}
                                 </span>.
                             </p>
                         </div>
@@ -456,7 +570,7 @@ export default function AttendanceReportDetail({
                             </div>
                             <div className="flex items-center gap-2 rounded-2xl border border-white/20 bg-white/15 px-4 py-2 text-xs font-bold text-white shadow-inner backdrop-blur-md">
                                 <Calendar className="h-4 w-4 text-sky-200" />
-                                <span>Tahun {year}</span>
+                                <span>{periodLabel}</span>
                             </div>
                             <Button
                                 asChild
@@ -572,11 +686,46 @@ export default function AttendanceReportDetail({
 
                 {/* Bright Toolbar & Filter Bar */}
                 <div className="flex flex-col gap-4 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs">
-                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-end">
-                        {/* Year Selection */}
-                        <div className="space-y-1.5 lg:col-span-3">
+                    <div className="flex flex-wrap items-end gap-3">
+                        {/* Period Mode */}
+                        <div className="space-y-1.5">
                             <label className="text-[10px] font-bold tracking-wider text-slate-500 uppercase">
-                                Periode Tahun
+                                Periode
+                            </label>
+                            <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50/50 p-1">
+                                <button
+                                    type="button"
+                                    onClick={() => applyPeriodMode('tahun')}
+                                    className={cn(
+                                        'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-all',
+                                        !isMonthly
+                                            ? 'bg-indigo-600 text-white shadow-xs'
+                                            : 'text-slate-600 hover:text-slate-900',
+                                    )}
+                                >
+                                    <Calendar className="h-3.5 w-3.5" />
+                                    Tahunan
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => applyPeriodMode('bulan')}
+                                    className={cn(
+                                        'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-all',
+                                        isMonthly
+                                            ? 'bg-indigo-600 text-white shadow-xs'
+                                            : 'text-slate-600 hover:text-slate-900',
+                                    )}
+                                >
+                                    <CalendarDays className="h-3.5 w-3.5" />
+                                    Bulanan
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Year Selection */}
+                        <div className="w-full space-y-1.5 sm:w-36">
+                            <label className="text-[10px] font-bold tracking-wider text-slate-500 uppercase">
+                                Tahun
                             </label>
                             <Select
                                 value={filterYear}
@@ -598,8 +747,117 @@ export default function AttendanceReportDetail({
                             </Select>
                         </div>
 
+                        {/* Month Selection */}
+                        {isMonthly && (
+                            <div className="w-full space-y-1.5 sm:w-40">
+                                <label className="text-[10px] font-bold tracking-wider text-slate-500 uppercase">
+                                    Bulan
+                                </label>
+                                <Select
+                                    value={filterMonth}
+                                    onValueChange={(val) => {
+                                        setFilterMonth(val);
+
+                                        router.get('/attendance-history/detail', buildFilterParams(filterGroup, val), {
+                                            preserveState: true,
+                                            preserveScroll: true,
+                                        });
+                                    }}
+                                >
+                                    <SelectTrigger className="h-10 border-slate-200 bg-slate-50/50 font-semibold text-xs text-slate-800">
+                                        <SelectValue placeholder="Pilih Bulan" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {MONTH_FULL_NAMES.map((monthName, index) => (
+                                            <SelectItem key={monthName} value={String(index + 1)}>
+                                                {monthName}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
+
+                        {/* Row Order */}
+                        <div className="w-full space-y-1.5 sm:w-40">
+                            <label className="text-[10px] font-bold tracking-wider text-slate-500 uppercase">
+                                Urutan Baris
+                            </label>
+                            <Select
+                                value={sortMode}
+                                onValueChange={(val) => applySortMode(val as 'abjad' | 'departemen')}
+                            >
+                                <SelectTrigger className="h-10 border-slate-200 bg-slate-50/50 font-semibold text-xs text-slate-800">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="abjad">Abjad (A–Z)</SelectItem>
+                                    <SelectItem value="departemen">Departemen</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* Department Filter (muncul saat urutan baris = Departemen) */}
+                        {sortMode === 'departemen' && (
+                            <div className="w-full space-y-1.5 sm:w-48">
+                                <label className="text-[10px] font-bold tracking-wider text-slate-500 uppercase">
+                                    Departemen
+                                </label>
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <button
+                                            type="button"
+                                            className="flex h-10 w-full items-center justify-between rounded-md border border-slate-200 bg-slate-50/50 px-3 text-xs font-semibold text-slate-800 hover:bg-slate-100/70"
+                                        >
+                                            <span className="truncate">{departmentFilterLabel}</span>
+                                            <ChevronDown className="ml-1 h-4 w-4 shrink-0 text-slate-400" />
+                                        </button>
+                                    </PopoverTrigger>
+                                    <PopoverContent align="start" className="w-64 p-0">
+                                        <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2">
+                                            <span className="text-[10px] font-bold tracking-wider text-slate-500 uppercase">
+                                                Pilih Departemen
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => applyDepartmentFilter([])}
+                                                className="text-[10px] font-bold text-indigo-600 hover:text-indigo-700"
+                                            >
+                                                Semua
+                                            </button>
+                                        </div>
+                                        <div className="max-h-64 overflow-y-auto p-1.5">
+                                            {safeDepartments.length === 0 ? (
+                                                <p className="px-2 py-3 text-center text-xs text-slate-400">
+                                                    Tidak ada departemen pada periode ini
+                                                </p>
+                                            ) : (
+                                                safeDepartments.map((department) => (
+                                                    <label
+                                                        key={department}
+                                                        className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                                                    >
+                                                        <Checkbox
+                                                            checked={selectedDepartments.includes(department)}
+                                                            onCheckedChange={() => toggleDepartment(department)}
+                                                        />
+                                                        <span className="truncate">{department}</span>
+                                                    </label>
+                                                ))
+                                            )}
+                                        </div>
+                                        <div className="border-t border-slate-100 px-3 py-2 text-[10px] text-slate-400">
+                                            {selectedDepartments.length === 0
+                                                ? 'Semua departemen ditampilkan'
+                                                : `${selectedDepartments.length} dari ${safeDepartments.length} departemen dipilih`}
+                                        </div>
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
+                        )}
+
                         {/* Search Input */}
-                        <div className="space-y-1.5 lg:col-span-5">
+                        <div className="min-w-[220px] flex-1 space-y-1.5">
                             <label className="text-[10px] font-bold tracking-wider text-slate-500 uppercase">
                                 Cari Nama atau NIK
                             </label>
@@ -632,10 +890,10 @@ export default function AttendanceReportDetail({
                         </div>
 
                         {/* Filter Action Buttons */}
-                        <div className="flex items-center gap-2 lg:col-span-4 lg:justify-end">
+                        <div className="flex items-center gap-2">
                             <Button
                                 onClick={applyFilters}
-                                className="h-10 flex-1 font-semibold shadow-xs bg-indigo-600 hover:bg-indigo-700 text-white lg:flex-none"
+                                className="h-10 flex-1 font-semibold shadow-xs bg-indigo-600 hover:bg-indigo-700 text-white"
                             >
                                 <Search className="mr-1.5 h-4 w-4" />
                                 Cari Data
@@ -692,19 +950,21 @@ export default function AttendanceReportDetail({
                             </button>
 
                             {/* Dynamic Month Range Toggle */}
-                            <button
-                                onClick={() => setStartFromFirstMonth((prev) => !prev)}
-                                className={cn(
-                                    'ml-2 rounded-lg border px-3 py-1 text-xs font-semibold transition-all shadow-2xs',
-                                    startFromFirstMonth
-                                        ? 'border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
-                                        : 'border-slate-200 bg-white text-slate-600 hover:text-slate-900',
-                                )}
-                            >
-                                {startFromFirstMonth
-                                    ? `📌 Mulai (${MONTH_FULL_NAMES[firstEventMonthIndex - 1]})`
-                                    : '🗓️ Lengkap (Jan - Des)'}
-                            </button>
+                            {!isMonthly && (
+                                <button
+                                    onClick={() => setStartFromFirstMonth((prev) => !prev)}
+                                    className={cn(
+                                        'ml-2 rounded-lg border px-3 py-1 text-xs font-semibold transition-all shadow-2xs',
+                                        startFromFirstMonth
+                                            ? 'border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+                                            : 'border-slate-200 bg-white text-slate-600 hover:text-slate-900',
+                                    )}
+                                >
+                                    {startFromFirstMonth
+                                        ? `📌 Mulai (${MONTH_FULL_NAMES[firstEventMonthIndex - 1]})`
+                                        : '🗓️ Lengkap (Jan - Des)'}
+                                </button>
+                            )}
                         </div>
 
                         {/* Clean Status Legend (Light Style) */}
@@ -831,6 +1091,15 @@ export default function AttendanceReportDetail({
                                             </div>
                                         </th>
 
+                                        {sortMode === 'departemen' && (
+                                            <th
+                                                rowSpan={2}
+                                                className="min-w-[120px] border-r border-slate-200 bg-slate-100 px-3 py-3 font-bold text-[10px] uppercase tracking-wider text-slate-700"
+                                            >
+                                                Departemen
+                                            </th>
+                                        )}
+
                                         {/* Bright Clean Month Headers (Light Slate Tints) */}
                                         {displayMonthNumbers.map((mNum, idx) => {
                                             const weeks = getMonthWeeks(mNum);
@@ -903,7 +1172,40 @@ export default function AttendanceReportDetail({
                                 </thead>
                                 <tbody className="divide-y divide-slate-100 bg-white">
                                     {processedRows.map((row, idx) => {
+                                        const previousRow = idx > 0 ? processedRows[idx - 1] : null;
+                                        const departmentLabel = row.department || 'Tanpa Departemen';
+                                        const showDepartmentSection =
+                                            sortMode === 'departemen' &&
+                                            (!previousRow ||
+                                                (previousRow.department || 'Tanpa Departemen') !==
+                                                    departmentLabel);
+
                                         return (
+                                            <Fragment key={row.member_id}>
+                                            {showDepartmentSection && (
+                                                <tr className="bg-slate-100/90">
+                                                    <td
+                                                        colSpan={
+                                                            (sortMode === 'departemen' ? 3 : 2) +
+                                                            displayMonthNumbers.reduce(
+                                                                (sum, m) => sum + getMonthWeeks(m).length,
+                                                                0,
+                                                            ) +
+                                                            2
+                                                        }
+                                                        className="border-y border-slate-200 px-4 py-2.5"
+                                                    >
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-indigo-100 text-indigo-700">
+                                                                <Building2 className="h-3.5 w-3.5" />
+                                                            </span>
+                                                            <span className="text-[11px] font-extrabold tracking-wider text-slate-800 uppercase">
+                                                                {departmentLabel}
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            )}
                                             <tr
                                                 key={row.member_id}
                                                 className="group transition-colors hover:bg-slate-50/80"
@@ -932,18 +1234,28 @@ export default function AttendanceReportDetail({
                                                             <span className="font-semibold text-slate-900 text-xs leading-snug truncate">
                                                                 {row.name}
                                                             </span>
-                                                            {row.nik ? (
-                                                                <span className="text-[10px] text-slate-400 font-mono truncate">
-                                                                    NIK: {row.nik}
-                                                                </span>
-                                                            ) : (
-                                                                <span className="text-[10px] text-slate-400 truncate">
-                                                                    ID #{row.member_id}
-                                                                </span>
-                                                            )}
+                                                            <span className="text-[10px] text-slate-400 truncate">
+                                                                {row.email || row.phone || '-'}
+                                                            </span>
                                                         </div>
                                                     </div>
                                                 </td>
+
+                                                {sortMode === 'departemen' && (
+                                                    <td className="min-w-[120px] border-r border-slate-200/80 px-3 py-2.5">
+                                                        <span
+                                                            className={cn(
+                                                                'inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-bold',
+                                                                row.department
+                                                                    ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
+                                                                    : 'border-slate-200 bg-slate-100 text-slate-500',
+                                                            )}
+                                                        >
+                                                            <Building2 className="h-3 w-3" />
+                                                            {row.department || 'Tanpa Departemen'}
+                                                        </span>
+                                                    </td>
+                                                )}
 
                                                 {/* Sub-column Attendance Cells (M1, M2...) */}
                                                 {displayMonthNumbers.map((mNum) => {
@@ -1028,12 +1340,16 @@ export default function AttendanceReportDetail({
                                                     </span>
                                                 </td>
                                             </tr>
+                                            </Fragment>
                                         );
                                     })}
                                 </tbody>
                                 <tfoot>
                                     <tr className="border-t border-slate-200 bg-slate-50 font-bold text-xs">
-                                        <td colSpan={2} className="sticky left-0 z-20 bg-slate-50 px-4 py-3 text-right text-slate-800 border-r border-slate-200">
+                                        <td
+                                            colSpan={sortMode === 'departemen' ? 3 : 2}
+                                            className="sticky left-0 z-20 bg-slate-50 px-4 py-3 text-right text-slate-800 border-r border-slate-200"
+                                        >
                                             Total Kehadiran Halaman Ini:
                                         </td>
                                         <td

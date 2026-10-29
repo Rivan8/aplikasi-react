@@ -5,15 +5,19 @@ namespace App\Http\Controllers;
 use App\Exports\AttendanceHistoryExport;
 use App\Models\Attendance;
 use App\Models\Category;
+use App\Models\Department;
 use App\Models\Event;
 use App\Models\EventGroup;
 use App\Models\EventSession;
+use App\Models\EventVolunteer;
+use App\Models\MemberDetail;
 use App\Services\MemberApiService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Maatwebsite\Excel\Facades\Excel;
@@ -21,6 +25,34 @@ use Maatwebsite\Excel\Facades\Excel;
 class AttendanceController extends Controller
 {
     public function __construct(private readonly MemberApiService $memberApi) {}
+
+    /**
+     * Departemen jemaat: data anggota (member_details) diutamakan, lalu
+     * departemen posisi volunteer pada event yang sama (event_volunteers).
+     */
+    private function departmentColumnSql(): string
+    {
+        return "COALESCE(departments.name, NULLIF((select min(ev.role_category) from event_volunteers ev where ev.event_id = attendances.event_id and ev.member_id = CAST(attendances.member_id AS CHAR)), ''), 'Tanpa Departemen')";
+    }
+
+    /**
+     * PDF laporan selalu dikelompokkan per departemen: urutkan baris per
+     * departemen (tanpa departemen paling akhir) lalu nama jemaat.
+     */
+    private function sortRowsByDepartment(array $rows, string $departmentKey, string $nameKey): array
+    {
+        return collect($rows)
+            ->sortBy(function (array $row) use ($departmentKey, $nameKey): string {
+                $department = trim((string) ($row[$departmentKey] ?? ''));
+                $isUnassigned = $department === ''
+                    || mb_strtolower($department) === mb_strtolower('Tanpa Departemen');
+
+                return ($isUnassigned ? 'zzzz' : mb_strtolower($department))
+                    .'|'.mb_strtolower((string) ($row[$nameKey] ?? ''));
+            })
+            ->values()
+            ->all();
+    }
 
     private function attendanceStatus(?Event $event, ?EventSession $session, CarbonInterface $scanTime): string
     {
@@ -48,30 +80,45 @@ class AttendanceController extends Controller
      */
     public function history(Request $request)
     {
+        $view = $request->input('view') === 'departemen' ? 'departemen' : 'jadwal';
+
         $query = Attendance::with(['event', 'session'])
-            ->orderBy('scan_time', 'desc');
+            ->select('attendances.*')
+            ->addSelect('departments.name as department_name')
+            ->addSelect(DB::raw('(select min(ev.role_category) from event_volunteers ev where ev.event_id = attendances.event_id and ev.member_id = CAST(attendances.member_id AS CHAR)) as volunteer_department'))
+            ->leftJoin('events', 'events.id', '=', 'attendances.event_id')
+            ->leftJoin('member_details', 'member_details.member_id', '=', 'attendances.member_id')
+            ->leftJoin('departments', 'departments.id', '=', 'member_details.department_id');
+
+        if ($view === 'departemen') {
+            $query->orderByRaw($this->departmentColumnSql().' asc')
+                ->orderByDesc('attendances.scan_time');
+        } else {
+            $query->orderByDesc('events.date')
+                ->orderByDesc('attendances.scan_time');
+        }
 
         // Filter by event
         if ($request->filled('event_id') && $request->event_id !== 'all') {
-            $query->where('event_id', $request->event_id);
+            $query->where('attendances.event_id', $request->event_id);
         }
 
         // Filter by session
         if ($request->filled('event_session_id') && $request->event_session_id !== 'all') {
-            $query->where('event_session_id', $request->event_session_id);
+            $query->where('attendances.event_session_id', $request->event_session_id);
         }
 
         // Filter by status
         if ($request->filled('status') && $request->status !== 'all') {
-            $query->where('status', $request->status);
+            $query->where('attendances.status', $request->status);
         }
 
         // Filter by date range
         if ($request->filled('date_from')) {
-            $query->whereDate('scan_time', '>=', $request->date_from);
+            $query->whereDate('attendances.scan_time', '>=', $request->date_from);
         }
         if ($request->filled('date_to')) {
-            $query->whereDate('scan_time', '<=', $request->date_to);
+            $query->whereDate('attendances.scan_time', '<=', $request->date_to);
         }
 
         // Search by member name (akan difilter setelah fetch dari external DB)
@@ -100,8 +147,24 @@ class AttendanceController extends Controller
         }
 
         // Transform data attendance untuk frontend
-        $attendanceLogs = $attendances->through(function ($attendance) use ($members) {
+        $attendanceLogs = $attendances->through(function ($attendance) use ($members, $view) {
             $memberInfo = $members[$attendance->member_id] ?? null;
+            $volunteerDepartment = trim((string) ($attendance->volunteer_department ?? ''));
+            $department = $attendance->department_name ?: ($volunteerDepartment !== '' ? $volunteerDepartment : null);
+
+            if ($view === 'departemen') {
+                $groupKey = 'dept-'.Str::slug($department ?? 'tanpa-departemen');
+                $groupLabel = $department ?? 'Tanpa Departemen';
+                $groupMeta = null;
+            } else {
+                $groupKey = 'jadwal-'.$attendance->event_id.'-'.($attendance->event_session_id ?? '0');
+                $groupLabel = $attendance->event?->title ?? 'Event Dihapus';
+                $groupMeta = collect([
+                    $attendance->event?->date,
+                    $attendance->session?->title,
+                    $attendance->event?->location,
+                ])->filter()->implode(' • ') ?: null;
+            }
 
             return [
                 'id' => $attendance->id,
@@ -109,6 +172,7 @@ class AttendanceController extends Controller
                 'member_name' => $memberInfo ? $memberInfo['name'] : 'Member #'.$attendance->member_id,
                 'member_nik' => $memberInfo ? $memberInfo['nik'] : null,
                 'member_foto_url' => $memberInfo ? ($memberInfo['foto_url'] ?? null) : null,
+                'department' => $department,
                 'event_title' => $attendance->event?->title ?? 'Event Dihapus',
                 'session_title' => $attendance->session ? ($attendance->session->title.' ('.$attendance->session->date.')') : null,
                 'event_location' => $attendance->event?->location ?? '-',
@@ -117,6 +181,9 @@ class AttendanceController extends Controller
                 'scan_time_raw' => $attendance->scan_time?->toISOString(),
                 'check_out_time' => $attendance->check_out_time?->format('d M Y, H:i'),
                 'status' => $attendance->status,
+                'group_key' => $groupKey,
+                'group_label' => $groupLabel,
+                'group_meta' => $groupMeta,
             ];
         });
 
@@ -126,7 +193,8 @@ class AttendanceController extends Controller
         return Inertia::render('attendance-history/index', [
             'attendances' => $attendanceLogs,
             'events' => $events,
-            'filters' => $request->only(['event_id', 'event_session_id', 'status', 'date_from', 'date_to', 'search']),
+            'view' => $view,
+            'filters' => $request->only(['event_id', 'event_session_id', 'status', 'date_from', 'date_to', 'search', 'view']),
         ]);
     }
 
@@ -158,56 +226,59 @@ class AttendanceController extends Controller
             'year' => $data['year'],
             'availableYears' => $this->reportDetailAvailableYears(),
             'groups' => $data['groups'],
+            'availableDepartments' => $data['departmentOptions'],
             'filters' => [
                 'year' => (string) $data['year'],
+                'month' => (string) $data['month'],
+                'sort' => $data['sort'],
                 'search' => $data['search'],
                 'group' => $data['selectedGroup'],
+                'departments' => $data['selectedDepartments']->all(),
             ],
         ]);
     }
 
     public function exportDetailPdf(Request $request)
     {
+        $this->raisePdfMemoryLimit();
+
         $data = $this->buildReportDetailData($request);
 
         $monthNames = [1 => 'Jan', 2 => 'Feb', 3 => 'Mar', 4 => 'Apr', 5 => 'Mei', 6 => 'Jun', 7 => 'Jul', 8 => 'Agu', 9 => 'Sep', 10 => 'Okt', 11 => 'Nov', 12 => 'Des'];
-        $monthDataMap = collect($data['months'])->keyBy('month');
+        $fullMonthNames = [1 => 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 
-        $fullMonths = [];
-        for ($m = 1; $m <= 12; $m++) {
-            $existing = $monthDataMap->get($m);
-            if ($existing && ! empty($existing['weeks'])) {
-                $fullMonths[] = $existing;
-            } else {
-                $fullMonths[] = [
-                    'month' => $m,
-                    'label' => $monthNames[$m].' '.$data['year'],
-                    'weeks' => [
-                        ['index' => 1, 'date' => '', 'day' => 0, 'event_title' => null],
-                        ['index' => 2, 'date' => '', 'day' => 0, 'event_title' => null],
-                        ['index' => 3, 'date' => '', 'day' => 0, 'event_title' => null],
-                        ['index' => 4, 'date' => '', 'day' => 0, 'event_title' => null],
-                    ],
-                ];
-            }
-        }
+        // Hanya tampilkan bulan yang benar-benar punya jadwal event; padding 12 bulan
+        // membuat tabel membengkak dan memicu kehabisan memori saat render PDF.
+        $fullMonths = collect($data['months'])->values()->all();
+
+        $periodLabel = $data['month'] > 0
+            ? $fullMonthNames[$data['month']].' '.$data['year']
+            : 'Januari – Desember '.$data['year'];
+
+        // PDF selalu dikelompokkan per departemen (sama seperti Laporan Proses).
+        $rows = $this->sortRowsByDepartment($data['rows']->all(), 'department', 'name');
 
         $pdf = Pdf::loadView('exports.attendance-detail', [
             'months' => $fullMonths,
-            'rows' => $data['rows'],
+            'rows' => $rows,
             'year' => $data['year'],
+            'month' => $data['month'],
+            'sort' => 'departemen',
+            'periodLabel' => $periodLabel,
             'search' => $data['search'],
+            'selectedDepartments' => $data['selectedDepartments']->all(),
             'groupLabel' => $data['selectedGroup'] !== '' ? $data['selectedGroup'] : 'Semua Group',
             'totalJemaat' => $data['rows']->count(),
             'totalHadir' => $data['rows']->sum('hadir'),
             'totalTerlambat' => $data['rows']->sum('terlambat'),
             'monthNames' => $monthNames,
-            'generatedAt' => now()->format('d M Y, H:i'),
+            'generatedAt' => now()->locale('id')->translatedFormat('d M Y, H:i'),
         ])->setPaper('a4', 'landscape');
 
         $suffix = $data['selectedGroup'] !== '' ? '-'.Str::slug($data['selectedGroup']) : '';
+        $suffix .= $data['month'] > 0 ? '-'.$data['month'] : '';
 
-        return $pdf->download('laporan-detail-absensi-'.$data['year'].$suffix.'.pdf');
+        return $pdf->stream('laporan-detail-absensi-'.$data['year'].$suffix.'.pdf');
     }
 
     private function reportDetailAvailableYears()
@@ -235,6 +306,14 @@ class AttendanceController extends Controller
             $year = $currentYear;
         }
 
+        $month = (int) $request->input('month', 0);
+
+        if ($month < 0 || $month > 12) {
+            $month = 0;
+        }
+
+        $sort = $request->input('sort') === 'departemen' ? 'departemen' : 'abjad';
+
         // Peta kategori event ke group event (categories.group_name -> event_groups.name)
         $categoryGroups = Category::query()
             ->whereNotNull('group_name')
@@ -259,8 +338,14 @@ class AttendanceController extends Controller
             $selectedGroup = '';
         }
 
-        $attendances = Attendance::with('event')
-            ->whereYear('scan_time', $year)
+        $attendancesQuery = Attendance::with('event')
+            ->whereYear('scan_time', $year);
+
+        if ($month > 0) {
+            $attendancesQuery->whereMonth('scan_time', $month);
+        }
+
+        $attendances = $attendancesQuery
             ->orderBy('scan_time')
             ->get()
             ->filter(function (Attendance $attendance) use ($selectedGroup, $categoryGroups): bool {
@@ -285,6 +370,10 @@ class AttendanceController extends Controller
             $date = substr($attendance->event->date, 0, 10);
 
             if ((int) substr($date, 0, 4) !== $year) {
+                continue;
+            }
+
+            if ($month > 0 && (int) substr($date, 5, 2) !== $month) {
                 continue;
             }
 
@@ -315,10 +404,62 @@ class AttendanceController extends Controller
         $memberMap = collect($this->memberApi->listAll())
             ->keyBy(fn (array $member) => (string) $member['idjemaat']);
 
+        $departmentMap = collect();
+        $memberIds = $attendances->pluck('member_id')->unique()->values();
+
+        if ($memberIds->isNotEmpty()) {
+            $departmentMap = MemberDetail::with('department')
+                ->whereIn('member_id', $memberIds->all())
+                ->get()
+                ->mapWithKeys(fn (MemberDetail $detail) => [
+                    (string) $detail->member_id => $detail->department?->name,
+                ]);
+        }
+
+        // Fallback: jemaat tanpa departemen di data anggota memakai departemen
+        // posisi volunteer-nya pada event di periode laporan.
+        $volunteerDepartmentMap = collect();
+
+        if ($memberIds->isNotEmpty()) {
+            $unassignedMemberIds = $memberIds
+                ->reject(fn ($id) => filled($departmentMap->get((string) $id)))
+                ->values();
+
+            if ($unassignedMemberIds->isNotEmpty()) {
+                $departmentNameByKey = Department::query()
+                    ->pluck('name')
+                    ->mapWithKeys(fn (string $name) => [mb_strtolower(trim($name)) => $name]);
+
+                $eventIds = $attendances->pluck('event_id')->filter()->unique()->values()->all();
+
+                $volunteerDepartmentMap = EventVolunteer::query()
+                    ->whereIn('member_id', $unassignedMemberIds->all())
+                    ->when($eventIds !== [], fn ($query) => $query->whereIn('event_id', $eventIds))
+                    ->whereNotNull('role_category')
+                    ->selectRaw('member_id, role_category, count(*) as total')
+                    ->groupBy('member_id', 'role_category')
+                    ->orderByDesc('total')
+                    ->orderBy('role_category')
+                    ->get()
+                    ->groupBy(fn (EventVolunteer $volunteer) => (string) $volunteer->member_id)
+                    ->map(function ($volunteers) use ($departmentNameByKey) {
+                        foreach ($volunteers as $volunteer) {
+                            $name = $departmentNameByKey->get(mb_strtolower(trim((string) $volunteer->role_category)));
+
+                            if ($name !== null) {
+                                return $name;
+                            }
+                        }
+
+                        return null;
+                    });
+            }
+        }
+
         // Baris: member unik, status per tanggal event (Late menang bila ada lebih dari 1 sesi)
         $rows = $attendances
             ->groupBy('member_id')
-            ->map(function ($items, $memberId) use ($memberMap) {
+            ->map(function ($items, $memberId) use ($memberMap, $departmentMap, $volunteerDepartmentMap) {
                 $cells = [];
                 $hadir = 0;
                 $terlambat = 0;
@@ -348,15 +489,41 @@ class AttendanceController extends Controller
                 return [
                     'member_id' => (string) $memberId,
                     'name' => $member['name'] ?? 'Member #'.$memberId,
-                    'nik' => $member['nik'] ?? null,
+                    'email' => $member['email'] ?? null,
+                    'phone' => $member['phone'] ?? null,
                     'foto_url' => $member['foto_url'] ?? null,
+                    'department' => $departmentMap->get((string) $memberId)
+                        ?: $volunteerDepartmentMap->get((string) $memberId),
                     'cells' => $cells,
                     'hadir' => $hadir,
                     'terlambat' => $terlambat,
                 ];
             })
-            ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
             ->values();
+
+        // Opsi filter mengikuti daftar departemen di halaman Departemen, bukan
+        // hanya departemen yang terisi pada periode ini, agar semua pilihan
+        // (Frontline, Prayer, Event, dst.) tetap bisa dipilih.
+        $departmentOptions = Department::query()
+            ->orderBy('name')
+            ->pluck('name')
+            ->map(fn (string $name) => trim($name))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($rows->contains(fn (array $row) => trim((string) ($row['department'] ?? '')) === '')) {
+            $departmentOptions->push('Tanpa Departemen');
+        }
+
+        $selectedDepartments = $sort === 'departemen'
+            ? collect((array) $request->input('departments', []))
+                ->filter(fn ($department) => is_string($department) && trim($department) !== '')
+                ->map(fn (string $department) => trim($department))
+                ->unique()
+                ->intersect($departmentOptions)
+                ->values()
+            : collect();
 
         $search = trim((string) $request->input('search', ''));
 
@@ -366,13 +533,34 @@ class AttendanceController extends Controller
                 ->values();
         }
 
+        if ($selectedDepartments->isNotEmpty()) {
+            $rows = $rows
+                ->filter(fn (array $row) => $selectedDepartments->contains(
+                    trim((string) ($row['department'] ?? '')) ?: 'Tanpa Departemen'
+                ))
+                ->values();
+        }
+
+        $rows = $sort === 'departemen'
+            ? $rows
+                ->sortBy(fn (array $row) => [
+                    $row['department'] ?? 'zzzz',
+                    mb_strtolower((string) $row['name']),
+                ])
+                ->values()
+            : $rows->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)->values();
+
         return [
             'year' => $year,
+            'month' => $month,
+            'sort' => $sort,
             'months' => $months,
             'rows' => $rows,
             'search' => $search,
             'groups' => $groups,
             'selectedGroup' => $selectedGroup,
+            'departmentOptions' => $departmentOptions,
+            'selectedDepartments' => $selectedDepartments,
         ];
     }
 
@@ -404,7 +592,10 @@ class AttendanceController extends Controller
 
     public function exportPdf(Request $request)
     {
+        $this->raisePdfMemoryLimit();
+
         $rows = $this->buildAttendanceExportRows($request);
+        $rows = $this->sortRowsByDepartment($rows, 'Departemen', 'Nama Jemaat');
         $presentCount = collect($rows)->where('Status', 'Hadir')->count();
         $lateCount = collect($rows)->where('Status', 'Terlambat')->count();
         $eventTitle = $request->filled('event_id') && $request->event_id !== 'all'
@@ -419,7 +610,31 @@ class AttendanceController extends Controller
             'generatedAt' => now()->format('d M Y, H:i'),
         ])->setPaper('a4', 'landscape');
 
-        return $pdf->download('attendance-history.pdf');
+        return $pdf->stream('attendance-history.pdf');
+    }
+
+    /**
+     * Dompdf merender seluruh tabel ke memori; limit default 128M tidak cukup
+     * untuk laporan setahun penuh sehingga export gagal tanpa pesan.
+     */
+    private function raisePdfMemoryLimit(): void
+    {
+        $limit = ini_get('memory_limit');
+
+        if ($limit === false || $limit === '-1') {
+            return;
+        }
+
+        $bytes = (int) $limit * match (strtoupper(substr($limit, -1))) {
+            'G' => 1024 ** 3,
+            'M' => 1024 ** 2,
+            'K' => 1024,
+            default => 1,
+        };
+
+        if ($bytes < 512 * 1024 * 1024) {
+            @ini_set('memory_limit', '512M');
+        }
     }
 
     public function exportExcel(Request $request)
@@ -431,26 +646,41 @@ class AttendanceController extends Controller
 
     private function buildAttendanceExportRows(Request $request): array
     {
+        $view = $request->input('view') === 'departemen' ? 'departemen' : 'jadwal';
+
         $query = Attendance::with(['event', 'session'])
-            ->orderBy('scan_time', 'desc');
+            ->select('attendances.*')
+            ->addSelect('departments.name as department_name')
+            ->addSelect(DB::raw('(select min(ev.role_category) from event_volunteers ev where ev.event_id = attendances.event_id and ev.member_id = CAST(attendances.member_id AS CHAR)) as volunteer_department'))
+            ->leftJoin('events', 'events.id', '=', 'attendances.event_id')
+            ->leftJoin('member_details', 'member_details.member_id', '=', 'attendances.member_id')
+            ->leftJoin('departments', 'departments.id', '=', 'member_details.department_id');
+
+        if ($view === 'departemen') {
+            $query->orderByRaw($this->departmentColumnSql().' asc')
+                ->orderByDesc('attendances.scan_time');
+        } else {
+            $query->orderByDesc('events.date')
+                ->orderByDesc('attendances.scan_time');
+        }
 
         if ($request->filled('event_id') && $request->event_id !== 'all') {
-            $query->where('event_id', $request->event_id);
+            $query->where('attendances.event_id', $request->event_id);
         }
 
         if ($request->filled('event_session_id') && $request->event_session_id !== 'all') {
-            $query->where('event_session_id', $request->event_session_id);
+            $query->where('attendances.event_session_id', $request->event_session_id);
         }
 
         if ($request->filled('status') && $request->status !== 'all') {
-            $query->where('status', $request->status);
+            $query->where('attendances.status', $request->status);
         }
 
         if ($request->filled('date_from')) {
-            $query->whereDate('scan_time', '>=', $request->date_from);
+            $query->whereDate('attendances.scan_time', '>=', $request->date_from);
         }
         if ($request->filled('date_to')) {
-            $query->whereDate('scan_time', '<=', $request->date_to);
+            $query->whereDate('attendances.scan_time', '<=', $request->date_to);
         }
 
         $attendances = $query->get();
@@ -478,6 +708,8 @@ class AttendanceController extends Controller
                 'ID' => $attendance->id,
                 'Nama Jemaat' => $memberInfo ? $memberInfo['name'] : 'Member #'.$attendance->member_id,
                 'NIK' => $memberInfo ? $memberInfo['nik'] : '-',
+                'Departemen' => $attendance->department_name
+                    ?: (trim((string) ($attendance->volunteer_department ?? '')) ?: 'Tanpa Departemen'),
                 'Event' => $attendance->event?->title ?? 'Event Dihapus',
                 'Sesi Kelas' => $attendance->session?->title ? ($attendance->session->title.' ('.$attendance->session->date.')') : '-',
                 'Lokasi' => $attendance->event?->location ?? '-',
