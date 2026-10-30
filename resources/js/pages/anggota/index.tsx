@@ -3,6 +3,7 @@ import { Edit2, Search } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const avatarColors = ['bg-primary', 'bg-chart-2', 'bg-chart-3', 'bg-chart-4', 'bg-chart-5'];
 
@@ -46,15 +47,16 @@ export default function Anggota({
     members,
     statuses = [],
     departments = [],
-    filters = { search: '' }
+    filters = { search: '', sort: 'name' }
 }: {
     members: MembersData;
     statuses: Option[];
     departments: Option[];
-    filters?: { search: string };
+    filters?: { search?: string; sort?: string };
 }) {
     const users = members?.data || [];
     const [search, setSearch] = useState(filters?.search || '');
+    const [sort, setSort] = useState<'name' | 'department'>(filters?.sort === 'department' ? 'department' : 'name');
 
     // Handle search logic
     useEffect(() => {
@@ -63,7 +65,7 @@ export default function Anggota({
             if (search !== (filters?.search || '')) {
                 router.get(
                     '/anggota',
-                    { search },
+                    { search, sort },
                     {
                         preserveState: true,
                         replace: true,
@@ -74,7 +76,20 @@ export default function Anggota({
         }, 300); // Kurangi debounce ke 300ms agar lebih responsif
 
         return () => clearTimeout(timeout);
-    }, [search]);
+    }, [search, sort]);
+
+    const handleSortChange = (value: string) => {
+        setSort(value as 'name' | 'department');
+        router.get(
+            '/anggota',
+            { search, sort: value },
+            {
+                preserveState: true,
+                replace: true,
+                only: ['members', 'filters']
+            }
+        );
+    };
 
     return (
         <>
@@ -91,7 +106,7 @@ export default function Anggota({
 
                 <div className="rounded-xl border bg-card shadow-sm">
                     {/* Search Header */}
-                    <div className="p-4 border-b flex items-center justify-between gap-4">
+                    <div className="p-4 border-b flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="relative w-full max-w-sm">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                             <Input
@@ -101,6 +116,20 @@ export default function Anggota({
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                             />
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground whitespace-nowrap">
+                                Urutkan
+                            </span>
+                            <Select value={sort} onValueChange={handleSortChange}>
+                                <SelectTrigger className="w-[210px] bg-muted/30 border-border">
+                                    <SelectValue placeholder="Pilih urutan" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="name">Nama (A-Z)</SelectItem>
+                                    <SelectItem value="department">Departemen (kosong di akhir)</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
                     </div>
 

@@ -431,12 +431,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         try {
             $search = $request->input('search');
+            $sort = $request->input('sort') === 'department' ? 'department' : 'name';
             $page = max(1, (int) $request->input('page', 1));
             $perPage = 10;
 
+            $listedMembers = collect($memberApi->listAll());
+
             if (! empty($search)) {
                 $needle = mb_strtolower(trim((string) $search));
-                $filteredMembers = collect($memberApi->listAll())
+                $listedMembers = $listedMembers
                     ->filter(function (array $member) use ($needle): bool {
                         return collect([
                             $member['idjemaat'] ?? null,
@@ -447,36 +450,36 @@ Route::middleware(['auth', 'verified'])->group(function () {
                             && str_contains(mb_strtolower((string) $value), $needle));
                     })
                     ->values();
-
-                $total = $filteredMembers->count();
-                $items = $filteredMembers
-                    ->forPage($page, $perPage)
-                    ->values()
-                    ->all();
-            } else {
-                $result = $memberApi->list($page, $perPage);
-                $items = $result['data'];
-                $pagination = $result['pagination'];
-                $page = (int) ($pagination['current_page'] ?? $page);
-                $perPage = (int) ($pagination['per_page'] ?? $perPage);
-                $total = (int) ($pagination['total_records'] ?? count($items));
             }
 
-            $memberIds = collect($items)->pluck('idjemaat')->filter()->all();
             $details = MemberDetail::with(['status', 'department'])
-                ->whereIn('member_id', $memberIds)
+                ->whereIn('member_id', $listedMembers->pluck('idjemaat')->filter()->all())
                 ->get()
                 ->keyBy(fn ($detail) => (string) $detail->member_id);
 
-            $items = collect($items)->map(function (array $member) use ($details) {
+            $listedMembers = $listedMembers->map(function (array $member) use ($details) {
                 $member['member_detail'] = $details->get((string) $member['idjemaat']);
 
                 return $member;
-            })->all();
+            });
+
+            $sortName = fn (array $member): string => mb_strtolower(trim((string) ($member['name'] ?? '')))
+                ?: mb_strtolower('User '.$member['id']);
+
+            $listedMembers = $sort === 'department'
+                ? $listedMembers->sortBy(fn (array $member): string => sprintf(
+                    '%s|%s|%s',
+                    $member['member_detail']?->department_id ? '0' : '1',
+                    mb_strtolower((string) ($member['member_detail']?->department?->name ?? '')),
+                    $sortName($member),
+                ), SORT_STRING)
+                : $listedMembers->sortBy($sortName, SORT_STRING);
+
+            $items = $listedMembers->forPage($page, $perPage)->values()->all();
 
             $members = new LengthAwarePaginator(
                 $items,
-                $total,
+                $listedMembers->count(),
                 $perPage,
                 $page,
                 ['path' => $request->url(), 'query' => $request->query()]
@@ -496,7 +499,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             'members' => $members,
             'statuses' => $statuses,
             'departments' => $departments,
-            'filters' => $request->only(['search']),
+            'filters' => $request->only(['search', 'sort']),
             'breadcrumbs' => [
                 ['title' => 'Member List', 'href' => route('anggota')],
             ],
