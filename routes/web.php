@@ -535,7 +535,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ]
         );
 
-        return back()->with('success', 'Detail anggota berhasil diperbarui');
+        return redirect()->route('anggota')->with('success', 'Detail anggota berhasil diperbarui');
     })->middleware('role:admin,superadmin')->name('anggota.update-details');
     Route::resource('departments', DepartmentController::class)->except(['create', 'edit', 'show'])->middleware('role:admin,superadmin');
 
