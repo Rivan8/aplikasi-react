@@ -11,6 +11,7 @@ import {
     ChevronRight,
     Clock,
     Download,
+    FileSpreadsheet,
     Filter,
     Layers,
     RotateCcw,
@@ -57,6 +58,13 @@ interface RekapMonth {
     weeks: RekapWeek[];
 }
 
+interface AttendanceEventDetail {
+    title: string;
+    session?: string | null;
+    status: 'Present' | 'Late';
+    scan_time?: string | null;
+}
+
 interface RekapRow {
     member_id: string;
     name: string;
@@ -65,6 +73,7 @@ interface RekapRow {
     foto_url?: string | null;
     department?: string | null;
     cells: Record<string, 'Present' | 'Late'>;
+    event_details?: Record<string, AttendanceEventDetail[]>;
     hadir: number;
     terlambat: number;
 }
@@ -502,7 +511,7 @@ export default function AttendanceReportDetail({
         );
     };
 
-    const buildExportUrl = () => {
+    const buildExportUrl = (format: 'pdf' | 'excel' = 'pdf') => {
         const params = new URLSearchParams();
         params.set('sort', filters.sort || 'abjad');
 
@@ -528,7 +537,7 @@ export default function AttendanceReportDetail({
 
         const queryString = params.toString();
 
-        return `/attendance-history/detail/export/pdf${queryString ? `?${queryString}` : ''}`;
+        return `/attendance-history/detail/export/${format}${queryString ? `?${queryString}` : ''}`;
     };
 
     const goToPage = (url: string | null) => {
@@ -577,13 +586,27 @@ export default function AttendanceReportDetail({
                                 className="h-11 rounded-2xl bg-white px-5 font-bold text-indigo-700 shadow-md transition-all hover:bg-sky-50 hover:shadow-lg active:scale-95 border border-white/40"
                             >
                                 <a
-                                    href={buildExportUrl()}
+                                    href={buildExportUrl('pdf')}
                                     target="_blank"
                                     rel="noreferrer"
                                     className="flex items-center gap-2 text-xs sm:text-sm"
                                 >
                                     <Download className="h-4 w-4 text-indigo-600" />
                                     <span>Export PDF</span>
+                                </a>
+                            </Button>
+                            <Button
+                                asChild
+                                className="h-11 rounded-2xl bg-emerald-50 px-5 font-bold text-emerald-700 shadow-md transition-all hover:bg-emerald-100 hover:shadow-lg active:scale-95 border border-white/40"
+                            >
+                                <a
+                                    href={buildExportUrl('excel')}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="flex items-center gap-2 text-xs sm:text-sm"
+                                >
+                                    <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+                                    <span>Export Excel</span>
                                 </a>
                             </Button>
                         </div>
@@ -1265,6 +1288,9 @@ export default function AttendanceReportDetail({
                                                         const status = w.date ? row.cells[w.date] : undefined;
                                                         const isPresent = status === 'Present';
                                                         const isLate = status === 'Late';
+                                                        const eventDetails = w.date
+                                                            ? (row.event_details?.[w.date] ?? [])
+                                                            : [];
 
                                                         return (
                                                             <td
@@ -1287,31 +1313,49 @@ export default function AttendanceReportDetail({
                                                                             {isPresent ? 'H' : isLate ? 'T' : '-'}
                                                                         </span>
                                                                     </TooltipTrigger>
-                                                                    <TooltipContent side="top" className="space-y-1 p-2 text-xs bg-slate-900 text-white">
-                                                                        <p className="font-bold">
-                                                                            {w.event_title || `Pekan ${w.index} (${MONTH_FULL_NAMES[mNum - 1]})`}
+                                                                    <TooltipContent side="top" className="w-64 space-y-1.5 p-2.5 text-xs bg-slate-900 text-white">
+                                                                        <p className="text-[11px] font-semibold text-slate-300">
+                                                                            {w.date
+                                                                                ? formatLongDate(w.date)
+                                                                                : `Pekan ${w.index} (${MONTH_FULL_NAMES[mNum - 1]})`}
                                                                         </p>
-                                                                        {w.date && (
+                                                                        {eventDetails.length > 0 ? (
+                                                                            <div className="space-y-1.5">
+                                                                                {eventDetails.map((event, eventIndex) => (
+                                                                                    <div
+                                                                                        key={`${w.date}-${eventIndex}`}
+                                                                                        className="flex items-start justify-between gap-2"
+                                                                                    >
+                                                                                        <div className="min-w-0">
+                                                                                            <p className="font-bold leading-snug break-words">
+                                                                                                {event.title}
+                                                                                            </p>
+                                                                                            {event.session && (
+                                                                                                <p className="text-[10px] text-slate-400">
+                                                                                                    {event.session}
+                                                                                                </p>
+                                                                                            )}
+                                                                                        </div>
+                                                                                        <Badge
+                                                                                            className={cn(
+                                                                                                'shrink-0 border-none text-[10px] font-bold',
+                                                                                                event.status === 'Late'
+                                                                                                    ? 'bg-rose-600 text-white'
+                                                                                                    : 'bg-emerald-600 text-white',
+                                                                                            )}
+                                                                                        >
+                                                                                            {event.status === 'Late' ? 'T' : 'H'}
+                                                                                        </Badge>
+                                                                                    </div>
+                                                                                ))}
+                                                                            </div>
+                                                                        ) : (
                                                                             <p className="text-[11px] text-slate-300">
-                                                                                {formatLongDate(w.date)}
+                                                                                {w.date
+                                                                                    ? 'Tidak hadir / belum absen'
+                                                                                    : 'Belum ada jadwal event'}
                                                                             </p>
                                                                         )}
-                                                                        <div className="pt-0.5">
-                                                                            <Badge
-                                                                                className={cn(
-                                                                                    'text-[10px] font-bold border-none',
-                                                                                    isPresent && 'bg-emerald-600 text-white',
-                                                                                    isLate && 'bg-rose-600 text-white',
-                                                                                    !status && 'bg-slate-700 text-slate-200',
-                                                                                )}
-                                                                            >
-                                                                                {isPresent
-                                                                                    ? 'Hadir (H)'
-                                                                                    : isLate
-                                                                                        ? 'Terlambat (T)'
-                                                                                        : 'Belum / Tidak Absen (-)'}
-                                                                            </Badge>
-                                                                        </div>
                                                                     </TooltipContent>
                                                                 </Tooltip>
                                                             </td>

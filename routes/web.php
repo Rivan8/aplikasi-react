@@ -566,6 +566,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('attendance-history', [AttendanceController::class, 'history'])->middleware('role:admin,superadmin')->name('attendance-history');
     Route::get('attendance-history/detail', [AttendanceController::class, 'reportDetail'])->middleware('role:admin,superadmin')->name('attendance-history.detail');
     Route::get('attendance-history/detail/export/pdf', [AttendanceController::class, 'exportDetailPdf'])->middleware('role:admin,superadmin')->name('attendance-history.detail.export.pdf');
+    Route::get('attendance-history/detail/export/excel', [AttendanceController::class, 'exportDetailExcel'])->middleware('role:admin,superadmin')->name('attendance-history.detail.export.excel');
     Route::get('attendance-history/export/pdf', [AttendanceController::class, 'exportPdf'])->middleware('role:admin,superadmin')->name('attendance-history.export.pdf');
     Route::get('attendance-history/export/excel', [AttendanceController::class, 'exportExcel'])->middleware('role:admin,superadmin')->name('attendance-history.export.excel');
     Route::get('manual-attendance', [AttendanceController::class, 'showManualAttendance'])->middleware('role:admin,superadmin')->name('manual-attendance');

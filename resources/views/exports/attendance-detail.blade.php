@@ -175,6 +175,26 @@
             display: inline-block;
             margin-right: 11px;
         }
+        .legend-swatch {
+            display: inline-block;
+            width: 12px;
+            height: 8px;
+            margin-right: 3px;
+            border-radius: 2px;
+            vertical-align: middle;
+        }
+        .swatch-hadir {
+            background-color: #bbf7d0;
+            border: 0.5pt solid #4ade80;
+        }
+        .swatch-late {
+            background-color: #fecaca;
+            border: 0.5pt solid #f87171;
+        }
+        .swatch-empty {
+            background-color: #ffffff;
+            border: 0.5pt solid #cbd5e1;
+        }
         .legend-note {
             color: #94a3b8;
         }
@@ -219,25 +239,14 @@
             border-right: 1px solid #e2e8f0;
         }
         .th-month {
+            background-color: #eef2ff;
+            color: #3730a3;
             font-size: 6.4pt;
             text-transform: uppercase;
             letter-spacing: 0.5px;
             padding: 5px 1px !important;
             border-bottom: 2px solid #ffffff;
         }
-        /* Palet pastel bulan, berputar agar tiap bulan mudah dibedakan */
-        .m-bg-0  { background-color: #e0e7ff; color: #3730a3; }
-        .m-bg-1  { background-color: #dbeafe; color: #075985; }
-        .m-bg-2  { background-color: #d1fae5; color: #166534; }
-        .m-bg-3  { background-color: #fde68a; color: #92400e; }
-        .m-bg-4  { background-color: #ffe4e6; color: #9f1239; }
-        .m-bg-5  { background-color: #ede9fe; color: #5b21b6; }
-        .m-bg-6  { background-color: #ccfbf1; color: #115e59; }
-        .m-bg-7  { background-color: #ecfccb; color: #3f6212; }
-        .m-bg-8  { background-color: #c7d2fe; color: #1e40af; }
-        .m-bg-9  { background-color: #fae8ff; color: #86198f; }
-        .m-bg-10 { background-color: #ffedd5; color: #9a3412; }
-        .m-bg-11 { background-color: #e2e8f0; color: #334155; }
         .month-start {
             border-left: 1px solid #ffffff;
         }
@@ -313,34 +322,35 @@
             padding-left: 6px;
         }
 
-        /* Indikator kehadiran: cakram warna penuh dengan cincin tipis senada */
-        .badge {
-            display: inline-block;
-            width: 12px;
-            height: 12px;
-            line-height: 12px;
-            text-align: center;
-            border-radius: 50%;
-            font-size: 6.2pt;
-            font-weight: bold;
-            letter-spacing: 0;
-            vertical-align: middle;
+        /* Indikator kehadiran: warna penuh pada cell + keterangan event kecil */
+        .cell-hadir {
+            background-color: #bbf7d0 !important;
         }
-        .badge-h {
-            background-color: #059669;
-            border: 0.8pt solid #34d399;
-            color: #ffffff;
+        .cell-late {
+            background-color: #fecaca !important;
         }
-        .badge-t {
-            background-color: #e11d48;
-            border: 0.8pt solid #fb7185;
-            color: #ffffff;
-        }
-        .badge-empty {
-            color: #d4dce7;
+        .cell-event {
+            display: block;
+            font-size: 4.4pt;
+            line-height: 1.22;
             font-weight: normal;
+            text-align: left;
+            letter-spacing: 0;
+            padding: 0 2px;
+        }
+        .cell-event + .cell-event {
+            margin-top: 1px;
+        }
+        .cell-hadir .cell-event {
+            color: #065f46;
+        }
+        .cell-late .cell-event {
+            color: #9f1239;
+        }
+        .cell-empty {
+            color: #c3cddb;
             font-size: 8pt;
-            line-height: 13px;
+            line-height: 1;
         }
 
         .td-hadir-val {
@@ -370,12 +380,9 @@
         table.matrix-table.compact .th-name {
             width: 130px;
         }
-        table.matrix-table.compact .badge {
-            width: 9px;
-            height: 9px;
-            line-height: 9px;
-            font-size: 5pt;
-            border-width: 0.5pt;
+        table.matrix-table.compact .cell-event {
+            font-size: 3.8pt;
+            line-height: 1.18;
         }
         table.matrix-table.compact .td-name {
             font-size: 6.4pt;
@@ -513,10 +520,10 @@
 
         <div class="legend">
             <span class="legend-title">Legenda</span>
-            <span class="legend-item"><span class="badge badge-h">H</span> Hadir</span>
-            <span class="legend-item"><span class="badge badge-t">T</span> Terlambat</span>
-            <span class="legend-item"><span class="badge badge-empty">&ndash;</span> Tidak hadir / belum absen</span>
-            <span class="legend-note">&middot; Dikelompokkan per departemen</span>
+            <span class="legend-item"><span class="legend-swatch swatch-hadir"></span> Hadir</span>
+            <span class="legend-item"><span class="legend-swatch swatch-late"></span> Terlambat</span>
+            <span class="legend-item"><span class="legend-swatch swatch-empty"></span> Tidak hadir / belum absen</span>
+            <span class="legend-note">&middot; Keterangan event tercantum di dalam cell</span>
         </div>
 
         <table class="matrix-table {{ $totalWeeks > 30 ? 'compact' : '' }}">
@@ -525,7 +532,7 @@
                     <th rowspan="2" class="th-no">NO</th>
                     <th rowspan="2" class="th-name">NAMA JEMAAT</th>
                     @foreach($months as $mIndex => $month)
-                        <th colspan="{{ count($month['weeks']) }}" class="th-month m-bg-{{ $mIndex % 12 }} {{ $mIndex > 0 ? 'month-start' : '' }}">
+                        <th colspan="{{ count($month['weeks']) }}" class="th-month {{ $mIndex > 0 ? 'month-start' : '' }}">
                             {{ strtoupper($monthNames[$month['month']] ?? $month['month']) }}
                         </th>
                     @endforeach
@@ -565,14 +572,13 @@
                         @foreach($months as $month)
                             @foreach($month['weeks'] as $week)
                                 @php($status = !empty($week['date']) ? ($row['cells'][$week['date']] ?? null) : null)
-                                <td class="{{ $loop->first ? 'week-start' : '' }}">
-                                    @if($status === 'Present')
-                                        <span class="badge badge-h">H</span>
-                                    @elseif($status === 'Late')
-                                        <span class="badge badge-t">T</span>
-                                    @else
-                                        <span class="badge badge-empty">&ndash;</span>
-                                    @endif
+                                @php($events = !empty($week['date']) ? ($row['event_details'][$week['date']] ?? []) : [])
+                                <td class="{{ $loop->first ? 'week-start' : '' }} {{ $status === 'Present' ? 'cell-hadir' : ($status === 'Late' ? 'cell-late' : '') }}">
+                                    @forelse($events as $event)
+                                        <span class="cell-event">{{ $event['title'] }}@if(! empty($event['session'])) &middot; {{ $event['session'] }}@endif</span>
+                                    @empty
+                                        <span class="cell-empty">&ndash;</span>
+                                    @endforelse
                                 </td>
                             @endforeach
                         @endforeach

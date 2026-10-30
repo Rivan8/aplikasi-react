@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\AttendanceDetailExport;
 use App\Exports\AttendanceHistoryExport;
 use App\Models\Attendance;
 use App\Models\Category;
@@ -281,6 +282,21 @@ class AttendanceController extends Controller
         return $pdf->stream('laporan-detail-absensi-'.$data['year'].$suffix.'.pdf');
     }
 
+    public function exportDetailExcel(Request $request)
+    {
+        $data = $this->buildReportDetailData($request);
+
+        $rows = $this->sortRowsByDepartment($data['rows']->all(), 'department', 'name');
+
+        $suffix = $data['selectedGroup'] !== '' ? '-'.Str::slug($data['selectedGroup']) : '';
+        $suffix .= $data['month'] > 0 ? '-'.$data['month'] : '';
+
+        return Excel::download(
+            new AttendanceDetailExport($rows),
+            'laporan-detail-absensi-'.$data['year'].$suffix.'.xlsx'
+        );
+    }
+
     private function reportDetailAvailableYears()
     {
         $currentYear = now()->year;
@@ -338,7 +354,7 @@ class AttendanceController extends Controller
             $selectedGroup = '';
         }
 
-        $attendancesQuery = Attendance::with('event')
+        $attendancesQuery = Attendance::with(['event', 'session'])
             ->whereYear('scan_time', $year);
 
         if ($month > 0) {
@@ -461,6 +477,7 @@ class AttendanceController extends Controller
             ->groupBy('member_id')
             ->map(function ($items, $memberId) use ($memberMap, $departmentMap, $volunteerDepartmentMap) {
                 $cells = [];
+                $eventDetails = [];
                 $hadir = 0;
                 $terlambat = 0;
 
@@ -474,6 +491,15 @@ class AttendanceController extends Controller
                     if (($cells[$date] ?? null) !== 'Late') {
                         $cells[$date] = $attendance->status;
                     }
+
+                    // Satu tanggal bisa memuat beberapa service. Simpan detail
+                    // per event agar popup & ekspor menampilkan event yang benar.
+                    $eventDetails[$date][] = [
+                        'title' => $attendance->event?->title ?? 'Event Dihapus',
+                        'session' => $attendance->session?->title,
+                        'status' => $attendance->status,
+                        'scan_time' => $attendance->scan_time?->format('H:i'),
+                    ];
                 }
 
                 foreach ($cells as $status) {
@@ -495,6 +521,7 @@ class AttendanceController extends Controller
                     'department' => $departmentMap->get((string) $memberId)
                         ?: $volunteerDepartmentMap->get((string) $memberId),
                     'cells' => $cells,
+                    'event_details' => $eventDetails,
                     'hadir' => $hadir,
                     'terlambat' => $terlambat,
                 ];
