@@ -1,4 +1,5 @@
 import { createInertiaApp } from '@inertiajs/react';
+import PageLoader from '@/components/page-loader';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { initializeTheme } from '@/hooks/use-appearance';
@@ -32,12 +33,13 @@ createInertiaApp({
         return (
             <TooltipProvider delayDuration={0}>
                 {app}
+                <PageLoader />
                 <Toaster />
             </TooltipProvider>
         );
     },
     progress: {
-        color: '#4B5563',
+        color: '#EA580C',
     },
 });
 

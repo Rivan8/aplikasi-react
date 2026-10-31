@@ -422,13 +422,13 @@ export default function AttendanceHistory({ attendances, events, view, filters }
                         {/* Search Input */}
                         <div className="space-y-1.5">
                             <label className="text-[10px] font-bold tracking-wider text-slate-500 uppercase">
-                                Cari Nama atau NIK
+                                Cari Nama atau email...
                             </label>
                             <div className="relative">
                                 <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-slate-400" />
                                 <Input
                                     type="text"
-                                    placeholder="Ketik nama jemaat atau NIK..."
+                                    placeholder="Ketik nama jemaat atau email..."
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                     onKeyDown={(e) => {
