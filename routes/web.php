@@ -360,7 +360,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
     })->name('notifications.messages.read');
 
     Route::post('dashboard/volunteer-assignments/{eventVolunteer}/accept', function (Request $request, EventVolunteer $eventVolunteer) {
-        abort_unless((string) $eventVolunteer->member_id === (string) $request->user()?->member_id, 403);
+        $user = $request->user();
+        $hasDepartmentAccess = $user?->schedulingDepartments()
+            ->where('name', $eventVolunteer->role_category)
+            ->exists() ?? false;
+
+        abort_unless(
+            $user && (
+                (string) $eventVolunteer->member_id === (string) $user->member_id
+                || $user->isAdmin()
+                || $hasDepartmentAccess
+            ),
+            403,
+        );
 
         $eventVolunteer->update([
             'response_status' => 'accepted',

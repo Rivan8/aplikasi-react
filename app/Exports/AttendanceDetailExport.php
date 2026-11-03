@@ -26,6 +26,7 @@ class AttendanceDetailExport implements FromCollection, WithColumnWidths, WithHe
                 'Email' => filled($row['email'] ?? null) ? $row['email'] : '-',
                 'No. HP' => filled($row['phone'] ?? null) ? $row['phone'] : '-',
                 'Departemen' => filled($row['department'] ?? null) ? $row['department'] : 'Tanpa Departemen',
+                'Pelayanan' => filled($row['service_roles'] ?? []) ? implode(', ', $row['service_roles']) : '-',
                 'Hadir' => $row['hadir'] ?? 0,
                 'Terlambat' => $row['terlambat'] ?? 0,
                 'Event yang Diikuti' => $this->attendanceNotes($row['event_details'] ?? []),
@@ -35,7 +36,7 @@ class AttendanceDetailExport implements FromCollection, WithColumnWidths, WithHe
 
     public function headings(): array
     {
-        return ['No', 'Nama Jemaat', 'Email', 'No. HP', 'Departemen', 'Hadir', 'Terlambat', 'Event yang Diikuti'];
+        return ['No', 'Nama Jemaat', 'Email', 'No. HP', 'Departemen', 'Pelayanan', 'Hadir', 'Terlambat', 'Event yang Diikuti'];
     }
 
     public function columnWidths(): array
@@ -46,22 +47,26 @@ class AttendanceDetailExport implements FromCollection, WithColumnWidths, WithHe
             'C' => 34,
             'D' => 18,
             'E' => 22,
-            'F' => 8,
-            'G' => 10,
-            'H' => 90,
+            'F' => 28,
+            'G' => 8,
+            'H' => 10,
+            'I' => 90,
         ];
     }
 
     public function styles(Worksheet $sheet): array
     {
-        $sheet->getStyle('A1:H1')->getFont()->setBold(true);
-        $sheet->getStyle('A1:H1')->getFill()
+        $sheet->getStyle('A1:I1')->getFont()->setBold(true);
+        $sheet->getStyle('A1:I1')->getFill()
             ->setFillType(Fill::FILL_SOLID)
             ->getStartColor()->setRGB('EEF2FF');
-        $sheet->getStyle('A1:H'.$sheet->getHighestRow())
+        $sheet->getStyle('A1:I'.$sheet->getHighestRow())
             ->getAlignment()
             ->setVertical(Alignment::VERTICAL_TOP);
-        $sheet->getStyle('H2:H'.$sheet->getHighestRow())
+        $sheet->getStyle('F2:F'.$sheet->getHighestRow())
+            ->getAlignment()
+            ->setWrapText(true);
+        $sheet->getStyle('I2:I'.$sheet->getHighestRow())
             ->getAlignment()
             ->setWrapText(true);
 

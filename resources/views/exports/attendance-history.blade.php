@@ -126,6 +126,7 @@
                 <th>ID</th>
                 <th>Nama Jemaat</th>
                 <th>NIK</th>
+                <th>Pelayanan</th>
                 <th>Event</th>
                 <th>Lokasi</th>
                 <th>Tanggal Event</th>
@@ -141,13 +142,14 @@
                 @if($currentDepartment !== $previousDepartment)
                     @php($previousDepartment = $currentDepartment)
                     <tr class="dept-section">
-                        <td colspan="9">Departemen: {{ $currentDepartment }}</td>
+                        <td colspan="10">Departemen: {{ $currentDepartment }}</td>
                     </tr>
                 @endif
                 <tr>
                     <td>{{ $row['ID'] }}</td>
                     <td>{{ $row['Nama Jemaat'] }}</td>
                     <td>{{ $row['NIK'] }}</td>
+                    <td>{{ $row['Pelayanan'] ?? '-' }}</td>
                     <td>{{ $row['Event'] }}</td>
                     <td>{{ $row['Lokasi'] }}</td>
                     <td>{{ $row['Tanggal Event'] }}</td>
@@ -156,7 +158,7 @@
                     <td><span class="status {{ $row['Status'] === 'Terlambat' ? 'status-late' : 'status-present' }}">{{ $row['Status'] }}</span></td>
                 </tr>
             @empty
-                <tr><td colspan="9" class="empty">Belum ada data kehadiran untuk ditampilkan.</td></tr>
+                <tr><td colspan="10" class="empty">Belum ada data kehadiran untuk ditampilkan.</td></tr>
             @endforelse
         </tbody>
     </table>

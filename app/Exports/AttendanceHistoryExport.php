@@ -7,7 +7,7 @@ use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 
-class AttendanceHistoryExport implements FromCollection, WithHeadings, ShouldAutoSize
+class AttendanceHistoryExport implements FromCollection, ShouldAutoSize, WithHeadings
 {
     protected array $rows;
 
@@ -24,7 +24,7 @@ class AttendanceHistoryExport implements FromCollection, WithHeadings, ShouldAut
     public function headings(): array
     {
         if (empty($this->rows)) {
-            return ['ID', 'Nama Jemaat', 'NIK', 'Event', 'Lokasi', 'Tanggal Event', 'Waktu Scan', 'Waktu Check-out', 'Status'];
+            return ['ID', 'Nama Jemaat', 'NIK', 'Departemen', 'Pelayanan', 'Event', 'Sesi Kelas', 'Lokasi', 'Tanggal Event', 'Waktu Scan', 'Waktu Check-out', 'Status'];
         }
 
         return array_keys($this->rows[0]);

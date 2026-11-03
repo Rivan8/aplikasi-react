@@ -30,6 +30,7 @@ import {
     MessageSquare,
     Paperclip,
     Download,
+    GripVertical,
 } from 'lucide-react';
 import { QRCodeSVG as QRCodeComponent } from 'qrcode.react';
 import { useEffect, useMemo, useState } from 'react';
@@ -104,12 +105,37 @@ interface EventRundownItem {
     arrangement?: SongArrangement | null;
 }
 
+type EventRundownPhase = 'before' | 'during' | 'after';
+
 interface EventRundownSegment {
     id?: number;
     title: string;
+    phase: EventRundownPhase;
     duration_seconds: number;
     items: EventRundownItem[];
 }
+
+const RUNDOWN_PHASE_OPTIONS: { value: EventRundownPhase; label: string }[] = [
+    { value: 'before', label: 'Sebelum Event' },
+    { value: 'during', label: 'Selama Event' },
+    { value: 'after', label: 'Setelah Event' },
+];
+
+const defaultRundownPhase = (index: number): EventRundownPhase => {
+    if (index === 0) {
+        return 'before';
+    }
+
+    if (index === 1) {
+        return 'during';
+    }
+
+    return 'after';
+};
+
+type RundownDragSource =
+    | { kind: 'segment'; index: number }
+    | { kind: 'item'; segmentIndex: number; itemIndex: number };
 
 interface EventSession {
     id?: number;
@@ -625,9 +651,16 @@ roles,
     };
 
     const addRundownSegment = () => {
+        const nextIndex = data.rundown_segments.length;
+
         setData('rundown_segments', [
             ...data.rundown_segments,
-            { title: '', duration_seconds: 0, items: [] },
+            {
+                title: '',
+                phase: defaultRundownPhase(nextIndex),
+                duration_seconds: 0,
+                items: [],
+            },
         ]);
     };
 
@@ -695,6 +728,61 @@ roles,
                       }
                     : segment,
             ),
+        );
+    };
+
+    const [rundownDrag, setRundownDrag] = useState<RundownDragSource | null>(null);
+    const [rundownDropSegment, setRundownDropSegment] = useState<number | null>(null);
+    const [rundownDropItem, setRundownDropItem] = useState<{
+        segmentIndex: number;
+        itemIndex: number;
+    } | null>(null);
+
+    const resetRundownDrag = () => {
+        setRundownDrag(null);
+        setRundownDropSegment(null);
+        setRundownDropItem(null);
+    };
+
+    const moveRundownSegment = (from: number, to: number) => {
+        if (from === to) {
+            return;
+        }
+
+        const next = [...data.rundown_segments];
+        const [moved] = next.splice(from, 1);
+
+        if (!moved) {
+            return;
+        }
+
+        next.splice(to, 0, moved);
+        setData('rundown_segments', next);
+    };
+
+    const moveRundownItem = (segmentIndex: number, from: number, to: number) => {
+        if (from === to) {
+            return;
+        }
+
+        setData(
+            'rundown_segments',
+            data.rundown_segments.map((segment, index) => {
+                if (index !== segmentIndex) {
+                    return segment;
+                }
+
+                const items = [...segment.items];
+                const [moved] = items.splice(from, 1);
+
+                if (!moved) {
+                    return segment;
+                }
+
+                items.splice(to, 0, moved);
+
+                return { ...segment, items };
+            }),
         );
     };
 
@@ -960,6 +1048,7 @@ formData.append('_method', 'PUT');
                 rundown_segments:
                     editingEvent.rundown_segments?.map((segment) => ({
                         title: segment.title,
+                        phase: segment.phase || 'during',
                         duration_seconds: segment.duration_seconds || 0,
                         items:
                             segment.items?.map((item) => ({
@@ -2371,7 +2460,7 @@ return;
                                     <div className="flex items-center justify-between">
                                         <div className="space-y-1">
                                             <h3 className="text-lg font-bold text-foreground/90">Manajemen Rundown</h3>
-                                            <p className="text-xs text-muted-foreground font-medium">Susun jadwal acara dan lampirkan lagu.</p>
+                                            <p className="text-xs text-muted-foreground font-medium">Susun jadwal acara dan lampirkan lagu. Tarik ikon pegangan untuk mengubah urutan segmen atau item.</p>
                                         </div>
                                         <Badge variant="outline" className="px-4 py-2 rounded-xl bg-primary/5 border-primary/10 text-primary font-bold text-[10px] uppercase tracking-widest">
                                             Estimasi Durasi: {formatDuration(getRundownTotalSeconds(data.rundown_segments))}
@@ -2380,8 +2469,63 @@ return;
 
                                     <div className="space-y-6">
                                         {data.rundown_segments.map((segment, segmentIndex) => (
-                                            <div key={segmentIndex} className="group relative rounded-[32px] border border-border/40 bg-card/50 p-6 shadow-sm transition-all hover:shadow-md hover:bg-card">
-                                                <div className="grid gap-6 md:grid-cols-[1fr_200px_48px] items-center">
+                                            <div
+                                                key={segmentIndex}
+                                                onDragOver={(dragEvent) => {
+                                                    if (rundownDrag?.kind !== 'segment' || rundownDrag.index === segmentIndex) {
+                                                        return;
+                                                    }
+
+                                                    dragEvent.preventDefault();
+                                                    dragEvent.dataTransfer.dropEffect = 'move';
+
+                                                    if (rundownDropSegment !== segmentIndex) {
+                                                        setRundownDropSegment(segmentIndex);
+                                                    }
+                                                }}
+                                                onDragLeave={(dragEvent) => {
+                                                    if (dragEvent.currentTarget.contains(dragEvent.relatedTarget as Node | null)) {
+                                                        return;
+                                                    }
+
+                                                    if (rundownDropSegment === segmentIndex) {
+                                                        setRundownDropSegment(null);
+                                                    }
+                                                }}
+                                                onDrop={(dragEvent) => {
+                                                    if (rundownDrag?.kind !== 'segment') {
+                                                        return;
+                                                    }
+
+                                                    dragEvent.preventDefault();
+
+                                                    const from = rundownDrag.index;
+                                                    resetRundownDrag();
+                                                    moveRundownSegment(from, segmentIndex);
+                                                }}
+                                                className={cn(
+                                                    "group relative rounded-[32px] border border-border/40 bg-card/50 p-6 shadow-sm transition-all hover:shadow-md hover:bg-card",
+                                                    rundownDrag?.kind === 'segment' && rundownDrag.index === segmentIndex && "opacity-50",
+                                                    rundownDropSegment === segmentIndex && "border-primary/50 ring-2 ring-primary/15"
+                                                )}
+                                            >
+                                                <div className="grid gap-6 md:grid-cols-[32px_minmax(0,1fr)_170px_170px_48px] items-center">
+                                                    <div
+                                                        draggable
+                                                        role="button"
+                                                        tabIndex={0}
+                                                        aria-label={`Geser segmen ${segment.title || segmentIndex + 1}`}
+                                                        title="Geser untuk mengubah urutan segmen"
+                                                        onDragStart={(dragEvent) => {
+                                                            setRundownDrag({ kind: 'segment', index: segmentIndex });
+                                                            dragEvent.dataTransfer.effectAllowed = 'move';
+                                                            dragEvent.dataTransfer.setData('text/plain', segment.title || `Segment ${segmentIndex + 1}`);
+                                                        }}
+                                                        onDragEnd={resetRundownDrag}
+                                                        className="hidden md:flex h-12 w-7 cursor-grab items-center justify-center rounded-xl text-muted-foreground/40 hover:bg-muted/50 hover:text-primary active:cursor-grabbing"
+                                                    >
+                                                        <GripVertical className="h-5 w-5" />
+                                                    </div>
                                                     <div className="space-y-2">
                                                         <Label className="text-[10px] font-black text-primary/70 uppercase tracking-widest ml-1">Nama Segment</Label>
                                                         <Input
@@ -2390,6 +2534,24 @@ return;
                                                             placeholder="Contoh: Worship Session"
                                                             className="h-12 bg-background border-border/40 rounded-2xl px-5 text-sm font-bold focus:ring-primary/20"
                                                         />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <Label className="text-[10px] font-black text-primary/70 uppercase tracking-widest ml-1">Fase Event</Label>
+                                                        <Select
+                                                            value={segment.phase}
+                                                            onValueChange={(value) => updateRundownSegment(segmentIndex, { phase: value as EventRundownPhase })}
+                                                        >
+                                                            <SelectTrigger className="h-12 w-full bg-background border-border/40 rounded-2xl px-4 text-xs font-bold focus:ring-primary/20">
+                                                                <SelectValue placeholder="Pilih fase" />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {RUNDOWN_PHASE_OPTIONS.map((option) => (
+                                                                    <SelectItem key={option.value} value={option.value} className="text-xs font-semibold">
+                                                                        {option.label}
+                                                                    </SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
                                                     </div>
                                                     <div className="space-y-2">
                                                         <Label className="text-[10px] font-black text-primary/70 uppercase tracking-widest ml-1">Total Durasi</Label>
@@ -2413,10 +2575,73 @@ return;
                                                     <div className="absolute left-6 top-0 bottom-0 w-px bg-gradient-to-b from-primary/20 via-border/40 to-transparent" />
 
                                                     {segment.items.map((item, itemIndex) => (
-                                                        <div key={itemIndex} className="relative pl-14 group/item">
+                                                        <div
+                                                            key={itemIndex}
+                                                            className={cn(
+                                                                "relative pl-14 group/item",
+                                                                rundownDrag?.kind === 'item' && rundownDrag.segmentIndex === segmentIndex && rundownDrag.itemIndex === itemIndex && "opacity-50"
+                                                            )}
+                                                            onDragOver={(dragEvent) => {
+                                                                if (rundownDrag?.kind !== 'item' || rundownDrag.segmentIndex !== segmentIndex || rundownDrag.itemIndex === itemIndex) {
+                                                                    return;
+                                                                }
+
+                                                                dragEvent.preventDefault();
+                                                                dragEvent.stopPropagation();
+                                                                dragEvent.dataTransfer.dropEffect = 'move';
+
+                                                                if (rundownDropItem?.segmentIndex !== segmentIndex || rundownDropItem.itemIndex !== itemIndex) {
+                                                                    setRundownDropItem({ segmentIndex, itemIndex });
+                                                                }
+                                                            }}
+                                                            onDragLeave={(dragEvent) => {
+                                                                dragEvent.stopPropagation();
+
+                                                                if (dragEvent.currentTarget.contains(dragEvent.relatedTarget as Node | null)) {
+                                                                    return;
+                                                                }
+
+                                                                if (rundownDropItem?.segmentIndex === segmentIndex && rundownDropItem.itemIndex === itemIndex) {
+                                                                    setRundownDropItem(null);
+                                                                }
+                                                            }}
+                                                            onDrop={(dragEvent) => {
+                                                                if (rundownDrag?.kind !== 'item' || rundownDrag.segmentIndex !== segmentIndex) {
+                                                                    return;
+                                                                }
+
+                                                                dragEvent.preventDefault();
+                                                                dragEvent.stopPropagation();
+
+                                                                const from = rundownDrag.itemIndex;
+                                                                resetRundownDrag();
+                                                                moveRundownItem(segmentIndex, from, itemIndex);
+                                                            }}
+                                                        >
                                                             <div className="absolute left-[22px] top-4 h-3 w-3 rounded-full border-2 border-primary bg-background shadow-lg z-10 group-hover/item:scale-125 transition-transform" />
 
-                                                            <div className="grid grid-cols-1 md:grid-cols-[1fr_120px_48px] gap-4 items-center p-4 rounded-[20px] bg-background border border-border/30 shadow-sm transition-all hover:border-primary/20 hover:shadow-md">
+                                                            <div
+                                                                className={cn(
+                                                                    "grid grid-cols-1 md:grid-cols-[32px_1fr_120px_48px] gap-4 items-center p-4 rounded-[20px] bg-background border border-border/30 shadow-sm transition-all hover:border-primary/20 hover:shadow-md",
+                                                                    rundownDropItem?.segmentIndex === segmentIndex && rundownDropItem.itemIndex === itemIndex && "border-primary/50 ring-2 ring-primary/15"
+                                                                )}
+                                                            >
+                                                                <div
+                                                                    draggable
+                                                                    role="button"
+                                                                    tabIndex={0}
+                                                                    aria-label={`Geser item ${item.title || itemIndex + 1}`}
+                                                                    title="Geser untuk mengubah urutan item"
+                                                                    onDragStart={(dragEvent) => {
+                                                                        setRundownDrag({ kind: 'item', segmentIndex, itemIndex });
+                                                                        dragEvent.dataTransfer.effectAllowed = 'move';
+                                                                        dragEvent.dataTransfer.setData('text/plain', item.title || `Item ${itemIndex + 1}`);
+                                                                    }}
+                                                                    onDragEnd={resetRundownDrag}
+                                                                    className="hidden md:flex h-10 w-7 cursor-grab items-center justify-center rounded-lg text-muted-foreground/30 hover:bg-muted/40 hover:text-primary active:cursor-grabbing"
+                                                                >
+                                                                    <GripVertical className="h-4 w-4" />
+                                                                </div>
                                                                 <div className="space-y-3">
                                                                     <div className="flex gap-2">
                                                                         <Dialog>

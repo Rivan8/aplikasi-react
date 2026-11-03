@@ -18,6 +18,7 @@ use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -77,6 +78,59 @@ class AttendanceController extends Controller
     }
 
     /**
+     * Role pelayanan tiap kehadiran, diambil dari penjadwalan volunteer
+     * (event_volunteers) dengan pasangan event + member yang sama.
+     */
+    private function volunteerRolesByAttendance(Collection $attendances): Collection
+    {
+        $pairs = $attendances
+            ->filter(fn ($attendance) => $attendance->event_id && filled($attendance->member_id))
+            ->map(fn ($attendance) => [
+                'event_id' => (int) $attendance->event_id,
+                'member_id' => (string) $attendance->member_id,
+            ])
+            ->unique(fn (array $pair) => $pair['event_id'].'|'.$pair['member_id'])
+            ->values();
+
+        if ($pairs->isEmpty()) {
+            return collect();
+        }
+
+        return EventVolunteer::query()
+            ->whereIn('event_id', $pairs->pluck('event_id')->unique()->all())
+            ->whereIn('member_id', $pairs->pluck('member_id')->unique()->all())
+            ->orderBy('role_category')
+            ->orderBy('role_name')
+            ->get(['event_id', 'member_id', 'role_category', 'role_name'])
+            ->groupBy(fn (EventVolunteer $volunteer) => $volunteer->event_id.'|'.(string) $volunteer->member_id);
+    }
+
+    /**
+     * Label pelayanan "Departemen · Posisi" tanpa duplikasi.
+     */
+    private function volunteerRoleLabels(?Collection $volunteers): array
+    {
+        return collect($volunteers ?? [])
+            ->map(function (EventVolunteer $volunteer): string {
+                $category = trim((string) $volunteer->role_category);
+                $role = trim((string) $volunteer->role_name);
+
+                return trim($category.($category !== '' && $role !== '' ? ' · ' : '').$role);
+            })
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function resolvePerPage(Request $request): int
+    {
+        $perPage = (int) $request->input('per_page', 15);
+
+        return in_array($perPage, [15, 30, 50, 100], true) ? $perPage : 15;
+    }
+
+    /**
      * Halaman riwayat kehadiran (Attendance History)
      */
     public function history(Request $request)
@@ -125,7 +179,11 @@ class AttendanceController extends Controller
         // Search by member name (akan difilter setelah fetch dari external DB)
         $search = $request->input('search');
 
-        $attendances = $query->paginate(15)->withQueryString();
+        $perPage = $this->resolvePerPage($request);
+
+        $attendances = $query->paginate($perPage)->withQueryString();
+
+        $volunteerRoles = $this->volunteerRolesByAttendance($attendances->getCollection());
 
         // Ambil semua member_id unik dari halaman ini
         $memberIds = $attendances->pluck('member_id')->unique()->values()->toArray();
@@ -148,10 +206,13 @@ class AttendanceController extends Controller
         }
 
         // Transform data attendance untuk frontend
-        $attendanceLogs = $attendances->through(function ($attendance) use ($members, $view) {
+        $attendanceLogs = $attendances->through(function ($attendance) use ($members, $view, $volunteerRoles) {
             $memberInfo = $members[$attendance->member_id] ?? null;
             $volunteerDepartment = trim((string) ($attendance->volunteer_department ?? ''));
             $department = $attendance->department_name ?: ($volunteerDepartment !== '' ? $volunteerDepartment : null);
+            $serviceRoles = $this->volunteerRoleLabels(
+                $volunteerRoles->get($attendance->event_id.'|'.(string) $attendance->member_id),
+            );
 
             if ($view === 'departemen') {
                 $groupKey = 'dept-'.Str::slug($department ?? 'tanpa-departemen');
@@ -174,6 +235,7 @@ class AttendanceController extends Controller
                 'member_nik' => $memberInfo ? $memberInfo['nik'] : null,
                 'member_foto_url' => $memberInfo ? ($memberInfo['foto_url'] ?? null) : null,
                 'department' => $department,
+                'service_roles' => $serviceRoles,
                 'event_title' => $attendance->event?->title ?? 'Event Dihapus',
                 'session_title' => $attendance->session ? ($attendance->session->title.' ('.$attendance->session->date.')') : null,
                 'event_location' => $attendance->event?->location ?? '-',
@@ -195,7 +257,10 @@ class AttendanceController extends Controller
             'attendances' => $attendanceLogs,
             'events' => $events,
             'view' => $view,
-            'filters' => $request->only(['event_id', 'event_session_id', 'status', 'date_from', 'date_to', 'search', 'view']),
+            'filters' => [
+                ...$request->only(['event_id', 'event_session_id', 'status', 'date_from', 'date_to', 'search', 'view']),
+                'per_page' => (string) $perPage,
+            ],
         ]);
     }
 
@@ -205,7 +270,7 @@ class AttendanceController extends Controller
     public function reportDetail(Request $request)
     {
         $data = $this->buildReportDetailData($request);
-        $perPage = 15;
+        $perPage = $this->resolvePerPage($request);
         $page = LengthAwarePaginator::resolveCurrentPage();
         $rows = new LengthAwarePaginator(
             $data['rows']->forPage($page, $perPage)->values(),
@@ -235,6 +300,7 @@ class AttendanceController extends Controller
                 'search' => $data['search'],
                 'group' => $data['selectedGroup'],
                 'departments' => $data['selectedDepartments']->all(),
+                'per_page' => (string) $perPage,
             ],
         ]);
     }
@@ -375,6 +441,8 @@ class AttendanceController extends Controller
             })
             ->values();
 
+        $volunteerRoles = $this->volunteerRolesByAttendance($attendances);
+
         // Kolom: tanggal event unik (per minggu ibadah) tahun terpilih + nama eventnya
         $dateTitles = [];
 
@@ -475,9 +543,10 @@ class AttendanceController extends Controller
         // Baris: member unik, status per tanggal event (Late menang bila ada lebih dari 1 sesi)
         $rows = $attendances
             ->groupBy('member_id')
-            ->map(function ($items, $memberId) use ($memberMap, $departmentMap, $volunteerDepartmentMap) {
+            ->map(function ($items, $memberId) use ($memberMap, $departmentMap, $volunteerDepartmentMap, $volunteerRoles) {
                 $cells = [];
                 $eventDetails = [];
+                $memberRoles = [];
                 $hadir = 0;
                 $terlambat = 0;
 
@@ -492,6 +561,11 @@ class AttendanceController extends Controller
                         $cells[$date] = $attendance->status;
                     }
 
+                    $attendanceRoles = $this->volunteerRoleLabels(
+                        $volunteerRoles->get($attendance->event_id.'|'.(string) $memberId),
+                    );
+                    $memberRoles = array_merge($memberRoles, $attendanceRoles);
+
                     // Satu tanggal bisa memuat beberapa service. Simpan detail
                     // per event agar popup & ekspor menampilkan event yang benar.
                     $eventDetails[$date][] = [
@@ -499,6 +573,7 @@ class AttendanceController extends Controller
                         'session' => $attendance->session?->title,
                         'status' => $attendance->status,
                         'scan_time' => $attendance->scan_time?->format('H:i'),
+                        'roles' => $attendanceRoles,
                     ];
                 }
 
@@ -520,6 +595,7 @@ class AttendanceController extends Controller
                     'foto_url' => $member['foto_url'] ?? null,
                     'department' => $departmentMap->get((string) $memberId)
                         ?: $volunteerDepartmentMap->get((string) $memberId),
+                    'service_roles' => collect($memberRoles)->unique()->sort()->values()->all(),
                     'cells' => $cells,
                     'event_details' => $eventDetails,
                     'hadir' => $hadir,
@@ -712,6 +788,8 @@ class AttendanceController extends Controller
 
         $attendances = $query->get();
 
+        $volunteerRoles = $this->volunteerRolesByAttendance($attendances);
+
         $memberIds = $attendances->pluck('member_id')->unique()->values()->toArray();
         $members = [];
 
@@ -728,8 +806,11 @@ class AttendanceController extends Controller
             }
         }
 
-        return $attendances->map(function ($attendance) use ($members) {
+        return $attendances->map(function ($attendance) use ($members, $volunteerRoles) {
             $memberInfo = $members[$attendance->member_id] ?? null;
+            $serviceRoles = $this->volunteerRoleLabels(
+                $volunteerRoles->get($attendance->event_id.'|'.(string) $attendance->member_id),
+            );
 
             return [
                 'ID' => $attendance->id,
@@ -737,6 +818,7 @@ class AttendanceController extends Controller
                 'NIK' => $memberInfo ? $memberInfo['nik'] : '-',
                 'Departemen' => $attendance->department_name
                     ?: (trim((string) ($attendance->volunteer_department ?? '')) ?: 'Tanpa Departemen'),
+                'Pelayanan' => $serviceRoles === [] ? '-' : implode(', ', $serviceRoles),
                 'Event' => $attendance->event?->title ?? 'Event Dihapus',
                 'Sesi Kelas' => $attendance->session?->title ? ($attendance->session->title.' ('.$attendance->session->date.')') : '-',
                 'Lokasi' => $attendance->event?->location ?? '-',

@@ -27,6 +27,7 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -65,13 +66,17 @@ interface Member {
     foto_url?: string | null;
 }
 
+type ResponseStatus = 'pending' | 'accepted' | 'declined';
+
 interface Volunteer {
     id: number;
     member_id: string | number;
     role_category: string;
     role_name: string;
-    response_status?: string | null;
+    response_status?: ResponseStatus | null;
     response_reason?: string | null;
+    attendance_confirmed?: boolean | null;
+    attendance_confirmed_at?: string | null;
     member?: Member | null;
 }
 
@@ -126,9 +131,10 @@ function formatEventDate(date: string | null): string {
     }).format(parsedDate);
 }
 
-function createAssignments(event: Event, roles: CategoryRole[]) {
+function matchVolunteersToRoles(event: Event, roles: CategoryRole[]) {
     const usedRoleIds = new Set<number>();
     const assignments: Record<number, string> = {};
+    const attendanceStates: Record<number, boolean> = {};
 
     event.volunteers.forEach((volunteer) => {
         const matchingRole = roles.find(
@@ -141,10 +147,12 @@ function createAssignments(event: Event, roles: CategoryRole[]) {
         if (matchingRole) {
             usedRoleIds.add(matchingRole.id);
             assignments[matchingRole.id] = String(volunteer.member_id);
+            attendanceStates[matchingRole.id] =
+                volunteer.attendance_confirmed === true;
         }
     });
 
-    return assignments;
+    return { assignments, attendanceStates };
 }
 
 export default function EventScheduling({
@@ -163,6 +171,21 @@ export default function EventScheduling({
     const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
     const [eventSearch, setEventSearch] = useState('');
     const [assignments, setAssignments] = useState<Record<number, string>>({});
+    const [attendanceStates, setAttendanceStates] = useState<
+        Record<number, boolean>
+    >({});
+    const [dirtyAttendance, setDirtyAttendance] = useState<Set<number>>(
+        () => new Set(),
+    );
+    const [acceptedRoles, setAcceptedRoles] = useState<Set<number>>(
+        () => new Set(),
+    );
+    const [dirtyAcceptances, setDirtyAcceptances] = useState<Set<number>>(
+        () => new Set(),
+    );
+    const [acceptingAssignmentId, setAcceptingAssignmentId] = useState<
+        number | null
+    >(null);
     const [activeRoleId, setActiveRoleId] = useState<number | null>(null);
     const [memberQueries, setMemberQueries] = useState<Record<number, string>>(
         {},
@@ -269,6 +292,9 @@ export default function EventScheduling({
         return [...ordered, ...missing];
     }, [departmentGroups, departmentOrder]);
     const scheduledCount = Object.values(assignments).filter(Boolean).length;
+    const attendedCount = eventRoles.filter(
+        (role) => !!assignments[role.id] && attendanceStates[role.id] === true,
+    ).length;
     const allowedRolesCount = eventRoles.filter(
         (role) =>
             can_manage_events || authorizedDepartments.has(role.department.id),
@@ -278,16 +304,26 @@ export default function EventScheduling({
         const event = events.find((item) => item.id === Number(eventId));
 
         setSelectedEventId(event?.id ?? null);
-        setAssignments(
-            event
-                ? createAssignments(
-                      event,
-                      categories.find(
-                          (category) => category.name === event.category,
-                      )?.roles ?? [],
-                  )
-                : {},
-        );
+
+        if (event) {
+            const matched = matchVolunteersToRoles(
+                event,
+                categories.find(
+                    (category) => category.name === event.category,
+                )?.roles ?? [],
+            );
+
+            setAssignments(matched.assignments);
+            setAttendanceStates(matched.attendanceStates);
+        } else {
+            setAssignments({});
+            setAttendanceStates({});
+        }
+
+        setDirtyAttendance(new Set());
+        setAcceptedRoles(new Set());
+        setDirtyAcceptances(new Set());
+        setAcceptingAssignmentId(null);
         setEventSearch('');
         setMemberQueries({});
         setActiveRoleId(null);
@@ -296,7 +332,35 @@ export default function EventScheduling({
     };
 
     const setRoleMember = (roleId: number, memberId: string) => {
-        setAssignments((current) => ({ ...current, [roleId]: memberId }));
+        if (assignments[roleId] !== memberId) {
+            setAssignments((current) => ({ ...current, [roleId]: memberId }));
+            setAttendanceStates((current) => ({
+                ...current,
+                [roleId]: false,
+            }));
+            setDirtyAttendance((current) => {
+                const next = new Set(current);
+
+                next.delete(roleId);
+
+                return next;
+            });
+            setAcceptedRoles((current) => {
+                const next = new Set(current);
+
+                next.delete(roleId);
+
+                return next;
+            });
+            setDirtyAcceptances((current) => {
+                const next = new Set(current);
+
+                next.delete(roleId);
+
+                return next;
+            });
+        }
+
         setMemberQueries((current) => ({ ...current, [roleId]: '' }));
         setActiveRoleId(null);
     };
@@ -308,7 +372,91 @@ export default function EventScheduling({
 
             return next;
         });
+        setAttendanceStates((current) => {
+            const next = { ...current };
+            delete next[roleId];
+
+            return next;
+        });
+        setDirtyAttendance((current) => {
+            const next = new Set(current);
+
+            next.delete(roleId);
+
+            return next;
+        });
+        setAcceptedRoles((current) => {
+            const next = new Set(current);
+
+            next.delete(roleId);
+
+            return next;
+        });
+        setDirtyAcceptances((current) => {
+            const next = new Set(current);
+
+            next.delete(roleId);
+
+            return next;
+        });
         setMemberQueries((current) => ({ ...current, [roleId]: '' }));
+    };
+
+    const setRoleAttended = (roleId: number, attended: boolean) => {
+        setAttendanceStates((current) => ({
+            ...current,
+            [roleId]: attended,
+        }));
+        setDirtyAttendance((current) => {
+            const next = new Set(current);
+
+            next.add(roleId);
+
+            return next;
+        });
+    };
+
+    const acceptRoleAssignment = (
+        roleId: number,
+        volunteerId: number | null,
+        memberLabel: string,
+    ) => {
+        if (volunteerId === null) {
+            setAcceptedRoles((current) => new Set(current).add(roleId));
+            setDirtyAcceptances((current) => new Set(current).add(roleId));
+            toast.success(
+                `Jadwal ${memberLabel} ditandai diterima. Tekan Simpan Penjadwalan untuk menerapkan.`,
+            );
+
+            return;
+        }
+
+        setAcceptingAssignmentId(volunteerId);
+
+        router.post(
+            `/dashboard/volunteer-assignments/${volunteerId}/accept`,
+            {},
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setAcceptedRoles((current) => new Set(current).add(roleId));
+                    setDirtyAcceptances((current) => {
+                        const next = new Set(current);
+
+                        next.delete(roleId);
+
+                        return next;
+                    });
+                    toast.success(
+                        `Jadwal ${memberLabel} berhasil diterima atas nama anggota.`,
+                    );
+                },
+                onError: () => {
+                    toast.error('Gagal menerima jadwal pelayanan.');
+                },
+                onFinish: () => setAcceptingAssignmentId(null),
+            },
+        );
     };
 
     const handleColumnDragStart = (
@@ -423,6 +571,15 @@ export default function EventScheduling({
                 member_id: assignments[role.id],
                 role_category: role.department.name,
                 role_name: role.role_name,
+                ...(dirtyAttendance.has(role.id)
+                    ? {
+                          attendance_confirmed:
+                              attendanceStates[role.id] === true,
+                      }
+                    : {}),
+                ...(dirtyAcceptances.has(role.id)
+                    ? { response_status: 'accepted' }
+                    : {}),
             }));
 
         router.post(
@@ -824,9 +981,18 @@ export default function EventScheduling({
                                                                     ],
                                                                 ),
                                                     );
-                                                const responseStatus =
-                                                    volunteerAssignment?.response_status ??
-                                                    'pending';
+                                                const isAccepted =
+                                                    volunteerAssignment?.response_status ===
+                                                        'accepted' ||
+                                                    acceptedRoles.has(role.id);
+                                                const responseStatus: ResponseStatus =
+                                                    isAccepted
+                                                        ? 'accepted'
+                                                        : (volunteerAssignment?.response_status ??
+                                                          'pending');
+                                                const isAttended =
+                                                    attendanceStates[role.id] ===
+                                                    true;
                                                 const statusMeta =
                                                     RESPONSE_STATUS_META[
                                                         responseStatus
@@ -955,6 +1121,73 @@ export default function EventScheduling({
 
                                                             next[role.id] =
                                                                 draggedMember;
+
+                                                            return next;
+                                                        },
+                                                    );
+                                                    setAttendanceStates(
+                                                        (current) => {
+                                                            const next = {
+                                                                ...current,
+                                                            };
+                                                            const sourceState =
+                                                                current[
+                                                                    source
+                                                                        .roleId
+                                                                ] === true;
+                                                            const targetState =
+                                                                current[
+                                                                    role.id
+                                                                ] === true;
+
+                                                            next[role.id] =
+                                                                sourceState;
+                                                            next[
+                                                                source.roleId
+                                                            ] = targetState;
+
+                                                            return next;
+                                                        },
+                                                    );
+                                                    setDirtyAttendance(
+                                                        (current) => {
+                                                            const next =
+                                                                new Set(current);
+
+                                                            next.add(role.id);
+                                                            next.add(
+                                                                source.roleId,
+                                                            );
+
+                                                            return next;
+                                                        },
+                                                    );
+                                                    setAcceptedRoles(
+                                                        (current) => {
+                                                            const next =
+                                                                new Set(current);
+
+                                                            next.delete(
+                                                                role.id,
+                                                            );
+                                                            next.delete(
+                                                                source.roleId,
+                                                            );
+
+                                                            return next;
+                                                        },
+                                                    );
+                                                    setDirtyAcceptances(
+                                                        (current) => {
+                                                            const next =
+                                                                new Set(current);
+
+                                                            next.delete(
+                                                                role.id,
+                                                            );
+                                                            next.delete(
+                                                                source.roleId,
+                                                            );
 
                                                             return next;
                                                         },
@@ -1102,6 +1335,72 @@ export default function EventScheduling({
                                                                     : 'Belum ada anggota'}
                                                             </p>
                                                         )}
+                                                        {assignedLabel &&
+                                                            canScheduleDepartment && (
+                                                                <div
+                                                                    className="mt-2 flex items-center justify-between gap-2 rounded-xl border bg-muted/20 px-2.5 py-2"
+                                                                    onClick={(
+                                                                        clickEvent,
+                                                                    ) =>
+                                                                        clickEvent.stopPropagation()
+                                                                    }
+                                                                >
+                                                                    <span className="flex min-w-0 items-center gap-2">
+                                                                        <Checkbox
+                                                                            id={`attendance-role-${role.id}`}
+                                                                            checked={
+                                                                                isAttended
+                                                                            }
+                                                                            onCheckedChange={(
+                                                                                checked,
+                                                                            ) =>
+                                                                                setRoleAttended(
+                                                                                    role.id,
+                                                                                    checked ===
+                                                                                        true,
+                                                                                )
+                                                                            }
+                                                                            aria-label={`Konfirmasi kehadiran ${assignedLabel} pada posisi ${role.role_name}`}
+                                                                        />
+                                                                        <span
+                                                                            title="Konfirmasi bahwa anggota benar-benar hadir"
+                                                                            className="truncate text-[11px] leading-snug font-medium text-muted-foreground"
+                                                                        >
+                                                                            Hadir
+                                                                        </span>
+                                                                    </span>
+                                                                    {!isAccepted && (
+                                                                        <Button
+                                                                            type="button"
+                                                                            size="sm"
+                                                                            variant="outline"
+                                                                            title={`Terima jadwal ${assignedLabel} atas nama anggota`}
+                                                                            disabled={
+                                                                                acceptingAssignmentId !==
+                                                                                null
+                                                                            }
+                                                                            className="h-7 shrink-0 gap-1 rounded-full border-primary/30 px-2.5 text-[10px] font-bold text-primary"
+                                                                            onClick={(
+                                                                                clickEvent,
+                                                                            ) => {
+                                                                                clickEvent.stopPropagation();
+                                                                                acceptRoleAssignment(
+                                                                                    role.id,
+                                                                                    volunteerAssignment?.id ??
+                                                                                        null,
+                                                                                    assignedLabel,
+                                                                                );
+                                                                            }}
+                                                                        >
+                                                                            <Check className="size-3" />
+                                                                            {acceptingAssignmentId ===
+                                                                            volunteerAssignment?.id
+                                                                                ? 'Menerima...'
+                                                                                : 'Terima'}
+                                                                        </Button>
+                                                                    )}
+                                                                </div>
+                                                            )}
                                                         {isEditing && (
                                                             <div className="relative mt-2">
                                                                 <UserRound className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -1266,8 +1565,9 @@ export default function EventScheduling({
                         <div className="sticky bottom-3 z-20 flex flex-col gap-3 rounded-2xl border bg-background/95 p-4 shadow-lg backdrop-blur sm:flex-row sm:items-center sm:justify-between sm:px-6">
                             <p className="text-sm text-muted-foreground">
                                 {scheduledCount} posisi terisi dari{' '}
-                                {eventRoles.length}. Bagian tanpa izin hanya
-                                dapat dilihat.
+                                {eventRoles.length}, {attendedCount} kehadiran
+                                dikonfirmasi. Bagian tanpa izin hanya dapat
+                                dilihat.
                             </p>
                             <Button
                                 type="submit"

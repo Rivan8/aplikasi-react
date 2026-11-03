@@ -5,8 +5,28 @@ import { cn } from '@/lib/utils';
 const SHOW_DELAY = 150;
 const MIN_VISIBLE = 450;
 
+const VERSES = [
+    {
+        reference: 'Pengkhotbah 3:1',
+        text: 'Untuk segala sesuatu ada masanya, untuk apa pun di bawah langit ada waktunya.',
+    },
+    {
+        reference: 'Efesus 5:15-16',
+        text: 'Karena itu, perhatikanlah dengan saksama, bagaimana kamu hidup, jangan seperti orang bebal, tetapi seperti orang arif, dan pergunakanlah waktu yang ada, karena hari-hari ini adalah jahat.',
+    },
+    {
+        reference: 'Mazmur 90:12',
+        text: 'Ajarlah kami menghitung hari-hari kami sedemikian, hingga kami beroleh hati yang bijaksana.',
+    },
+    {
+        reference: 'Amsal 21:5',
+        text: 'Rancangan orang rajin mendatangkan kelimpahan, tetapi setiap orang yang tergesa-gesa hanya akan mengalami kekurangan.',
+    },
+];
+
 export default function PageLoader() {
     const [visible, setVisible] = useState(false);
+    const [verseIndex, setVerseIndex] = useState(0);
     const showTimer = useRef<number | null>(null);
     const hideTimer = useRef<number | null>(null);
     const visibleSince = useRef(0);
@@ -51,6 +71,19 @@ export default function PageLoader() {
 
             showTimer.current = window.setTimeout(() => {
                 visibleSince.current = Date.now();
+                setVerseIndex((previous) => {
+                    if (VERSES.length < 2) {
+                        return previous;
+                    }
+
+                    let next = previous;
+
+                    while (next === previous) {
+                        next = Math.floor(Math.random() * VERSES.length);
+                    }
+
+                    return next;
+                });
                 setVisible(true);
                 showTimer.current = null;
             }, SHOW_DELAY);
@@ -112,7 +145,15 @@ export default function PageLoader() {
                     <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                         Memuat halaman
                     </span>
-                    <span className="h-1 w-40 overflow-hidden rounded-full bg-primary/15">
+                    <figure className="mt-1 max-w-[21rem] px-4 text-center">
+                        <blockquote className="text-sm leading-relaxed font-medium text-foreground/80 italic">
+                            &ldquo;{VERSES[verseIndex].text}&rdquo;
+                        </blockquote>
+                        <figcaption className="mt-1.5 text-[10px] font-bold tracking-[0.16em] text-primary uppercase">
+                            {VERSES[verseIndex].reference}
+                        </figcaption>
+                    </figure>
+                    <span className="mt-1 h-1 w-40 overflow-hidden rounded-full bg-primary/15">
                         <span className="page-loader-sweep block h-full w-1/2 rounded-full bg-gradient-to-r from-primary/0 via-primary to-primary/0" />
                     </span>
                 </div>

@@ -12,9 +12,38 @@ import {
     ScrollText,
     Timer,
 } from 'lucide-react';
-import { Fragment } from 'react';
+import { Fragment, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+
+type RundownPhase = 'before' | 'during' | 'after';
+type PhaseFilter = 'all' | RundownPhase;
+
+const PHASE_META: Record<RundownPhase, { label: string; badge: string; dot: string }> = {
+    before: {
+        label: 'Sebelum Event',
+        badge: 'border-amber-200 bg-amber-50 text-amber-700',
+        dot: 'bg-amber-500',
+    },
+    during: {
+        label: 'Selama Event',
+        badge: 'border-indigo-200 bg-indigo-50 text-indigo-700',
+        dot: 'bg-indigo-500',
+    },
+    after: {
+        label: 'Setelah Event',
+        badge: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+        dot: 'bg-emerald-500',
+    },
+};
+
+const PHASE_FILTERS: { value: PhaseFilter; label: string }[] = [
+    { value: 'all', label: 'Keseluruhan' },
+    { value: 'before', label: 'Sebelum' },
+    { value: 'during', label: 'Selama' },
+    { value: 'after', label: 'Setelah' },
+];
 
 interface RundownItemRow {
     title: string;
@@ -27,6 +56,7 @@ interface RundownItemRow {
 interface RundownSegmentRow {
     index: number;
     title: string;
+    phase: RundownPhase;
     start: string | null;
     end: string | null;
     duration_seconds: number;
@@ -80,6 +110,25 @@ const formatDurationLong = (seconds: number) => {
 
 export default function EventRundownReport({ event, report }: Props) {
     const eventDate = event.date ? new Date(event.date) : null;
+    const [phaseFilter, setPhaseFilter] = useState<PhaseFilter>('all');
+
+    const visibleSegments =
+        phaseFilter === 'all'
+            ? report.segments
+            : report.segments.filter((segment) => segment.phase === phaseFilter);
+    const visibleTotalSeconds = visibleSegments.reduce(
+        (total, segment) => total + segment.duration_seconds,
+        0,
+    );
+    const visibleTotalItems = visibleSegments.reduce(
+        (total, segment) => total + segment.items.length,
+        0,
+    );
+    const visibleStart = visibleSegments[0]?.start ?? null;
+    const visibleEnd = visibleSegments[visibleSegments.length - 1]?.end ?? null;
+    const pdfHref = `/events/${event.id}/rundown-report/pdf${
+        phaseFilter === 'all' ? '' : `?phase=${phaseFilter}`
+    }`;
 
     return (
         <>
@@ -139,15 +188,56 @@ export default function EventRundownReport({ event, report }: Props) {
                         asChild
                         className="h-10 shrink-0 gap-2 bg-indigo-600 px-4 text-xs font-bold text-white shadow-xs hover:bg-indigo-700"
                     >
-                        <a
-                            href={`/events/${event.id}/rundown-report/pdf`}
-                            target="_blank"
-                            rel="noreferrer"
-                        >
+                        <a href={pdfHref} target="_blank" rel="noreferrer">
                             <FileDown className="h-4 w-4" />
                             Buka PDF (Tab Baru)
                         </a>
                     </Button>
+                </div>
+
+                {/* Phase Filter */}
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-white p-2 pl-3 shadow-xs">
+                    <div className="flex flex-wrap items-center gap-1">
+                        {PHASE_FILTERS.map((option) => {
+                            const isActive = phaseFilter === option.value;
+                            const count =
+                                option.value === 'all'
+                                    ? report.segments.length
+                                    : report.segments.filter(
+                                          (segment) => segment.phase === option.value,
+                                      ).length;
+
+                            return (
+                                <button
+                                    key={option.value}
+                                    type="button"
+                                    onClick={() => setPhaseFilter(option.value)}
+                                    aria-pressed={isActive}
+                                    className={cn(
+                                        'inline-flex h-9 items-center gap-2 rounded-xl px-3.5 text-xs font-bold transition-colors',
+                                        isActive
+                                            ? 'bg-slate-900 text-white shadow-xs'
+                                            : 'text-slate-600 hover:bg-slate-100',
+                                    )}
+                                >
+                                    {option.label}
+                                    <span
+                                        className={cn(
+                                            'rounded-full px-1.5 py-0.5 text-[10px] font-black leading-none',
+                                            isActive
+                                                ? 'bg-white/20 text-white'
+                                                : 'bg-slate-100 text-slate-500',
+                                        )}
+                                    >
+                                        {count}
+                                    </span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                    <p className="px-2 text-[11px] font-medium text-slate-500">
+                        Tampilkan rundown berdasarkan fase event
+                    </p>
                 </div>
 
                 {/* Summary Stats */}
@@ -162,7 +252,7 @@ export default function EventRundownReport({ event, report }: Props) {
                             </div>
                         </div>
                         <p className="mt-2 text-2xl font-extrabold tracking-tight text-slate-900">
-                            {report.total_segments}
+                            {visibleSegments.length}
                         </p>
                     </div>
 
@@ -176,7 +266,7 @@ export default function EventRundownReport({ event, report }: Props) {
                             </div>
                         </div>
                         <p className="mt-2 text-2xl font-extrabold tracking-tight text-slate-900">
-                            {report.total_items}
+                            {visibleTotalItems}
                         </p>
                     </div>
 
@@ -190,10 +280,10 @@ export default function EventRundownReport({ event, report }: Props) {
                             </div>
                         </div>
                         <p className="mt-2 text-2xl font-extrabold tracking-tight text-slate-900">
-                            {formatDurationLong(report.total_seconds)}
+                            {formatDurationLong(visibleTotalSeconds)}
                         </p>
                         <p className="mt-0.5 font-mono text-[11px] font-semibold text-slate-400">
-                            {formatDuration(report.total_seconds)}
+                            {formatDuration(visibleTotalSeconds)}
                         </p>
                     </div>
 
@@ -207,8 +297,8 @@ export default function EventRundownReport({ event, report }: Props) {
                             </div>
                         </div>
                         <p className="mt-2 text-2xl font-extrabold tracking-tight text-slate-900">
-                            {report.start_time && report.end_time
-                                ? `${report.start_time} – ${report.end_time}`
+                            {visibleStart && visibleEnd
+                                ? `${visibleStart} – ${visibleEnd}`
                                 : '-'}
                         </p>
                     </div>
@@ -216,24 +306,34 @@ export default function EventRundownReport({ event, report }: Props) {
 
                 {/* Rundown Table */}
                 <div className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-xs">
-                    {report.segments.length === 0 ? (
+                    {visibleSegments.length === 0 ? (
                         <div className="flex flex-col items-center justify-center px-6 py-20 text-center">
                             <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
                                 <ScrollText className="h-6 w-6" />
                             </div>
                             <h3 className="text-sm font-bold text-slate-900">
-                                Rundown Belum Tersedia
+                                {report.segments.length === 0
+                                    ? 'Rundown Belum Tersedia'
+                                    : 'Fase Ini Belum Memiliki Segmen'}
                             </h3>
                             <p className="mt-1 max-w-xs text-xs text-slate-500">
-                                Event ini belum memiliki rundown yang bisa dilaporkan.
+                                {report.segments.length === 0
+                                    ? 'Event ini belum memiliki rundown yang bisa dilaporkan.'
+                                    : 'Tidak ada segmen rundown pada fase yang dipilih.'}
                             </p>
                             <Button
                                 variant="outline"
                                 size="sm"
                                 className="mt-4 border-slate-200 text-xs font-semibold"
-                                onClick={() => router.get('/events')}
+                                onClick={() =>
+                                    report.segments.length === 0
+                                        ? router.get('/events')
+                                        : setPhaseFilter('all')
+                                }
                             >
-                                Kembali ke Event
+                                {report.segments.length === 0
+                                    ? 'Kembali ke Event'
+                                    : 'Tampilkan Keseluruhan'}
                             </Button>
                         </div>
                     ) : (
@@ -248,19 +348,37 @@ export default function EventRundownReport({ event, report }: Props) {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
-                                    {report.segments.map((segment) => (
+                                    {visibleSegments.map((segment, position) => (
                                         <Fragment key={`segment-${segment.index}`}>
                                             <tr className="bg-slate-50/80">
                                                 <td className="px-3 py-2.5 text-center font-bold text-slate-500">
-                                                    {segment.index}
+                                                    {position + 1}
                                                 </td>
                                                 <td className="px-3 py-2.5 text-center font-mono font-semibold text-slate-700">
                                                     {segment.start && segment.end
                                                         ? `${segment.start} – ${segment.end}`
                                                         : '-'}
                                                 </td>
-                                                <td className="px-3 py-2.5 font-bold text-slate-900">
-                                                    {segment.title}
+                                                <td className="px-3 py-2.5">
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <span className="font-bold text-slate-900">
+                                                            {segment.title}
+                                                        </span>
+                                                        <span
+                                                            className={cn(
+                                                                'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold',
+                                                                PHASE_META[segment.phase].badge,
+                                                            )}
+                                                        >
+                                                            <span
+                                                                className={cn(
+                                                                    'h-1.5 w-1.5 rounded-full',
+                                                                    PHASE_META[segment.phase].dot,
+                                                                )}
+                                                            />
+                                                            {PHASE_META[segment.phase].label}
+                                                        </span>
+                                                    </div>
                                                 </td>
                                                 <td className="px-3 py-2.5 text-center font-mono font-bold text-indigo-700">
                                                     {formatDuration(segment.duration_seconds)}
@@ -307,7 +425,7 @@ export default function EventRundownReport({ event, report }: Props) {
                                             Total Durasi Rencana:
                                         </td>
                                         <td className="px-3 py-3 text-center font-mono text-indigo-700">
-                                            {formatDuration(report.total_seconds)}
+                                            {formatDuration(visibleTotalSeconds)}
                                         </td>
                                     </tr>
                                 </tfoot>

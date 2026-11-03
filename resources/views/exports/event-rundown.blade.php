@@ -32,6 +32,9 @@
     $rangeLabel = ($report['start_time'] ?? null) && ($report['end_time'] ?? null)
         ? $report['start_time'].' - '.$report['end_time']
         : '-';
+
+    $phaseLabels = ['before' => 'Sebelum Event', 'during' => 'Selama Event', 'after' => 'Setelah Event'];
+    $phaseLabel = $phaseLabels[$report['phase'] ?? ''] ?? null;
 @endphp
 <!doctype html>
 <html lang="id">
@@ -223,6 +226,9 @@
                             @if(! empty($event['category']))
                                 &nbsp;|&nbsp; Kategori: {{ $event['category'] }}
                             @endif
+                            @if($phaseLabel)
+                                &nbsp;|&nbsp; Fase: {{ $phaseLabel }}
+                            @endif
                             <br>
                             Dibuat: {{ $generatedAt }}
                         </div>
@@ -306,7 +312,9 @@
                 @empty
                     <tr>
                         <td colspan="4">
-                            <div class="empty-note">Rundown belum tersedia untuk event ini.</div>
+                            <div class="empty-note">
+                                {{ $phaseLabel ? 'Tidak ada segmen rundown pada fase '.$phaseLabel.'.' : 'Rundown belum tersedia untuk event ini.' }}
+                            </div>
                         </td>
                     </tr>
                 @endforelse

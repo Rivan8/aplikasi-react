@@ -9,6 +9,7 @@ class EventRundownSegment extends Model
     protected $fillable = [
         'event_id',
         'title',
+        'phase',
         'duration_seconds',
         'sort_order',
     ];

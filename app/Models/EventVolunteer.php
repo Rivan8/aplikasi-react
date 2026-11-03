@@ -21,15 +21,18 @@ class EventVolunteer extends Model
         'response_status',
         'response_reason',
         'responded_at',
+        'attendance_confirmed',
+        'attendance_confirmed_at',
     ];
 
     protected $casts = [
         'responded_at' => 'datetime',
+        'attendance_confirmed' => 'boolean',
+        'attendance_confirmed_at' => 'datetime',
     ];
 
     public function event()
     {
         return $this->belongsTo(Event::class);
     }
-
 }

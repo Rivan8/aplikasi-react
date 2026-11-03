@@ -63,6 +63,7 @@ interface AttendanceEventDetail {
     session?: string | null;
     status: 'Present' | 'Late';
     scan_time?: string | null;
+    roles?: string[];
 }
 
 interface RekapRow {
@@ -72,6 +73,7 @@ interface RekapRow {
     phone?: string | null;
     foto_url?: string | null;
     department?: string | null;
+    service_roles?: string[];
     cells: Record<string, 'Present' | 'Late'>;
     event_details?: Record<string, AttendanceEventDetail[]>;
     hadir: number;
@@ -85,7 +87,10 @@ interface DetailFilters {
     search: string;
     group: string;
     departments: string[];
+    per_page?: string;
 }
+
+const PER_PAGE_OPTIONS = [15, 30, 50, 100];
 
 interface PaginationLink {
     url: string | null;
@@ -169,7 +174,7 @@ export default function AttendanceReportDetail({
     availableYears = [],
     groups = [],
     availableDepartments = [],
-    filters = { year: '', month: '0', sort: 'abjad', search: '', group: '', departments: [] },
+    filters = { year: '', month: '0', sort: 'abjad', search: '', group: '', departments: [], per_page: '15' },
 }: Props) {
     const safeMonths = useMemo(() => (Array.isArray(months) ? months : []), [months]);
     const safeAvailableYears = useMemo(
@@ -192,6 +197,7 @@ export default function AttendanceReportDetail({
     );
     const [searchQuery, setSearchQuery] = useState(filters?.search || '');
     const [filterGroup, setFilterGroup] = useState(filters?.group || 'all');
+    const [perPage, setPerPage] = useState(filters?.per_page || '15');
     const [sortColumn, setSortColumn] = useState<'name' | 'hadir' | 'terlambat'>('name');
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
     const [quickFilter, setQuickFilter] = useState<'all' | 'present' | 'late' | 'perfect'>('all');
@@ -412,7 +418,18 @@ export default function AttendanceReportDetail({
             params.departments = departments;
         }
 
+        params.per_page = perPage;
+
         return params;
+    };
+
+    const handlePerPageChange = (value: string) => {
+        setPerPage(value);
+
+        router.get('/attendance-history/detail', { ...buildFilterParams(), per_page: value }, {
+            preserveState: true,
+            preserveScroll: true,
+        });
     };
 
     const applyFilters = () => {
@@ -496,6 +513,7 @@ export default function AttendanceReportDetail({
         setSearchQuery('');
         setFilterGroup('all');
         setSelectedDepartments([]);
+        setPerPage('15');
         setQuickFilter('all');
         setSortColumn('name');
         setSortDirection('asc');
@@ -1071,6 +1089,35 @@ export default function AttendanceReportDetail({
 
                 {/* Bright Clean Matrix Table Section */}
                 <div className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-xs">
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/70 px-5 py-3">
+                        <p className="text-xs font-bold text-slate-700">
+                            Daftar Kehadiran Jemaat
+                        </p>
+                        <div className="flex items-center gap-2">
+                            <label
+                                htmlFor="detail-per-page"
+                                className="text-[10px] font-bold tracking-wider text-slate-500 uppercase"
+                            >
+                                Tampilkan
+                            </label>
+                            <Select value={perPage} onValueChange={handlePerPageChange}>
+                                <SelectTrigger
+                                    id="detail-per-page"
+                                    className="h-8 w-[82px] border-slate-200 bg-white font-semibold text-xs text-slate-800"
+                                >
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {PER_PAGE_OPTIONS.map((option) => (
+                                        <SelectItem key={option} value={String(option)}>
+                                            {option}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <span className="text-xs font-medium text-slate-500">jemaat per halaman</span>
+                        </div>
+                    </div>
                     {processedRows.length === 0 ? (
                         <div className="flex flex-col items-center justify-center px-6 py-20 text-center">
                             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400 mb-3">
@@ -1333,6 +1380,11 @@ export default function AttendanceReportDetail({
                                                                                             {event.session && (
                                                                                                 <p className="text-[10px] text-slate-400">
                                                                                                     {event.session}
+                                                                                                </p>
+                                                                                            )}
+                                                                                            {event.roles && event.roles.length > 0 && (
+                                                                                                <p className="text-[10px] font-semibold text-indigo-300">
+                                                                                                    Pelayanan: {event.roles.join(', ')}
                                                                                                 </p>
                                                                                             )}
                                                                                         </div>

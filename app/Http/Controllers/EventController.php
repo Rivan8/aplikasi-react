@@ -194,6 +194,8 @@ class EventController extends Controller
     {
         $this->authorizeEventReports();
 
+        $phase = $this->normalizeRundownPhase(request()->query('phase'));
+
         $pdf = Pdf::loadView('exports.event-rundown', [
             'event' => [
                 'title' => $event->title,
@@ -202,11 +204,16 @@ class EventController extends Controller
                 'location' => $event->location,
                 'category' => $event->category,
             ],
-            'report' => $this->buildRundownReportData($event),
+            'report' => $this->buildRundownReportData($event, $phase),
             'generatedAt' => now()->format('d M Y, H:i'),
         ])->setPaper('a4', 'portrait');
 
         return $pdf->stream('laporan-rundown-event-'.$event->id.'.pdf');
+    }
+
+    private function normalizeRundownPhase(?string $phase): ?string
+    {
+        return in_array($phase, ['before', 'during', 'after'], true) ? $phase : null;
     }
 
     private function authorizeEventReports(): void
@@ -217,7 +224,7 @@ class EventController extends Controller
         abort_unless($user->isAdmin() || $departmentIds !== [], 403);
     }
 
-    private function buildRundownReportData(Event $event): array
+    private function buildRundownReportData(Event $event, ?string $phase = null): array
     {
         $event->load([
             'rundownSegments' => fn ($query) => $query->orderBy('sort_order'),
@@ -232,10 +239,8 @@ class EventController extends Controller
         $cursor = $start?->copy();
 
         $segments = [];
-        $totalSeconds = 0;
-        $totalItems = 0;
 
-        foreach ($event->rundownSegments as $index => $segment) {
+        foreach ($event->rundownSegments as $segment) {
             $items = $segment->items
                 ->map(fn (EventRundownItem $item): array => [
                     'title' => $item->title,
@@ -251,12 +256,9 @@ class EventController extends Controller
             $segmentStart = $cursor?->format('H:i');
             $cursor?->addSeconds($duration);
 
-            $totalSeconds += $duration;
-            $totalItems += count($items);
-
             $segments[] = [
-                'index' => $index + 1,
                 'title' => $segment->title,
+                'phase' => in_array($segment->phase, ['before', 'during', 'after'], true) ? $segment->phase : 'during',
                 'start' => $segmentStart,
                 'end' => $cursor?->format('H:i'),
                 'duration_seconds' => $duration,
@@ -264,13 +266,31 @@ class EventController extends Controller
             ];
         }
 
+        if ($phase !== null) {
+            $segments = array_values(array_filter(
+                $segments,
+                fn (array $segment): bool => $segment['phase'] === $phase
+            ));
+        }
+
+        $segments = array_map(
+            fn (array $segment, int $position): array => ['index' => $position + 1] + $segment,
+            $segments,
+            array_keys($segments)
+        );
+
+        $totalSeconds = array_sum(array_column($segments, 'duration_seconds'));
+        $totalItems = array_sum(array_map(fn (array $segment): int => count($segment['items']), $segments));
+        $lastSegment = $segments === [] ? null : $segments[array_key_last($segments)];
+
         return [
             'segments' => $segments,
             'total_segments' => count($segments),
             'total_items' => $totalItems,
             'total_seconds' => $totalSeconds,
-            'start_time' => $start?->format('H:i'),
-            'end_time' => $cursor?->format('H:i'),
+            'start_time' => $segments[0]['start'] ?? null,
+            'end_time' => $lastSegment['end'] ?? null,
+            'phase' => $phase,
         ];
     }
 
@@ -508,6 +528,8 @@ class EventController extends Controller
             'volunteers.*.member_id' => 'required',
             'volunteers.*.role_category' => 'required|string|max:255',
             'volunteers.*.role_name' => 'required|string|max:255',
+            'volunteers.*.attendance_confirmed' => 'sometimes|boolean',
+            'volunteers.*.response_status' => 'sometimes|in:accepted',
         ])->validate();
 
         $categoryRolesQuery = CategoryRole::query()
@@ -597,13 +619,44 @@ class EventController extends Controller
                         && (string) $volunteer->member_id === $memberKey,
                 );
 
+                if (($assignment['response_status'] ?? null) === 'accepted') {
+                    $responseStatus = 'accepted';
+                    $responseReason = null;
+                    $respondedAt = $previous?->response_status === 'accepted'
+                        ? $previous->responded_at
+                        : now();
+                } else {
+                    $responseStatus = $previous?->response_status ?? 'pending';
+                    $responseReason = $previous?->response_reason;
+                    $respondedAt = $previous?->responded_at;
+                }
+
+                $attendanceRequested = array_key_exists('attendance_confirmed', $assignment)
+                    ? (bool) $assignment['attendance_confirmed']
+                    : null;
+
+                if ($attendanceRequested === null) {
+                    $attendanceConfirmed = $previous?->attendance_confirmed ?? false;
+                    $attendanceConfirmedAt = $previous?->attendance_confirmed_at;
+                } elseif ($attendanceRequested) {
+                    $attendanceConfirmed = true;
+                    $attendanceConfirmedAt = $previous?->attendance_confirmed === true
+                        ? $previous->attendance_confirmed_at
+                        : now();
+                } else {
+                    $attendanceConfirmed = false;
+                    $attendanceConfirmedAt = null;
+                }
+
                 $volunteer = $event->volunteers()->create([
                     'member_id' => $memberKey,
                     'role_category' => $assignment['role_category'],
                     'role_name' => $assignment['role_name'],
-                    'response_status' => $previous?->response_status ?? 'pending',
-                    'response_reason' => $previous?->response_reason,
-                    'responded_at' => $previous?->responded_at,
+                    'response_status' => $responseStatus,
+                    'response_reason' => $responseReason,
+                    'responded_at' => $respondedAt,
+                    'attendance_confirmed' => $attendanceConfirmed,
+                    'attendance_confirmed_at' => $attendanceConfirmedAt,
                 ]);
 
                 if (! in_array((string) $assignment['member_id'], $previousMemberIds, true)) {
@@ -739,8 +792,13 @@ class EventController extends Controller
                 continue;
             }
 
+            $phase = in_array($segment['phase'] ?? null, ['before', 'during', 'after'], true)
+                ? $segment['phase']
+                : 'during';
+
             $createdSegment = $event->rundownSegments()->create([
                 'title' => $title,
+                'phase' => $phase,
                 'duration_seconds' => max(0, (int) ($segment['duration_seconds'] ?? 0)),
                 'sort_order' => $segmentIndex,
             ]);

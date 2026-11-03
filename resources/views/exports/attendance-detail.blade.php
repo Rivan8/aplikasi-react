@@ -301,8 +301,7 @@
             font-weight: normal;
             word-wrap: break-word;
             margin-top: 0.5px;
-        }
-        .dept-section td {
+        }        .dept-section td {
             background-color: #eef2ff;
             border-left: 3px solid #6366f1;
             border-top: 1px solid #e0e7ff;
@@ -341,10 +340,24 @@
         .cell-event + .cell-event {
             margin-top: 1px;
         }
+        .cell-role {
+            display: block;
+            font-size: 4pt;
+            line-height: 1.2;
+            font-weight: bold;
+            color: #4338ca;
+            margin-top: 0.5px;
+        }
         .cell-hadir .cell-event {
             color: #065f46;
         }
         .cell-late .cell-event {
+            color: #9f1239;
+        }
+        .cell-hadir .cell-role {
+            color: #3730a3;
+        }
+        .cell-late .cell-role {
             color: #9f1239;
         }
         .cell-empty {
@@ -575,7 +588,13 @@
                                 @php($events = !empty($week['date']) ? ($row['event_details'][$week['date']] ?? []) : [])
                                 <td class="{{ $loop->first ? 'week-start' : '' }} {{ $status === 'Present' ? 'cell-hadir' : ($status === 'Late' ? 'cell-late' : '') }}">
                                     @forelse($events as $event)
-                                        <span class="cell-event">{{ $event['title'] }}@if(! empty($event['session'])) &middot; {{ $event['session'] }}@endif</span>
+                                        <span class="cell-event">
+                                            {{ $event['title'] }}@if(! empty($event['session'])) &middot; {{ $event['session'] }}@endif
+                                            @php($eventRoles = array_filter($event['roles'] ?? []))
+                                            @if(count($eventRoles) > 0)
+                                                <span class="cell-role">{{ implode(' · ', $eventRoles) }}</span>
+                                            @endif
+                                        </span>
                                     @empty
                                         <span class="cell-empty">&ndash;</span>
                                     @endforelse
