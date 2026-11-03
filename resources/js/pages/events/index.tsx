@@ -7,6 +7,7 @@ import {
     ChevronDown,
     ChevronUp,
     Clock,
+    Copy,
     ImageIcon,
     ListChecks,
     MapPin,
@@ -441,6 +442,8 @@ export default function Events({
             .map((category) => category.name),
     );
     const [activeTab, setActiveTab] = useState<'basic' | 'participants' | 'rundown' | 'volunteers'>('basic');
+    const [isCopyRundownModalOpen, setIsCopyRundownModalOpen] = useState(false);
+    const [copyRundownSearch, setCopyRundownSearch] = useState('');
     const [selectedMemberToEnroll, setSelectedMemberToEnroll] = useState<string | number | null>(null);
     const [eventSearch, setEventSearch] = useState('');
     const [eventCategory, setEventCategory] = useState('all');
@@ -818,6 +821,51 @@ return `${m}m ${s > 0 ? s + 'd' : ''}`;
 
     const getRundownTotalSeconds = (segments: EventRundownSegment[]) => {
         return segments.reduce((acc, s) => acc + getItemTotalSeconds(s), 0);
+    };
+
+    const copyRundownSources = useMemo(() => {
+        const query = copyRundownSearch.trim().toLowerCase();
+
+        return events
+            .filter((event) => event.id !== editingEvent?.id)
+            .filter((event) => (event.rundown_segments?.length ?? 0) > 0)
+            .filter((event) =>
+                query === ''
+                    ? true
+                    : event.title.toLowerCase().includes(query) ||
+                      (event.date ?? '').toLowerCase().includes(query),
+            )
+            .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
+    }, [events, editingEvent, copyRundownSearch]);
+
+    const copyRundownFromEvent = (source: Event) => {
+        const segments: EventRundownSegment[] = (source.rundown_segments ?? []).map((segment) => ({
+            title: segment.title,
+            phase:
+                segment.phase === 'before' || segment.phase === 'after'
+                    ? segment.phase
+                    : 'during',
+            duration_seconds: segment.duration_seconds || 0,
+            items: (segment.items ?? []).map((item) => ({
+                title: item.title,
+                duration_seconds: item.duration_seconds || 0,
+                song_id: item.song_id ?? null,
+                song_arrangement_id: item.song_arrangement_id ?? null,
+                song: item.song ?? null,
+                arrangement: item.arrangement ?? null,
+            })),
+        }));
+
+        if (segments.length === 0) {
+            toast.error('Event sumber belum memiliki rundown.');
+
+            return;
+        }
+
+        setData('rundown_segments', segments);
+        setIsCopyRundownModalOpen(false);
+        setCopyRundownSearch('');
+        toast.success(`Rundown dari "${source.title}" berhasil disalin.`);
     };
 
     const handleDepartmentScheduleSubmit = (e: React.FormEvent) => {
@@ -2457,14 +2505,25 @@ return;
                             {/* Tab 2: Rundown */}
                             {activeTab === 'rundown' && (
                                 <div className="p-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                                    <div className="flex items-center justify-between">
+                                    <div className="flex flex-wrap items-center justify-between gap-3">
                                         <div className="space-y-1">
                                             <h3 className="text-lg font-bold text-foreground/90">Manajemen Rundown</h3>
                                             <p className="text-xs text-muted-foreground font-medium">Susun jadwal acara dan lampirkan lagu. Tarik ikon pegangan untuk mengubah urutan segmen atau item.</p>
                                         </div>
-                                        <Badge variant="outline" className="px-4 py-2 rounded-xl bg-primary/5 border-primary/10 text-primary font-bold text-[10px] uppercase tracking-widest">
-                                            Estimasi Durasi: {formatDuration(getRundownTotalSeconds(data.rundown_segments))}
-                                        </Badge>
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                onClick={() => setIsCopyRundownModalOpen(true)}
+                                                className="rounded-xl border-primary/20 text-primary hover:bg-primary/5 font-bold text-xs"
+                                            >
+                                                <Copy className="mr-2 h-4 w-4" />
+                                                Salin dari Event Lain
+                                            </Button>
+                                            <Badge variant="outline" className="px-4 py-2 rounded-xl bg-primary/5 border-primary/10 text-primary font-bold text-[10px] uppercase tracking-widest">
+                                                Estimasi Durasi: {formatDuration(getRundownTotalSeconds(data.rundown_segments))}
+                                            </Badge>
+                                        </div>
                                     </div>
 
                                     <div className="space-y-6">
@@ -3446,6 +3505,111 @@ return;
                             </div>
                         </>
                     )}
+                </DialogContent>
+            </Dialog>
+
+            {/* Copy Rundown Modal */}
+            <Dialog
+                open={isCopyRundownModalOpen}
+                onOpenChange={(open) => {
+                    setIsCopyRundownModalOpen(open);
+
+                    if (!open) {
+                        setCopyRundownSearch('');
+                    }
+                }}
+            >
+                <DialogContent className="max-w-2xl overflow-hidden rounded-[28px] p-0">
+                    <DialogHeader className="border-b border-border/40 bg-gradient-to-br from-primary/10 via-background to-background p-6">
+                        <DialogTitle className="text-xl font-black tracking-tight">
+                            Salin Rundown dari Event Lain
+                        </DialogTitle>
+                        <DialogDescription className="text-xs font-medium text-muted-foreground">
+                            Pilih event sumber. Segmen, fase, urutan, lagu, dan durasi akan disalin ke rundown event ini.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-3 p-6">
+                        <div className="relative">
+                            <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                                value={copyRundownSearch}
+                                onChange={(e) => setCopyRundownSearch(e.target.value)}
+                                placeholder="Cari judul atau tanggal event..."
+                                className="h-10 rounded-xl pl-9"
+                            />
+                        </div>
+
+                        {data.rundown_segments.length > 0 && (
+                            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-800">
+                                Rundown yang sedang diedit akan diganti. Simpan event setelah menyalin untuk menerapkan.
+                            </div>
+                        )}
+
+                        <div className="max-h-[45vh] space-y-2 overflow-y-auto pr-1">
+                            {copyRundownSources.length === 0 ? (
+                                <div className="rounded-2xl border border-dashed border-border/60 p-8 text-center">
+                                    <p className="text-sm font-bold text-foreground">
+                                        Tidak ada rundown untuk disalin
+                                    </p>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                        Event lain belum memiliki rundown, atau pencarian tidak cocok.
+                                    </p>
+                                </div>
+                            ) : (
+                                copyRundownSources.map((source) => (
+                                    <div
+                                        key={source.id}
+                                        className="flex flex-col gap-3 rounded-2xl border border-border/50 bg-card/60 p-4 transition-colors hover:border-primary/30 hover:bg-primary/[0.03] sm:flex-row sm:items-center sm:justify-between"
+                                    >
+                                        <div className="min-w-0">
+                                            <p className="truncate text-sm font-bold text-foreground">
+                                                {source.title}
+                                            </p>
+                                            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+                                                <span>
+                                                    {source.date
+                                                        ? format(
+                                                              new Date(`${source.date}T00:00:00`),
+                                                              'd MMM yyyy',
+                                                              { locale: id },
+                                                          )
+                                                        : 'Tanpa tanggal'}
+                                                </span>
+                                                <span className="text-border">•</span>
+                                                <span>{source.category}</span>
+                                                <span className="text-border">•</span>
+                                                <span>{source.rundown_segments.length} segmen</span>
+                                                <span className="text-border">•</span>
+                                                <span>
+                                                    {formatDuration(
+                                                        getRundownTotalSeconds(source.rundown_segments),
+                                                    )}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            onClick={() => copyRundownFromEvent(source)}
+                                            className="shrink-0 rounded-xl font-bold"
+                                        >
+                                            <Copy className="mr-1.5 h-3.5 w-3.5" />
+                                            Salin
+                                        </Button>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+
+                    <DialogFooter className="border-t border-border/40 p-4">
+                        <DialogClose asChild>
+                            <Button type="button" variant="ghost" className="font-semibold">
+                                Batal
+                            </Button>
+                        </DialogClose>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
 
