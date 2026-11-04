@@ -6,13 +6,17 @@ import {
     CalendarDays,
     Clock,
     FileDown,
+    FileText,
+    Headphones,
     ListChecks,
     MapPin,
     Music,
     ScrollText,
     Timer,
+    X,
+    Youtube,
 } from 'lucide-react';
-import { Fragment, useState } from 'react';
+import { Fragment, useCallback, useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -50,8 +54,42 @@ interface RundownItemRow {
     song_title: string | null;
     song_artist: string | null;
     arrangement_name: string | null;
+    video_url: string | null;
+    audio_url: string | null;
+    pdf_url: string | null;
     duration_seconds: number;
 }
+
+type MediaKind = 'video' | 'audio' | 'pdf';
+
+interface MediaState {
+    kind: MediaKind;
+    url: string;
+    embedUrl: string | null;
+    songTitle: string;
+    arrangementName: string | null;
+}
+
+const MEDIA_META = {
+    video: {
+        label: 'Video YouTube',
+        icon: Youtube,
+        iconClass: 'bg-rose-50 text-rose-600',
+        maxWidth: 'max-w-3xl',
+    },
+    audio: {
+        label: 'Audio aransemen',
+        icon: Headphones,
+        iconClass: 'bg-emerald-50 text-emerald-600',
+        maxWidth: 'max-w-2xl',
+    },
+    pdf: {
+        label: 'Chord PDF',
+        icon: FileText,
+        iconClass: 'bg-amber-50 text-amber-600',
+        maxWidth: 'max-w-3xl',
+    },
+} as const;
 
 interface RundownSegmentRow {
     index: number;
@@ -84,6 +122,7 @@ interface ReportEvent {
 interface Props {
     event: ReportEvent;
     report: RundownReport;
+    back_url: string;
 }
 
 const formatDuration = (seconds: number) => {
@@ -108,9 +147,48 @@ const formatDurationLong = (seconds: number) => {
     return `${minutes} menit`;
 };
 
-export default function EventRundownReport({ event, report }: Props) {
+const getYouTubeEmbedUrl = (url: string): string | null => {
+    const match = url.match(
+        /(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/,
+    );
+
+    return match ? `https://www.youtube-nocookie.com/embed/${match[1]}` : null;
+};
+
+export default function EventRundownReport({ event, report, back_url }: Props) {
     const eventDate = event.date ? new Date(event.date) : null;
     const [phaseFilter, setPhaseFilter] = useState<PhaseFilter>('all');
+    const [activeMedia, setActiveMedia] = useState<MediaState | null>(null);
+    const [mediaClosing, setMediaClosing] = useState(false);
+
+    const openMedia = (media: MediaState) => {
+        setMediaClosing(false);
+        setActiveMedia(media);
+    };
+
+    const closeMedia = useCallback(() => {
+        setMediaClosing(true);
+        window.setTimeout(() => {
+            setActiveMedia(null);
+            setMediaClosing(false);
+        }, 180);
+    }, []);
+
+    useEffect(() => {
+        if (!activeMedia) {
+            return;
+        }
+
+        const handleKeyDown = (keyboardEvent: KeyboardEvent) => {
+            if (keyboardEvent.key === 'Escape') {
+                closeMedia();
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [activeMedia, closeMedia]);
 
     const visibleSegments =
         phaseFilter === 'all'
@@ -129,6 +207,86 @@ export default function EventRundownReport({ event, report }: Props) {
     const pdfHref = `/events/${event.id}/rundown-report/pdf${
         phaseFilter === 'all' ? '' : `?phase=${phaseFilter}`
     }`;
+    const mediaMeta = activeMedia ? MEDIA_META[activeMedia.kind] : null;
+    const MediaIcon = mediaMeta?.icon;
+
+    const renderMediaButtons = (item: RundownItemRow) => {
+        const songTitle = item.song_title;
+
+        if (!songTitle) {
+            return null;
+        }
+
+        const videoUrl = item.video_url;
+        const audioUrl = item.audio_url;
+        const pdfUrl = item.pdf_url;
+
+        if (!videoUrl && !audioUrl && !pdfUrl) {
+            return null;
+        }
+
+        return (
+            <span className="inline-flex items-center gap-1">
+                {videoUrl && (
+                    <button
+                        type="button"
+                        title="Putar video YouTube"
+                        aria-label={`Putar video ${songTitle}`}
+                        onClick={() =>
+                            openMedia({
+                                kind: 'video',
+                                url: videoUrl,
+                                embedUrl: getYouTubeEmbedUrl(videoUrl),
+                                songTitle,
+                                arrangementName: item.arrangement_name,
+                            })
+                        }
+                        className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-rose-100 bg-rose-50 text-rose-600 transition-colors hover:bg-rose-100 hover:text-rose-700 focus-visible:ring-2 focus-visible:ring-rose-300 focus-visible:outline-none"
+                    >
+                        <Youtube className="h-3.5 w-3.5" />
+                    </button>
+                )}
+                {audioUrl && (
+                    <button
+                        type="button"
+                        title="Putar audio"
+                        aria-label={`Putar audio ${songTitle}`}
+                        onClick={() =>
+                            openMedia({
+                                kind: 'audio',
+                                url: audioUrl,
+                                embedUrl: null,
+                                songTitle,
+                                arrangementName: item.arrangement_name,
+                            })
+                        }
+                        className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-emerald-100 bg-emerald-50 text-emerald-600 transition-colors hover:bg-emerald-100 hover:text-emerald-700 focus-visible:ring-2 focus-visible:ring-emerald-300 focus-visible:outline-none"
+                    >
+                        <Headphones className="h-3.5 w-3.5" />
+                    </button>
+                )}
+                {pdfUrl && (
+                    <button
+                        type="button"
+                        title="Lihat chord PDF"
+                        aria-label={`Lihat chord PDF ${songTitle}`}
+                        onClick={() =>
+                            openMedia({
+                                kind: 'pdf',
+                                url: pdfUrl,
+                                embedUrl: null,
+                                songTitle,
+                                arrangementName: item.arrangement_name,
+                            })
+                        }
+                        className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-amber-100 bg-amber-50 text-amber-600 transition-colors hover:bg-amber-100 hover:text-amber-700 focus-visible:ring-2 focus-visible:ring-amber-300 focus-visible:outline-none"
+                    >
+                        <FileText className="h-3.5 w-3.5" />
+                    </button>
+                )}
+            </span>
+        );
+    };
 
     return (
         <>
@@ -142,7 +300,7 @@ export default function EventRundownReport({ event, report }: Props) {
                             size="icon"
                             aria-label="Kembali ke daftar event"
                             className="h-10 w-10 shrink-0 border-slate-200 text-slate-600 hover:bg-slate-50"
-                            onClick={() => router.get('/events')}
+                            onClick={() => router.get(back_url)}
                         >
                             <ArrowLeft className="h-4 w-4" />
                         </Button>
@@ -327,7 +485,7 @@ export default function EventRundownReport({ event, report }: Props) {
                                 className="mt-4 border-slate-200 text-xs font-semibold"
                                 onClick={() =>
                                     report.segments.length === 0
-                                        ? router.get('/events')
+                                        ? router.get(back_url)
                                         : setPhaseFilter('all')
                                 }
                             >
@@ -409,6 +567,7 @@ export default function EventRundownReport({ event, report }: Props) {
                                                                         : ''}
                                                                 </span>
                                                             )}
+                                                            {renderMediaButtons(item)}
                                                         </div>
                                                     </td>
                                                     <td className="px-3 py-2 text-center font-mono text-slate-500">
@@ -434,6 +593,116 @@ export default function EventRundownReport({ event, report }: Props) {
                     )}
                 </div>
             </div>
+
+            {activeMedia && (
+                <div
+                    className={cn(
+                        'fixed inset-x-0 bottom-0 z-50 flex justify-center px-3 pb-3 sm:px-6 sm:pb-6',
+                        mediaClosing
+                            ? 'animate-out fade-out slide-out-to-bottom-4 duration-200'
+                            : 'animate-in fade-in slide-in-from-bottom-8 duration-300',
+                    )}
+                >
+                    <div
+                        role="dialog"
+                        aria-label={`Player ${activeMedia.songTitle}`}
+                        className={cn(
+                            'w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl ring-1 ring-slate-900/5',
+                            mediaMeta?.maxWidth,
+                        )}
+                    >
+                        <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/80 px-4 py-3">
+                            <div className="flex min-w-0 items-center gap-2.5">
+                                <div
+                                    className={cn(
+                                        'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl',
+                                        mediaMeta?.iconClass,
+                                    )}
+                                >
+                                    {MediaIcon && <MediaIcon className="h-4 w-4" />}
+                                </div>
+                                <div className="min-w-0">
+                                    <p className="truncate text-sm font-bold text-slate-900">
+                                        {activeMedia.songTitle}
+                                    </p>
+                                    <p className="truncate text-[11px] font-medium text-slate-500">
+                                        {mediaMeta?.label}
+                                        {activeMedia.arrangementName
+                                            ? ` · ${activeMedia.arrangementName}`
+                                            : ''}
+                                    </p>
+                                </div>
+                            </div>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                aria-label="Tutup player"
+                                onClick={closeMedia}
+                                className="h-8 w-8 shrink-0 text-slate-500 hover:bg-slate-200/60"
+                            >
+                                <X className="h-4 w-4" />
+                            </Button>
+                        </div>
+                        <div className="p-3 sm:p-4">
+                            {activeMedia.kind === 'video' ? (
+                                activeMedia.embedUrl ? (
+                                    <div className="aspect-video overflow-hidden rounded-xl bg-black">
+                                        <iframe
+                                            key={activeMedia.url}
+                                            src={activeMedia.embedUrl}
+                                            title={`Video ${activeMedia.songTitle}`}
+                                            className="h-full w-full"
+                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                            allowFullScreen
+                                            referrerPolicy="strict-origin-when-cross-origin"
+                                        />
+                                    </div>
+                                ) : (
+                                    <a
+                                        href={activeMedia.url}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-6 text-sm font-bold text-rose-600 transition-colors hover:bg-rose-50"
+                                    >
+                                        <Youtube className="h-4 w-4" />
+                                        Buka video di tab baru
+                                    </a>
+                                )
+                            ) : activeMedia.kind === 'pdf' ? (
+                                <div className="space-y-2">
+                                    <div className="h-[60vh] min-h-[320px] overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
+                                        <iframe
+                                            key={activeMedia.url}
+                                            src={activeMedia.url}
+                                            title={`Chord PDF ${activeMedia.songTitle}`}
+                                            className="h-full w-full"
+                                        />
+                                    </div>
+                                    <a
+                                        href={activeMedia.url}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 hover:underline"
+                                    >
+                                        <FileText className="h-3.5 w-3.5" />
+                                        Buka PDF di tab baru
+                                    </a>
+                                </div>
+                            ) : (
+                                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                                    <audio
+                                        key={activeMedia.url}
+                                        src={activeMedia.url}
+                                        controls
+                                        autoPlay
+                                        className="w-full"
+                                    />
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </>
     );
 }

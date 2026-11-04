@@ -146,13 +146,17 @@ class EventController extends Controller
             'rundownSegments.items.arrangement',
         ])->orderBy('date', 'desc')->get();
 
-        $events->each(function (Event $event) use ($membersById): void {
+        $events->each(function (Event $event) use ($membersById, $user): void {
             $event->volunteers->each(function ($volunteer) use ($membersById): void {
                 $volunteer->setAttribute('member', $membersById->get((string) $volunteer->member_id));
             });
             $event->participants->each(function ($participant) use ($membersById): void {
                 $participant->setAttribute('member', $membersById->get((string) $participant->member_id));
             });
+            $event->setAttribute(
+                'can_view_rundown',
+                $user->isAdmin() || $event->isVolunteerAssigned($user->member_id),
+            );
         });
 
         return Inertia::render('events/index', [
@@ -171,7 +175,10 @@ class EventController extends Controller
 
     public function rundownReport(Event $event)
     {
-        $this->authorizeEventReports();
+        $this->authorizeEventRundown($event);
+
+        $user = request()->user();
+        $canBrowseEvents = $user->isAdmin() || $user->schedulingDepartments()->exists();
 
         return Inertia::render('events/rundown-report', [
             'event' => [
@@ -183,6 +190,7 @@ class EventController extends Controller
                 'category' => $event->category,
             ],
             'report' => $this->buildRundownReportData($event),
+            'back_url' => $canBrowseEvents ? '/events' : '/my/events',
             'breadcrumbs' => [
                 ['title' => 'Event Dashboard', 'href' => '/events'],
                 ['title' => 'Laporan Rundown', 'href' => '/events/'.$event->id.'/rundown-report'],
@@ -192,7 +200,7 @@ class EventController extends Controller
 
     public function rundownReportPdf(Event $event)
     {
-        $this->authorizeEventReports();
+        $this->authorizeEventRundown($event);
 
         $phase = $this->normalizeRundownPhase(request()->query('phase'));
 
@@ -216,12 +224,15 @@ class EventController extends Controller
         return in_array($phase, ['before', 'during', 'after'], true) ? $phase : null;
     }
 
-    private function authorizeEventReports(): void
+    private function authorizeEventRundown(Event $event): void
     {
         $user = request()->user();
-        $departmentIds = $user->schedulingDepartments()->pluck('departments.id')->map(fn ($id) => (int) $id)->all();
 
-        abort_unless($user->isAdmin() || $departmentIds !== [], 403);
+        abort_unless(
+            $user?->isAdmin() || $event->isVolunteerAssigned($user?->member_id),
+            403,
+            'Anda tidak memiliki akses ke rundown event ini.',
+        );
     }
 
     private function buildRundownReportData(Event $event, ?string $phase = null): array
@@ -236,9 +247,20 @@ class EventController extends Controller
         $start = $event->date && $event->time
             ? Carbon::parse($event->date.' '.$event->time)
             : null;
-        $cursor = $start?->copy();
+
+        // Jam event adalah awal segmen "Selama event" pertama, sehingga
+        // segmen "Sebelum event" dihitung mundur dari jam tersebut.
+        $anchorIndex = $event->rundownSegments->search(
+            fn ($segment): bool => ($segment->phase ?? 'during') === 'during'
+        );
+        $beforeSeconds = $event->rundownSegments
+            ->take($anchorIndex === false ? 0 : $anchorIndex)
+            ->sum(fn ($segment): int => (int) $segment->duration_seconds);
+
+        $cursor = $start?->copy()->subSeconds($beforeSeconds);
 
         $segments = [];
+        $canViewPdf = request()->user()?->isAdmin() ?? false;
 
         foreach ($event->rundownSegments as $segment) {
             $items = $segment->items
@@ -247,6 +269,11 @@ class EventController extends Controller
                     'song_title' => $item->song?->title,
                     'song_artist' => $item->song?->artist,
                     'arrangement_name' => $item->arrangement?->name,
+                    'video_url' => $item->arrangement?->video_url,
+                    'audio_url' => $item->arrangement?->audio_url,
+                    'pdf_url' => $canViewPdf && $item->arrangement?->pdf_path
+                        ? '/arrangements/'.$item->arrangement->id.'/pdf'
+                        : null,
                     'duration_seconds' => (int) $item->duration_seconds,
                 ])
                 ->values()

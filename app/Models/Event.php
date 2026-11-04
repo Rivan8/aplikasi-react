@@ -40,6 +40,13 @@ class Event extends Model
         return $this->hasMany(EventVolunteer::class);
     }
 
+    public function isVolunteerAssigned(?string $memberId): bool
+    {
+        return $memberId !== null
+            && $memberId !== ''
+            && $this->volunteers()->where('member_id', $memberId)->exists();
+    }
+
     public function rundownSegments()
     {
         return $this->hasMany(EventRundownSegment::class)->orderBy('sort_order');

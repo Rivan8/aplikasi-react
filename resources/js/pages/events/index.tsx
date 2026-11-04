@@ -189,6 +189,7 @@ interface Event {
     total_sessions?: number;
     expected: number;
     image_path: string | null;
+    can_view_rundown?: boolean;
     volunteers: Volunteer[];
     rundown_segments: EventRundownSegment[];
     sessions?: EventSession[];
@@ -1696,16 +1697,18 @@ return false;
                                         )}
                                     </div>
                                     <div className="flex gap-2">
-                                        <Button
-                                            variant="outline"
-                                            size="icon"
-                                            className="h-10 w-10 rounded-xl border-white/20 bg-black/30 text-white hover:bg-white/20 hover:text-white"
-                                            title="Laporan Rundown"
-                                            aria-label="Laporan Rundown"
-                                            onClick={() => router.get(`/events/${event.id}/rundown-report`)}
-                                        >
-                                            <ScrollText className="h-5 w-5" />
-                                        </Button>
+                                        {event.can_view_rundown && (
+                                            <Button
+                                                variant="outline"
+                                                size="icon"
+                                                className="h-10 w-10 rounded-xl border-white/20 bg-black/30 text-white hover:bg-white/20 hover:text-white"
+                                                title="Laporan Rundown"
+                                                aria-label="Laporan Rundown"
+                                                onClick={() => router.get(`/events/${event.id}/rundown-report`)}
+                                            >
+                                                <ScrollText className="h-5 w-5" />
+                                            </Button>
+                                        )}
                                         <Button
                                             variant="outline"
                                             size="icon"

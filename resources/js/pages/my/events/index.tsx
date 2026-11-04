@@ -6,6 +6,7 @@ import {
     MapPin,
     Play,
     Radio,
+    ScrollText,
     Users,
     XCircle,
 } from 'lucide-react';
@@ -433,6 +434,21 @@ export default function MyEvents({
                                                 </Link>
                                             </Button>
                                         </div>
+                                        {event.rundown_segments &&
+                                            event.rundown_segments.length > 0 && (
+                                                <Button
+                                                    asChild
+                                                    variant="outline"
+                                                    className="w-full border-primary/20 text-primary hover:bg-primary/5"
+                                                >
+                                                    <Link
+                                                        href={`/events/${event.id}/rundown-report`}
+                                                    >
+                                                        <ScrollText className="mr-2 h-4 w-4" />
+                                                        Lihat Laporan Rundown
+                                                    </Link>
+                                                </Button>
+                                            )}
                                     </CardContent>
                                 </Card>
                             );

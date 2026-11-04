@@ -24,6 +24,27 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureDefaults();
+        $this->extendPhpIniScanDir();
+    }
+
+    /**
+     * Make `php artisan serve` read .php-ini/upload.ini. Laravel only forwards
+     * allowlisted env vars to the PHP child, and Herd already sets this one.
+     */
+    protected function extendPhpIniScanDir(): void
+    {
+        $scanDir = base_path('.php-ini');
+
+        if (! app()->runningInConsole() || ! app()->environment('local') || ! is_dir($scanDir)) {
+            return;
+        }
+
+        $current = $_ENV['HERD_PHP_83_INI_SCAN_DIR'] ?? getenv('HERD_PHP_83_INI_SCAN_DIR');
+        $current = is_string($current) && $current !== '' ? $current : '';
+
+        $_ENV['HERD_PHP_83_INI_SCAN_DIR'] = $current === ''
+            ? $scanDir
+            : $current.PATH_SEPARATOR.$scanDir;
     }
 
     /**

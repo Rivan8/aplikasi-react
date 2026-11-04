@@ -67,6 +67,8 @@ interface SongArrangement {
     chords: string | null;
     video_url: string | null;
     pdf_path: string | null;
+    audio_path: string | null;
+    audio_url: string | null;
     has_lyrics: boolean;
     has_chords: boolean;
     has_pdf: boolean;
@@ -97,6 +99,20 @@ interface Props {
 }
 
 const TIME_SIGNATURES = ['4/4', '3/4', '2/4', '6/8', '12/8', '2/2'];
+
+const AUDIO_FILE_ACCEPT = '.mp3,.wav,.ogg,.oga,.m4a,.aac,.flac,.webm,.opus,audio/*';
+
+const getYouTubeEmbedUrl = (url: string | null): string | null => {
+    if (!url) {
+        return null;
+    }
+
+    const match = url.match(
+        /(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/,
+    );
+
+    return match ? `https://www.youtube-nocookie.com/embed/${match[1]}` : null;
+};
 
 export default function SongsIndex({ songs, filters, breadcrumbs }: Props) {
     const [search, setSearch] = useState(filters.search || '');
@@ -148,8 +164,11 @@ return null;
         lyrics: '',
         video_url: '',
         pdf_file: null as File | null,
+        audio_file: null as File | null,
         _method: 'POST' as 'POST' | 'PUT',
     });
+
+    const [audioPreview, setAudioPreview] = useState<string | null>(null);
 
     const [lyricSections, setLyricSections] = useState<{heading: string; body: string}[]>([]);
 
@@ -195,6 +214,7 @@ return;
         arrangementForm.reset();
         arrangementForm.setData('_method', 'POST');
         setLyricSections([]);
+        setAudioPreview(null);
         setIsArrangementModalOpen(true);
     };
 
@@ -211,8 +231,10 @@ return;
             lyrics: arr.lyrics || '',
             video_url: arr.video_url || '',
             pdf_file: null,
+            audio_file: null,
             _method: 'PUT',
         });
+        setAudioPreview(null);
         setIsArrangementModalOpen(true);
     };
 
@@ -234,6 +256,21 @@ return;
                 }
             });
         }
+    };
+
+    const handleAudioFileChange = (file: File | null) => {
+        if (file && file.size > 20 * 1024 * 1024) {
+            toast.error('Ukuran file audio maksimal 20 MB.');
+
+            return;
+        }
+
+        if (audioPreview) {
+            URL.revokeObjectURL(audioPreview);
+        }
+
+        setAudioPreview(file ? URL.createObjectURL(file) : null);
+        arrangementForm.setData('audio_file', file);
     };
 
     const handleArrangementSubmit = (e: React.FormEvent) => {
@@ -496,19 +533,43 @@ blocks = text.split(/\n\s*\n/);
                                                             </div>
 
                                                             {activeArrangement.video_url && (
-                                                                <div className="flex items-center gap-4 group">
+                                                                <div className="flex items-start gap-4 group">
                                                                     <div className="h-8 w-8 rounded-lg bg-rose-50 dark:bg-rose-900/20 flex items-center justify-center text-rose-600 shrink-0">
                                                                         <Youtube className="h-4 w-4" />
                                                                     </div>
-                                                                    <div className="flex-1">
-                                                                        <p className="text-sm font-bold">YouTube Reference</p>
-                                                                        <a
-                                                                            href={activeArrangement.video_url}
-                                                                            target="_blank"
-                                                                            className="text-xs text-blue-600 hover:underline flex items-center gap-1 mt-1"
-                                                                        >
-                                                                            {activeArrangement.video_url} <ExternalLink className="h-3 w-3" />
-                                                                        </a>
+                                                                    <div className="flex-1 min-w-0 space-y-3">
+                                                                        <div className="flex items-center justify-between gap-2">
+                                                                            <p className="text-sm font-bold">YouTube Reference</p>
+                                                                            <a
+                                                                                href={activeArrangement.video_url}
+                                                                                target="_blank"
+                                                                                rel="noopener noreferrer"
+                                                                                className="text-[10px] font-black uppercase tracking-widest text-blue-600 hover:underline flex items-center gap-1"
+                                                                            >
+                                                                                Buka di YouTube <ExternalLink className="h-3 w-3" />
+                                                                            </a>
+                                                                        </div>
+                                                                        {getYouTubeEmbedUrl(activeArrangement.video_url) ? (
+                                                                            <div className="aspect-video w-full overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 bg-black">
+                                                                                <iframe
+                                                                                    src={getYouTubeEmbedUrl(activeArrangement.video_url)!}
+                                                                                    title={`YouTube - ${activeArrangement.name}`}
+                                                                                    className="h-full w-full"
+                                                                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                                                                    referrerPolicy="strict-origin-when-cross-origin"
+                                                                                    allowFullScreen
+                                                                                />
+                                                                            </div>
+                                                                        ) : (
+                                                                            <a
+                                                                                href={activeArrangement.video_url}
+                                                                                target="_blank"
+                                                                                rel="noopener noreferrer"
+                                                                                className="block truncate rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-blue-600 hover:underline dark:border-slate-800 dark:bg-slate-900"
+                                                                            >
+                                                                                {activeArrangement.video_url}
+                                                                            </a>
+                                                                        )}
                                                                     </div>
                                                                 </div>
                                                             )}
@@ -527,20 +588,55 @@ blocks = text.split(/\n\s*\n/);
                                                         </div>
                                                     </CardHeader>
                                                     <CardContent className="p-6">
-                                                        {activeArrangement.pdf_path ? (
-                                                            <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800">
-                                                                <div className="flex items-center gap-3">
-                                                                    <div className="h-10 w-10 bg-rose-100 text-rose-600 rounded flex items-center justify-center">
-                                                                        <FileIcon className="h-6 w-6" />
+                                                        {activeArrangement.pdf_path || activeArrangement.audio_url ? (
+                                                            <div className="space-y-3">
+                                                                {activeArrangement.pdf_path && (
+                                                                    <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800">
+                                                                        <div className="flex items-center gap-3">
+                                                                            <div className="h-10 w-10 bg-rose-100 text-rose-600 rounded flex items-center justify-center">
+                                                                                <FileIcon className="h-6 w-6" />
+                                                                            </div>
+                                                                            <div>
+                                                                                <p className="text-sm font-bold">Chord Chart (PDF)</p>
+                                                                                <p className="text-[10px] text-slate-400 uppercase font-black">Ready to Download</p>
+                                                                            </div>
+                                                                        </div>
+                                                                        <Button size="sm" asChild variant="outline" className="h-8 text-xs font-bold">
+                                                                            <a href={`/arrangements/${activeArrangement.id}/pdf`} target="_blank" rel="noopener noreferrer">View File</a>
+                                                                        </Button>
                                                                     </div>
-                                                                    <div>
-                                                                        <p className="text-sm font-bold">Chord Chart (PDF)</p>
-                                                                        <p className="text-[10px] text-slate-400 uppercase font-black">Ready to Download</p>
+                                                                )}
+
+                                                                {activeArrangement.audio_url && (
+                                                                    <div className="overflow-hidden rounded-xl border border-emerald-100 bg-emerald-50/40 dark:border-emerald-900/40 dark:bg-emerald-900/10">
+                                                                        <div className="flex items-center justify-between gap-3 p-4 pb-2">
+                                                                            <div className="flex items-center gap-3">
+                                                                                <div className="h-10 w-10 bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-300 rounded flex items-center justify-center">
+                                                                                    <Music className="h-5 w-5" />
+                                                                                </div>
+                                                                                <div>
+                                                                                    <p className="text-sm font-bold">Audio Reference</p>
+                                                                                    <p className="text-[10px] text-emerald-700/70 dark:text-emerald-300/70 uppercase font-black">
+                                                                                        {activeArrangement.audio_path?.split('.').pop()?.toUpperCase() || 'AUDIO'}
+                                                                                    </p>
+                                                                                </div>
+                                                                            </div>
+                                                                            <a
+                                                                                href={activeArrangement.audio_url}
+                                                                                download
+                                                                                className="text-[10px] font-black uppercase tracking-widest text-emerald-700 hover:underline dark:text-emerald-300"
+                                                                            >
+                                                                                Unduh
+                                                                            </a>
+                                                                        </div>
+                                                                        <audio
+                                                                            controls
+                                                                            preload="metadata"
+                                                                            src={activeArrangement.audio_url}
+                                                                            className="w-full px-4 pb-4"
+                                                                        />
                                                                     </div>
-                                                                </div>
-                                                                <Button size="sm" asChild variant="outline" className="h-8 text-xs font-bold">
-                                                                    <a href={`/arrangements/${activeArrangement.id}/pdf`} target="_blank" rel="noopener noreferrer">View File</a>
-                                                                </Button>
+                                                                )}
                                                             </div>
                                                         ) : (
                                                             <div className="py-12 text-center border-2 border-dashed rounded-xl border-slate-100 dark:border-slate-800">
@@ -652,7 +748,20 @@ blocks = text.split(/\n\s*\n/);
             </Dialog>
 
             {/* ADD/EDIT ARRANGEMENT MODAL */}
-            <Dialog open={isArrangementModalOpen} onOpenChange={setIsArrangementModalOpen}>
+            <Dialog
+                open={isArrangementModalOpen}
+                onOpenChange={(open) => {
+                    setIsArrangementModalOpen(open);
+
+                    if (!open) {
+                        if (audioPreview) {
+                            URL.revokeObjectURL(audioPreview);
+                        }
+
+                        setAudioPreview(null);
+                    }
+                }}
+            >
                 <DialogContent className="max-w-6xl p-0 overflow-hidden border-none shadow-2xl h-[90vh] flex flex-col">
                     <DialogHeader className="bg-emerald-600 p-6 text-white shrink-0">
                         <DialogTitle className="text-2xl font-black italic tracking-tighter">
@@ -707,10 +816,44 @@ blocks = text.split(/\n\s*\n/);
                                     <div className="space-y-2">
                                         <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">YouTube Reference URL</Label>
                                         <Input value={arrangementForm.data.video_url} onChange={e => arrangementForm.setData('video_url', e.target.value)} placeholder="https://youtube.com/..." />
+                                        {getYouTubeEmbedUrl(arrangementForm.data.video_url) && (
+                                            <div className="aspect-video w-full overflow-hidden rounded-lg border border-slate-200 bg-black dark:border-slate-800">
+                                                <iframe
+                                                    src={getYouTubeEmbedUrl(arrangementForm.data.video_url)!}
+                                                    title="Pratinjau YouTube"
+                                                    className="h-full w-full"
+                                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                                    referrerPolicy="strict-origin-when-cross-origin"
+                                                    allowFullScreen
+                                                />
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="space-y-2">
                                         <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Chord Chart (PDF)</Label>
                                         <Input type="file" accept=".pdf" onChange={e => arrangementForm.setData('pdf_file', e.target.files?.[0] || null)} />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Audio Referensi</Label>
+                                        {(audioPreview || editingArrangement?.audio_url) && (
+                                            <div className="space-y-2 rounded-lg border border-emerald-100 bg-emerald-50/40 p-3 dark:border-emerald-900/40 dark:bg-emerald-900/10">
+                                                <p className="flex items-center gap-2 text-[11px] font-bold text-emerald-700 dark:text-emerald-300">
+                                                    <Music className="h-3.5 w-3.5" />
+                                                    {audioPreview ? arrangementForm.data.audio_file?.name : 'Audio tersimpan'}
+                                                </p>
+                                                <audio
+                                                    controls
+                                                    preload="metadata"
+                                                    src={audioPreview || editingArrangement?.audio_url || undefined}
+                                                    className="w-full"
+                                                />
+                                            </div>
+                                        )}
+                                        <Input type="file" accept={AUDIO_FILE_ACCEPT} onChange={e => handleAudioFileChange(e.target.files?.[0] || null)} />
+                                        <p className="text-[10px] font-medium text-slate-400">MP3, WAV, OGG, M4A, AAC, FLAC, WebM, Opus &middot; maks 20 MB</p>
+                                        {arrangementForm.errors.audio_file && (
+                                            <p className="text-xs font-semibold text-rose-600">{arrangementForm.errors.audio_file}</p>
+                                        )}
                                     </div>
                                 </div>
 

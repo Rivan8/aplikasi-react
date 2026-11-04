@@ -49,6 +49,14 @@ class LiveEventController extends Controller
 
     public function userRundown(Event $event)
     {
+        $user = request()->user();
+
+        abort_unless(
+            $user?->isAdmin() || $event->isVolunteerAssigned($user?->member_id),
+            403,
+            'Anda tidak memiliki akses ke rundown event ini.',
+        );
+
         $event->load(['rundownSegments.items.song.arrangements', 'rundownSegments.items.arrangement', 'liveSession.runs', 'liveSession.itemRuns']);
 
         return Inertia::render('my/live-rundown', [

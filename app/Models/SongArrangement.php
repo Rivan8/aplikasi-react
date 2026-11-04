@@ -19,6 +19,7 @@ class SongArrangement extends Model
         'chords',
         'video_url',
         'pdf_path',
+        'audio_path',
         'has_lyrics',
         'has_chords',
         'has_pdf',
@@ -31,6 +32,15 @@ class SongArrangement extends Model
         'has_pdf' => 'boolean',
         'has_audio' => 'boolean',
     ];
+
+    protected $appends = ['audio_url'];
+
+    public function getAudioUrlAttribute(): ?string
+    {
+        return $this->audio_path
+            ? '/storage/'.ltrim($this->audio_path, '/')
+            : null;
+    }
 
     /**
      * Get the song that owns the arrangement.
