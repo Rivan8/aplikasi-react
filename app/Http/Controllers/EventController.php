@@ -19,6 +19,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
@@ -881,12 +882,6 @@ class EventController extends Controller
             ->filter(fn (array $assignment): bool => ! empty($assignment['member_id']))
             ->groupBy(fn (array $assignment): string => (string) $assignment['member_id'])
             ->each(function ($memberAssignments, string $memberId) use ($event, $memberApi): void {
-                $user = User::query()
-                    ->where('member_id', $memberId)
-                    ->whereNotNull('email')
-                    ->where('email', '!=', '')
-                    ->first();
-
                 $roles = $memberAssignments
                     ->pluck('role_name')
                     ->filter()
@@ -899,15 +894,29 @@ class EventController extends Controller
                     (int) $memberAssignments->first()['assignment_id'],
                 );
 
-                if ($user) {
-                    $user->notify($notification);
+                try {
+                    $user = User::query()
+                        ->where('member_id', $memberId)
+                        ->whereNotNull('email')
+                        ->where('email', '!=', '')
+                        ->first();
 
-                    return;
-                }
+                    if ($user) {
+                        $user->notifyNow($notification);
 
-                $memberEmail = $memberApi->findById($memberId)['email'] ?? null;
-                if (is_string($memberEmail) && filter_var($memberEmail, FILTER_VALIDATE_EMAIL)) {
-                    Notification::route('mail', $memberEmail)->notify($notification);
+                        return;
+                    }
+
+                    $memberEmail = $memberApi->findById($memberId)['email'] ?? null;
+                    if (is_string($memberEmail) && filter_var($memberEmail, FILTER_VALIDATE_EMAIL)) {
+                        Notification::route('mail', $memberEmail)->notifyNow($notification);
+                    }
+                } catch (\Throwable $exception) {
+                    Log::error('Gagal mengirim notifikasi penjadwalan.', [
+                        'event_id' => $event->getKey(),
+                        'member_id' => $memberId,
+                        'error' => $exception->getMessage(),
+                    ]);
                 }
             });
     }

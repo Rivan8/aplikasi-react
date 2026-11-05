@@ -61,15 +61,27 @@ class EventMessageNotification extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
+        $event = $this->eventMessage->event;
+        $hasAttachment = (bool) $this->eventMessage->attachment_path;
+
+        $data = [
+            'name' => $notifiable->name ?? 'Jemaat',
+            'eventTitle' => $event?->title ?: 'Event Pelayanan',
+            'messageTitle' => $this->eventMessage->title,
+            'messageBody' => $this->eventMessage->body ?? '',
+            'attachmentName' => $this->eventMessage->attachment_name,
+            'hasAttachment' => $hasAttachment,
+            'actionUrl' => $event
+                ? 'https://pcs.myesc.id/my/events/'.$event->getKey()
+                : 'https://pcs.myesc.id/my/events',
+        ];
+
         $mail = (new MailMessage)
             ->subject($this->eventMessage->title)
-            ->greeting('Halo '.($notifiable->name ?? 'Jemaat').',')
-            ->line('Anda menerima pesan baru untuk event pelayanan.')
-            ->line('**'.$this->eventMessage->body.'**')
-            ->action('Buka ESC Planning Center', 'https://pcs.myesc.id')
-            ->salutation('Salam, PCS MYESC');
+            ->view('emails.event-message', $data)
+            ->text('emails.event-message-text', $data);
 
-        if ($this->eventMessage->attachment_path) {
+        if ($hasAttachment) {
             $mail->attachFromStorageDisk('public', $this->eventMessage->attachment_path, [
                 'as' => $this->eventMessage->attachment_name,
                 'mime' => $this->eventMessage->attachment_mime,

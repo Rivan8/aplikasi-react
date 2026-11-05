@@ -25,6 +25,7 @@ use App\Notifications\VolunteerScheduledNotification;
 use App\Services\MemberApiService;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
@@ -413,27 +414,35 @@ Route::middleware(['auth', 'verified'])->group(function () {
             'responded_at' => null,
         ]);
 
-        $user = User::query()
-            ->where('member_id', $validated['member_id'])
-            ->whereNotNull('email')
-            ->where('email', '!=', '')
-            ->first();
-
         $notification = new VolunteerScheduledNotification(
             $eventVolunteer->event,
             $eventVolunteer->role_name ?: 'Volunteer',
+            (int) $eventVolunteer->getKey(),
         );
 
-        if ($user) {
-            $eventVolunteer->load('event');
-            $user->notify($notification);
-        } else {
-            $member = app(MemberApiService::class)->findById((string) $validated['member_id']);
-            $email = $member['email'] ?? null;
+        try {
+            $user = User::query()
+                ->where('member_id', $validated['member_id'])
+                ->whereNotNull('email')
+                ->where('email', '!=', '')
+                ->first();
 
-            if (is_string($email) && filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                Notification::route('mail', $email)->notify($notification);
+            if ($user) {
+                $user->notifyNow($notification);
+            } else {
+                $member = app(MemberApiService::class)->findById((string) $validated['member_id']);
+                $email = $member['email'] ?? null;
+
+                if (is_string($email) && filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    Notification::route('mail', $email)->notifyNow($notification);
+                }
             }
+        } catch (Throwable $exception) {
+            Log::error('Gagal mengirim notifikasi penjadwalan.', [
+                'event_id' => $eventVolunteer->event_id,
+                'member_id' => $validated['member_id'],
+                'error' => $exception->getMessage(),
+            ]);
         }
 
         return back()->with('success', 'Volunteer berhasil diganti.');

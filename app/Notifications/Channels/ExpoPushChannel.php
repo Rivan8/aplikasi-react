@@ -24,6 +24,8 @@ class ExpoPushChannel
 
         $response = Http::acceptJson()
             ->asJson()
+            ->connectTimeout(5)
+            ->timeout(10)
             ->post(self::SEND_ENDPOINT, $message);
 
         if ($response->failed()) {

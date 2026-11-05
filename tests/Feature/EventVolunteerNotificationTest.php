@@ -125,16 +125,14 @@ it('builds a visible Expo payload for volunteer schedules', function () {
         'expo_push_token' => 'ExponentPushToken[test-token]',
     ]);
 
-    expect((new VolunteerScheduledNotification($event, 'Vocal'))->toExpo($user))->toMatchArray([
+    expect((new VolunteerScheduledNotification($event, 'Vocal', 321))->toExpo($user))->toMatchArray([
         'to' => 'ExponentPushToken[test-token]',
         'title' => 'Penjadwalan baru',
-        'body' => 'Anda mendapat jadwal pelayanan baru.',
+        'body' => 'Anda menerima penjadwalan baru.',
         'sound' => 'default',
         'channelId' => 'default',
         'data' => [
-            'url' => '/messages',
-            'category' => 'schedule_pending',
-            'event_id' => $event->id,
+            'notificationId' => (string) (1000000 + 321),
         ],
     ]);
 });

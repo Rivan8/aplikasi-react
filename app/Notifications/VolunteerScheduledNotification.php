@@ -3,11 +3,13 @@
 namespace App\Notifications;
 
 use App\Models\Event;
+use App\Models\User;
 use App\Notifications\Channels\ExpoPushChannel;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use Illuminate\Support\Carbon;
 
 class VolunteerScheduledNotification extends Notification implements ShouldQueue
 {
@@ -28,7 +30,7 @@ class VolunteerScheduledNotification extends Notification implements ShouldQueue
      */
     public function via(object $notifiable): array
     {
-        return $notifiable instanceof \App\Models\User
+        return $notifiable instanceof User
             ? ['mail', ExpoPushChannel::class]
             : ['mail'];
     }
@@ -53,17 +55,30 @@ class VolunteerScheduledNotification extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
+        $eventDate = $this->event->date
+            ? Carbon::parse($this->event->date)->locale('id')->translatedFormat('l, j F Y')
+            : '-';
+        $eventTime = $this->event->time
+            ? date('H:i', strtotime((string) $this->event->time))
+            : '-';
+        $attendanceTime = $this->event->attendance_start_time
+            ? date('H:i', strtotime((string) $this->event->attendance_start_time))
+            : $eventTime;
+
+        $data = [
+            'name' => $notifiable->name ?? 'Jemaat',
+            'eventTitle' => $this->event->title ?: 'Event Pelayanan',
+            'roleName' => $this->roleName,
+            'eventDate' => $eventDate,
+            'eventTime' => $eventTime,
+            'attendanceTime' => $attendanceTime,
+            'eventLocation' => $this->event->location ?: '-',
+            'actionUrl' => 'https://pcs.myesc.id/my/events/'.$this->event->getKey(),
+        ];
+
         return (new MailMessage)
-            ->subject('Jadwal pelayanan baru untuk Anda')
-            ->greeting('Halo '.($notifiable->name ?? 'Jemaat').',')
-            ->line('Anda mendapatkan jadwal pelayanan baru. Berikut detailnya:')
-            ->line('**'.$this->event->title.'**')
-            ->line('**Peran:** '.$this->roleName)
-            ->line('**Tanggal:** '.date('d-m-Y', strtotime((string) $this->event->date)))
-            ->line('**Waktu:** '.date('H:i', strtotime((string) $this->event->time)))
-            ->line('**Lokasi:** '.$this->event->location)
-            ->action('Lihat jadwal', 'https://pcs.myesc.id')
-            ->line('Silakan buka jadwal Anda untuk menerima atau menolak penugasan ini.')
-            ->salutation('Salam, PCS MYESC');
+            ->subject('Jadwal Pelayanan Baru: '.($this->event->title ?: 'Event Pelayanan'))
+            ->view('emails.volunteer-scheduled', $data)
+            ->text('emails.volunteer-scheduled-text', $data);
     }
 }
