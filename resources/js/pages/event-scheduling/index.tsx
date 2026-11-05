@@ -4,6 +4,7 @@ import {
     Check,
     ClipboardList,
     Clock3,
+    Copy,
     MapPin,
     Search,
     ShieldCheck,
@@ -28,6 +29,15 @@ import {
     CardTitle,
 } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -198,6 +208,9 @@ export default function EventScheduling({
     const [columnDragOverId, setColumnDragOverId] = useState<number | null>(
         null,
     );
+    const [copyDialogOpen, setCopyDialogOpen] = useState(false);
+    const [copySearch, setCopySearch] = useState('');
+    const [copyOverwrite, setCopyOverwrite] = useState(false);
     const dragSourceRef = useRef<{
         roleId: number;
         departmentId: number;
@@ -299,6 +312,58 @@ export default function EventScheduling({
         (role) =>
             can_manage_events || authorizedDepartments.has(role.department.id),
     ).length;
+    const copyableRoleIds = useMemo(
+        () =>
+            new Set(
+                eventRoles
+                    .filter(
+                        (role) =>
+                            can_manage_events ||
+                            authorizedDepartments.has(role.department.id),
+                    )
+                    .map((role) => role.id),
+            ),
+        [eventRoles, can_manage_events, authorizedDepartments],
+    );
+    const copySources = useMemo(() => {
+        if (!selectedEvent) {
+            return [];
+        }
+
+        const query = copySearch.trim().toLocaleLowerCase();
+
+        return events
+            .filter((event) => event.id !== selectedEvent.id)
+            .filter((event) => event.volunteers.length > 0)
+            .filter(
+                (event) =>
+                    query === '' ||
+                    event.title.toLocaleLowerCase().includes(query) ||
+                    event.category.toLocaleLowerCase().includes(query) ||
+                    (event.date ?? '').includes(query),
+            )
+            .map((event) => ({
+                event,
+                matchedCount: Object.keys(
+                    matchVolunteersToRoles(event, eventRoles).assignments,
+                ).filter((roleId) => copyableRoleIds.has(Number(roleId)))
+                    .length,
+            }))
+            .filter((source) => source.matchedCount > 0)
+            .sort((first, second) => {
+                const sameCategoryDiff =
+                    Number(second.event.category === selectedEvent.category) -
+                    Number(first.event.category === selectedEvent.category);
+
+                if (sameCategoryDiff !== 0) {
+                    return sameCategoryDiff;
+                }
+
+                return (second.event.date ?? '').localeCompare(
+                    first.event.date ?? '',
+                );
+            });
+    }, [copySearch, copyableRoleIds, eventRoles, events, selectedEvent]);
 
     const selectEvent = (eventId: string) => {
         const event = events.find((item) => item.id === Number(eventId));
@@ -329,6 +394,9 @@ export default function EventScheduling({
         setActiveRoleId(null);
         setDepartmentOrder(null);
         setColumnDragOverId(null);
+        setCopyDialogOpen(false);
+        setCopySearch('');
+        setCopyOverwrite(false);
     };
 
     const setRoleMember = (roleId: number, memberId: string) => {
@@ -456,6 +524,90 @@ export default function EventScheduling({
                 },
                 onFinish: () => setAcceptingAssignmentId(null),
             },
+        );
+    };
+
+    const copyScheduleFromEvent = (source: Event) => {
+        const matched = matchVolunteersToRoles(source, eventRoles);
+        const nextAssignments = { ...assignments };
+        const scheduledMembers = new Set(
+            Object.values(nextAssignments).filter(Boolean),
+        );
+        const changedRoleIds = new Set<number>();
+        let copied = 0;
+        let skipped = 0;
+
+        eventRoles.forEach((role) => {
+            const memberId = matched.assignments[role.id];
+
+            if (!memberId || !copyableRoleIds.has(role.id)) {
+                return;
+            }
+
+            if (
+                !copyOverwrite &&
+                (nextAssignments[role.id] || scheduledMembers.has(memberId))
+            ) {
+                skipped++;
+
+                return;
+            }
+
+            if (nextAssignments[role.id] === memberId) {
+                return;
+            }
+
+            nextAssignments[role.id] = memberId;
+            scheduledMembers.add(memberId);
+            changedRoleIds.add(role.id);
+            copied++;
+        });
+
+        if (copied === 0) {
+            toast.info(
+                skipped > 0
+                    ? 'Semua posisi yang cocok sudah terisi. Centang "Timpa posisi yang sudah terisi" untuk menggantinya.'
+                    : 'Tidak ada posisi yang bisa disalin dari event ini.',
+            );
+
+            return;
+        }
+
+        setAssignments(nextAssignments);
+        setAttendanceStates((current) => {
+            const next = { ...current };
+
+            changedRoleIds.forEach((roleId) => {
+                next[roleId] = false;
+            });
+
+            return next;
+        });
+        setDirtyAttendance((current) => {
+            const next = new Set(current);
+
+            changedRoleIds.forEach((roleId) => next.delete(roleId));
+
+            return next;
+        });
+        setAcceptedRoles((current) => {
+            const next = new Set(current);
+
+            changedRoleIds.forEach((roleId) => next.delete(roleId));
+
+            return next;
+        });
+        setDirtyAcceptances((current) => {
+            const next = new Set(current);
+
+            changedRoleIds.forEach((roleId) => next.delete(roleId));
+
+            return next;
+        });
+        setCopyDialogOpen(false);
+        setCopySearch('');
+        toast.success(
+            `${copied} posisi disalin dari "${source.title}". Tekan Simpan Penjadwalan untuk menerapkan.`,
         );
     };
 
@@ -786,17 +938,36 @@ export default function EventScheduling({
                                     )}
                                 </div>
                             </div>
-                            <div className="flex shrink-0 items-center gap-3 rounded-2xl border bg-muted/20 px-4 py-3">
-                                <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                                    <Users className="size-5" />
-                                </div>
-                                <div>
-                                    <p className="text-xl font-black">
-                                        {eventRoles.length}
-                                    </p>
-                                    <p className="text-xs text-muted-foreground">
-                                        posisi pelayanan
-                                    </p>
+                            <div className="flex shrink-0 flex-wrap items-center gap-3">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="h-11 gap-2"
+                                    disabled={
+                                        eventRoles.length === 0 ||
+                                        copyableRoleIds.size === 0
+                                    }
+                                    onClick={() => {
+                                        setCopyDialogOpen(true);
+                                        setCopySearch('');
+                                        setCopyOverwrite(false);
+                                    }}
+                                >
+                                    <Copy className="size-4" />
+                                    Salin dari Event Lain
+                                </Button>
+                                <div className="flex items-center gap-3 rounded-2xl border bg-muted/20 px-4 py-3">
+                                    <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                                        <Users className="size-5" />
+                                    </div>
+                                    <div>
+                                        <p className="text-xl font-black">
+                                            {eventRoles.length}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground">
+                                            posisi pelayanan
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
                         </CardContent>
@@ -1581,6 +1752,151 @@ export default function EventScheduling({
                             </Button>
                         </div>
                     )}
+
+                    <Dialog
+                        open={copyDialogOpen}
+                        onOpenChange={(open) => {
+                            setCopyDialogOpen(open);
+
+                            if (!open) {
+                                setCopySearch('');
+                            }
+                        }}
+                    >
+                        <DialogContent className="max-w-2xl overflow-hidden rounded-[28px] p-0">
+                            <DialogHeader className="border-b border-border/40 bg-gradient-to-br from-primary/10 via-background to-background p-6">
+                                <DialogTitle className="text-xl font-black tracking-tight">
+                                    Salin Jadwal dari Event Lain
+                                </DialogTitle>
+                                <DialogDescription className="text-xs font-medium text-muted-foreground">
+                                    Pilih event sumber. Anggota yang sudah
+                                    dijadwalkan akan disalin ke{' '}
+                                    {selectedEvent.title} berdasarkan departemen
+                                    dan nama peran yang sama.
+                                </DialogDescription>
+                            </DialogHeader>
+
+                            <div className="space-y-3 p-6">
+                                <div className="relative">
+                                    <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                    <Input
+                                        type="search"
+                                        autoComplete="off"
+                                        value={copySearch}
+                                        onChange={(inputEvent) =>
+                                            setCopySearch(
+                                                inputEvent.target.value,
+                                            )
+                                        }
+                                        placeholder="Cari judul, kategori, atau tanggal event..."
+                                        className="h-10 rounded-xl pl-9"
+                                    />
+                                </div>
+
+                                <div className="flex items-start gap-3 rounded-xl border bg-muted/20 p-3">
+                                    <Checkbox
+                                        id="copy-overwrite"
+                                        checked={copyOverwrite}
+                                        onCheckedChange={(checked) =>
+                                            setCopyOverwrite(checked === true)
+                                        }
+                                    />
+                                    <div className="space-y-0.5">
+                                        <Label
+                                            htmlFor="copy-overwrite"
+                                            className="cursor-pointer text-sm font-semibold"
+                                        >
+                                            Timpa posisi yang sudah terisi
+                                        </Label>
+                                        <p className="text-xs text-muted-foreground">
+                                            Jika tidak dicentang, hanya posisi
+                                            kosong yang diisi dan anggota yang
+                                            sudah ada di event ini dilewati.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="max-h-[45vh] space-y-2 overflow-y-auto pr-1">
+                                    {copySources.length === 0 ? (
+                                        <div className="rounded-2xl border border-dashed border-border/60 p-8 text-center">
+                                            <p className="text-sm font-bold text-foreground">
+                                                Tidak ada jadwal untuk disalin
+                                            </p>
+                                            <p className="mt-1 text-xs text-muted-foreground">
+                                                Event lain belum memiliki
+                                                anggota pada posisi yang cocok,
+                                                atau pencarian tidak cocok.
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        copySources.map((source) => (
+                                            <div
+                                                key={source.event.id}
+                                                className="flex flex-col gap-3 rounded-2xl border border-border/50 bg-card/60 p-4 transition-colors hover:border-primary/30 hover:bg-primary/[0.03] sm:flex-row sm:items-center sm:justify-between"
+                                            >
+                                                <div className="min-w-0">
+                                                    <p className="truncate text-sm font-bold text-foreground">
+                                                        {source.event.title}
+                                                    </p>
+                                                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+                                                        <span>
+                                                            {formatEventDate(
+                                                                source.event
+                                                                    .date,
+                                                            )}
+                                                        </span>
+                                                        <span className="text-border">
+                                                            •
+                                                        </span>
+                                                        <span>
+                                                            {
+                                                                source.event
+                                                                    .category
+                                                            }
+                                                        </span>
+                                                        <span className="text-border">
+                                                            •
+                                                        </span>
+                                                        <span>
+                                                            {
+                                                                source.matchedCount
+                                                            }{' '}
+                                                            posisi cocok
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    onClick={() =>
+                                                        copyScheduleFromEvent(
+                                                            source.event,
+                                                        )
+                                                    }
+                                                    className="shrink-0 rounded-xl font-bold"
+                                                >
+                                                    <Copy className="mr-1.5 h-3.5 w-3.5" />
+                                                    Salin
+                                                </Button>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+
+                            <DialogFooter className="border-t border-border/40 p-4">
+                                <DialogClose asChild>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        className="font-semibold"
+                                    >
+                                        Batal
+                                    </Button>
+                                </DialogClose>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
                 </form>
             )}
         </div>
