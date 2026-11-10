@@ -163,9 +163,16 @@ interface EventMessage {
     title: string;
     body: string;
     created_at: string;
+    sender_name?: string | null;
     attachment_path?: string | null;
     attachment_name?: string | null;
     attachment_size?: number | null;
+}
+
+interface EventMessageThread {
+    title: string;
+    messages: EventMessage[];
+    latest_at: string;
 }
 
 interface EventScheduleItem {
@@ -296,6 +303,29 @@ const eventTimingStyles: Record<EventTiming, { label: string; className: string 
         label: 'Jadwal belum ditentukan',
         className: 'border-slate-200/70 bg-slate-500/90 text-white',
     },
+};
+
+const groupMessagesByTopic = (messages?: EventMessage[]): EventMessageThread[] => {
+    const threads = new Map<string, EventMessageThread>();
+
+    (messages ?? []).forEach((message) => {
+        const key = message.title.trim().toLowerCase();
+        const thread = threads.get(key);
+
+        if (thread) {
+            thread.messages.unshift(message);
+
+            return;
+        }
+
+        threads.set(key, {
+            title: message.title,
+            messages: [message],
+            latest_at: message.created_at,
+        });
+    });
+
+    return Array.from(threads.values());
 };
 
 function SearchableSelect({
@@ -452,11 +482,17 @@ export default function Events({
     const [eventStatus, setEventStatus] = useState<'all' | 'upcoming' | 'past'>('all');
     const [eventSort, setEventSort] = useState<'date-asc' | 'date-desc' | 'title'>('date-asc');
     const [currentTime, setCurrentTime] = useState(() => new Date());
-    const [messageEvent, setMessageEvent] = useState<Event | null>(null);
+    const [messageEventId, setMessageEventId] = useState<number | null>(null);
+    const messageEvent = messageEventId ? events.find((event) => event.id === messageEventId) ?? null : null;
     const [messageTitle, setMessageTitle] = useState('');
     const [messageBody, setMessageBody] = useState('');
     const [messageAttachment, setMessageAttachment] = useState<File | null>(null);
     const [messageProcessing, setMessageProcessing] = useState(false);
+    const messageThreads = useMemo(() => groupMessagesByTopic(messageEvent?.messages), [messageEvent]);
+    const messageTopics = useMemo(
+        () => messageThreads.map((thread) => thread.title),
+        [messageThreads],
+    );
     const [departmentScheduleProcessing, setDepartmentScheduleProcessing] = useState(false);
     const [clientErrors, setClientErrors] = useState<Record<string, string>>({});
     const [timeScheduleTab, setTimeScheduleTab] = useState<'worship' | 'training' | 'other'>('worship');
@@ -1613,7 +1649,7 @@ return false;
                                                 className="h-9 w-9 rounded-full bg-background/80 text-primary shadow-2xl backdrop-blur-md border border-white/20 hover:bg-primary hover:text-white"
                                                 onClick={(e) => {
                                                     e.stopPropagation();
-                                                    setMessageEvent(event);
+                                                    setMessageEventId(event.id);
                                                     setMessageTitle('');
                                                     setMessageBody('');
                                                     setMessageAttachment(null);
@@ -1804,7 +1840,10 @@ return false;
                 open={!!messageEvent}
                 onOpenChange={(open) => {
                     if (!open && !messageProcessing) {
-                        setMessageEvent(null);
+                        setMessageEventId(null);
+                        setMessageTitle('');
+                        setMessageBody('');
+                        setMessageAttachment(null);
                     }
                 }}
             >
@@ -1831,8 +1870,6 @@ formData.append('attachment', messageAttachment);
                                 router.post('/event-messages', formData, {
                                     preserveScroll: true,
                                     onSuccess: () => {
-                                        setMessageEvent(null);
-                                        setMessageTitle('');
                                         setMessageBody('');
                                         setMessageAttachment(null);
                                     },
@@ -1843,17 +1880,28 @@ formData.append('attachment', messageAttachment);
                             <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-2 lg:overflow-hidden">
                                 <div className="space-y-4 border-b p-6 lg:border-r lg:border-b-0">
                                     <div className="rounded-xl border border-primary/15 bg-primary/5 px-4 py-3 text-sm font-semibold text-primary">Event: {messageEvent.title}</div>
-                                    <div className="space-y-2"><Label htmlFor="message-title">Judul Pesan</Label><Input id="message-title" value={messageTitle} onChange={(event) => setMessageTitle(event.target.value)} placeholder="Contoh: Persiapan pelayanan hari Minggu" maxLength={255} required /></div>
+                                    <div className="space-y-2"><Label htmlFor="message-title">Topik / Judul Pesan</Label><Input id="message-title" value={messageTitle} onChange={(event) => setMessageTitle(event.target.value)} list="event-message-topics" placeholder="Contoh: Persiapan pelayanan hari Minggu" maxLength={255} required /><datalist id="event-message-topics">{messageTopics.map((topic) => <option key={topic} value={topic} />)}</datalist><p className="text-[11px] text-muted-foreground">Pesan berikutnya dengan topik yang sama akan tergabung dalam satu percakapan.</p></div>
+                                    {messageTopics.length > 0 && <div className="space-y-2"><p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Lanjutkan topik</p><div className="flex flex-wrap gap-2">{messageTopics.map((topic) => <button key={topic} type="button" onClick={() => setMessageTitle(topic)} className={cn('max-w-full truncate rounded-full border px-3 py-1 text-xs font-semibold transition', messageTitle.trim().toLowerCase() === topic.trim().toLowerCase() ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-background hover:border-primary/40 hover:text-primary')}>{topic}</button>)}</div></div>}
                                     <div className="space-y-2"><Label htmlFor="message-body">Isi Pesan</Label><Textarea id="message-body" value={messageBody} onChange={(event) => setMessageBody(event.target.value)} placeholder="Tulis informasi untuk volunteer..." rows={5} maxLength={10000} required /></div>
                                     <div className="space-y-2"><Label htmlFor="message-attachment">Lampiran</Label><label htmlFor="message-attachment" className="flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-primary/30 bg-primary/5 px-4 py-3 text-sm font-medium text-primary hover:bg-primary/10"><Paperclip className="h-4 w-4" /><span className="min-w-0 truncate">{messageAttachment ? messageAttachment.name : 'Pilih file untuk dilampirkan'}</span><input id="message-attachment" type="file" className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.jpg,.jpeg,.png,.webp,.zip" onChange={(event) => setMessageAttachment(event.target.files?.[0] ?? null)} /></label>{messageAttachment && <button type="button" className="text-xs text-destructive hover:underline" onClick={() => setMessageAttachment(null)}>Hapus lampiran</button>}<p className="text-[11px] text-muted-foreground">Maksimal 10 MB. PDF, dokumen, gambar, atau ZIP.</p></div>
                                 </div>
                                 <div className="min-h-0 space-y-3 bg-muted/10 p-6 lg:overflow-y-auto">
-                                    <div className="flex items-center justify-between"><div><h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Pesan sebelumnya</h3><p className="mt-1 text-xs text-muted-foreground">Riwayat komunikasi event ini.</p></div><Badge variant="secondary">{messageEvent.messages?.length ?? 0}</Badge></div>
-                                    {(messageEvent.messages?.length ?? 0) > 0 ? <div className="space-y-2">{messageEvent.messages?.map((message) => (
-                                        <div key={message.id} className="rounded-xl border bg-background p-4 shadow-sm">
-                                            <div className="flex items-start justify-between gap-3"><p className="font-semibold">{message.title}</p><time className="shrink-0 text-[10px] text-muted-foreground">{new Date(message.created_at).toLocaleString('id-ID')}</time></div>
-                                            <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">{message.body}</p>
-                                            {message.attachment_path && message.attachment_name && <a className="mt-3 flex items-center gap-2 text-xs font-semibold text-primary hover:underline" href={`/storage/${message.attachment_path}`} target="_blank" rel="noreferrer"><Download className="h-3.5 w-3.5" />{message.attachment_name}</a>}
+                                    <div className="flex items-center justify-between"><div><h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Riwayat percakapan</h3><p className="mt-1 text-xs text-muted-foreground">Satu topik bisa berisi beberapa pesan.</p></div><Badge variant="secondary">{messageEvent.messages?.length ?? 0} pesan</Badge></div>
+                                    {messageThreads.length > 0 ? <div className="space-y-3">{messageThreads.map((thread) => (
+                                        <div key={thread.title} className="rounded-xl border bg-background p-3 shadow-sm">
+                                            <div className="flex items-start justify-between gap-2">
+                                                <div className="min-w-0"><p className="truncate text-sm font-bold">{thread.title}</p><p className="mt-0.5 text-[10px] text-muted-foreground">{thread.messages.length} pesan · terbaru {new Date(thread.latest_at).toLocaleString('id-ID')}</p></div>
+                                                {messageTitle.trim().toLowerCase() !== thread.title.trim().toLowerCase() && <button type="button" onClick={() => setMessageTitle(thread.title)} className="shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-bold text-primary transition hover:bg-primary/5">Balas topik</button>}
+                                            </div>
+                                            <div className="mt-2 space-y-2">
+                                                {thread.messages.map((message) => (
+                                                    <div key={message.id} className="rounded-lg bg-muted/40 px-3 py-2">
+                                                        <div className="flex items-center justify-between gap-2"><p className="truncate text-[11px] font-bold text-foreground">{message.sender_name || 'Admin'}</p><time className="shrink-0 text-[10px] text-muted-foreground">{new Date(message.created_at).toLocaleString('id-ID')}</time></div>
+                                                        <p className="mt-1 whitespace-pre-wrap text-xs text-muted-foreground">{message.body}</p>
+                                                        {message.attachment_path && message.attachment_name && <a className="mt-2 flex items-center gap-1.5 text-[11px] font-semibold text-primary hover:underline" href={`/storage/${message.attachment_path}`} target="_blank" rel="noreferrer"><Download className="h-3 w-3" />{message.attachment_name}</a>}
+                                                    </div>
+                                                ))}
+                                            </div>
                                         </div>
                                     ))}</div> : <div className="flex min-h-40 items-center justify-center rounded-xl border border-dashed border-border bg-background/60 px-5 text-center"><div><MessageSquare className="mx-auto h-8 w-8 text-muted-foreground/30" /><p className="mt-3 text-sm font-semibold text-muted-foreground">Belum ada pesan</p><p className="mt-1 text-xs text-muted-foreground">Pesan yang dikirim akan tersimpan di sini.</p></div></div>}
                                 </div>

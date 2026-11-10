@@ -216,6 +216,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
             $userMessages = EventMessage::with([
                 'event:id,title,date,time',
+                'sender:id,name',
                 'reads' => fn ($query) => $query->where('user_id', $user->id),
             ])
                 ->whereIn('event_id', $assignments->pluck('event_id')->unique())
@@ -226,6 +227,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
                         'id' => $message->id,
                         'title' => $message->title,
                         'body' => $message->body,
+                        'sender_name' => $message->sender_name,
                         'created_at' => $message->created_at?->toISOString(),
                         'is_read' => $message->reads->isNotEmpty(),
                         'event' => [
@@ -580,6 +582,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('live-events/time-keeper', [LiveEventController::class, 'timeKeeper'])->middleware('role:admin,superadmin')->name('live-events.time-keeper');
     Route::post('live-events/{event}/start', [LiveEventController::class, 'start'])->middleware('role:admin,superadmin')->name('live-events.start');
     Route::post('live-events/{event}/next', [LiveEventController::class, 'next'])->middleware('role:admin,superadmin')->name('live-events.next');
+    Route::post('live-events/{event}/previous', [LiveEventController::class, 'previous'])->middleware('role:admin,superadmin')->name('live-events.previous');
     Route::post('live-events/{event}/finish', [LiveEventController::class, 'finish'])->middleware('role:admin,superadmin')->name('live-events.finish');
     Route::resource('categories', CategoryController::class)->except(['create', 'edit', 'show'])->middleware('role:admin,superadmin');
     Route::post('categories/{category}/duplicate', [CategoryController::class, 'duplicate'])->middleware('role:admin,superadmin')->name('categories.duplicate');

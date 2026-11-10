@@ -10,6 +10,8 @@ export interface MobileNotification {
     response_status?: 'pending' | 'read' | 'accepted' | 'declined' | 'rejected' | string;
     category: MobileNotificationCategory;
     is_read: boolean;
+    /** Hanya tersedia untuk kategori event_message. */
+    sender_name?: string | null;
     created_at: string;
 }
 

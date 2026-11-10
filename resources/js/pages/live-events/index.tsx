@@ -3,6 +3,7 @@ import {
     AlertCircle,
     CalendarDays,
     CheckCircle2,
+    ChevronLeft,
     ChevronRight,
     Clock,
     FileText,
@@ -301,6 +302,22 @@ return 0;
         );
     };
 
+    const previousItem = () => {
+        if (!selected_event) {
+            return;
+        }
+
+        router.post(
+            `/live-events/${selected_event.id}/previous`,
+            {},
+            { preserveScroll: true },
+        );
+    };
+
+    const isFirstItem =
+        (session?.current_segment_index ?? 0) === 0 &&
+        (session?.current_item_index ?? 0) === 0;
+
     const finishEvent = () => {
         if (!selected_event) {
             return;
@@ -461,6 +478,15 @@ return 0;
                                                 </Button>
                                             ) : (
                                                 <>
+                                                    <Button
+                                                        variant="outline"
+                                                        className="gap-2"
+                                                        onClick={previousItem}
+                                                        disabled={isFirstItem}
+                                                    >
+                                                        <ChevronLeft className="h-4 w-4" />
+                                                        Item Sebelumnya
+                                                    </Button>
                                                     <Button
                                                         className="gap-2"
                                                         onClick={nextSegment}

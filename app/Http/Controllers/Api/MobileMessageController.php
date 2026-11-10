@@ -20,7 +20,7 @@ class MobileMessageController extends Controller
             ]);
         }
 
-        $messages = EventMessage::with('event')
+        $messages = EventMessage::with(['event', 'sender:id,name'])
             ->whereHas('event.volunteers', fn ($query) => $query->where('member_id', $memberId))
             ->latest()
             ->paginate(20);
@@ -44,7 +44,7 @@ class MobileMessageController extends Controller
         $this->authorizeMessage($request, $eventMessage);
 
         return response()->json([
-            'data' => $this->serializeMessage($eventMessage->load('event'), $request->user()->id),
+            'data' => $this->serializeMessage($eventMessage->load(['event', 'sender:id,name']), $request->user()->id),
         ]);
     }
 
@@ -80,6 +80,7 @@ class MobileMessageController extends Controller
             'event_title' => $message->event?->title,
             'title' => $message->title,
             'body' => $message->body,
+            'sender_name' => $message->sender_name,
             'attachment' => $message->attachment_path ? [
                 'url' => Storage::disk('public')->url($message->attachment_path),
                 'name' => $message->attachment_name,

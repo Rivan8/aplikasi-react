@@ -24,6 +24,7 @@
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#FAFAF9; border-left:4px solid #F97316; border-radius:10px;">
         <tr>
             <td style="padding:20px 22px;">
+                <p style="margin:0 0 12px; font-size:11px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:#9A3412;">Dikirim oleh {{ $senderName }}</p>
                 <p style="margin:0; font-size:15px; line-height:1.75; color:#292524;">{!! nl2br(e($messageBody)) !!}</p>
             </td>
         </tr>

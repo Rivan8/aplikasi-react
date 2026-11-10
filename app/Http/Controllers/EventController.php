@@ -7,6 +7,7 @@ use App\Models\CategoryRole;
 use App\Models\Department;
 use App\Models\Event;
 use App\Models\EventGroup;
+use App\Models\EventMessage;
 use App\Models\EventParticipant;
 use App\Models\EventRundownItem;
 use App\Models\EventVolunteer;
@@ -94,6 +95,7 @@ class EventController extends Controller
         $event->load([
             'sessions',
             'volunteers',
+            'messages.sender:id,name',
             'rundownSegments.items.song.arrangements',
             'rundownSegments.items.arrangement',
             'liveSession.runs',
@@ -113,6 +115,19 @@ class EventController extends Controller
                             ? 'pending'
                             : $assignment->response_status,
                         'response_reason' => $assignment->response_reason,
+                    ])
+                    ->values()
+                    ->all(),
+                'messages' => $event->messages
+                    ->map(fn (EventMessage $message): array => [
+                        'id' => $message->id,
+                        'title' => $message->title,
+                        'body' => $message->body,
+                        'sender_name' => $message->sender_name,
+                        'created_at' => $message->created_at?->toISOString(),
+                        'attachment_path' => $message->attachment_path,
+                        'attachment_name' => $message->attachment_name,
+                        'attachment_size' => $message->attachment_size,
                     ])
                     ->values()
                     ->all(),
@@ -142,7 +157,7 @@ class EventController extends Controller
             'participants',
             'sessions',
             'liveSession',
-            'messages',
+            'messages.sender:id,name',
             'rundownSegments.items.song.arrangements',
             'rundownSegments.items.arrangement',
         ])->orderBy('date', 'desc')->get();

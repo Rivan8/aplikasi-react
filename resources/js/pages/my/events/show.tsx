@@ -4,7 +4,9 @@ import {
     CalendarDays,
     CheckCircle2,
     Clock3,
+    Download,
     MapPin,
+    MessageSquare,
     NotebookText,
     Sparkles,
     Users,
@@ -20,6 +22,16 @@ interface EventScheduleItem {
     date: string;
     start_time: string;
     end_time: string;
+}
+
+interface UserEventMessage {
+    id: number;
+    title: string;
+    body: string;
+    sender_name?: string | null;
+    created_at?: string | null;
+    attachment_path?: string | null;
+    attachment_name?: string | null;
 }
 
 interface UserEventDetail {
@@ -47,7 +59,39 @@ interface UserEventDetail {
         end_time?: string | null;
     }>;
     live_session?: unknown;
+    messages?: UserEventMessage[];
 }
+
+interface MessageThread {
+    title: string;
+    messages: UserEventMessage[];
+    latest_at: string;
+}
+
+const groupMessagesByTopic = (
+    messages?: UserEventMessage[],
+): MessageThread[] => {
+    const threads = new Map<string, MessageThread>();
+
+    (messages ?? []).forEach((message) => {
+        const key = message.title.trim().toLowerCase();
+        const thread = threads.get(key);
+
+        if (thread) {
+            thread.messages.unshift(message);
+
+            return;
+        }
+
+        threads.set(key, {
+            title: message.title,
+            messages: [message],
+            latest_at: message.created_at ?? '',
+        });
+    });
+
+    return Array.from(threads.values());
+};
 
 interface EventDataPayload {
     worship: {
@@ -178,6 +222,8 @@ export default function MyEventShow({
     event: UserEventDetail;
     eventData: EventDataPayload;
 }) {
+    const messageThreads = groupMessagesByTopic(event.messages);
+
     return (
         <>
             <Head title={event.title} />
@@ -329,6 +375,75 @@ export default function MyEventShow({
                                     );
                                 },
                             )}
+                        </CardContent>
+                    </Card>
+                )}
+
+                {messageThreads.length > 0 && (
+                    <Card className="overflow-hidden border-stone-200/80 bg-gradient-to-br from-white via-stone-50/60 to-zinc-100/40 dark:from-background dark:via-stone-950/10 dark:to-background">
+                        <CardHeader className="border-b border-stone-200/80 bg-stone-50/70 dark:bg-stone-950/20">
+                            <CardTitle className="flex items-center gap-2 text-lg text-stone-700 dark:text-stone-200">
+                                <MessageSquare className="h-5 w-5" />
+                                Pesan Event
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-5 p-4">
+                            {messageThreads.map((thread) => (
+                                <div key={thread.title} className="space-y-2">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <p className="text-sm font-bold text-foreground">
+                                            {thread.title}
+                                        </p>
+                                        <Badge
+                                            variant="secondary"
+                                            className="shrink-0 text-[10px]"
+                                        >
+                                            {thread.messages.length} pesan
+                                        </Badge>
+                                    </div>
+                                    <div className="space-y-2 border-l-2 border-stone-200 pl-3 dark:border-stone-800">
+                                        {thread.messages.map((message) => (
+                                            <div
+                                                key={message.id}
+                                                className="rounded-xl border border-border/60 bg-background/80 p-3"
+                                            >
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <p className="text-xs font-bold text-stone-700 dark:text-stone-200">
+                                                        {message.sender_name ||
+                                                            'Admin'}
+                                                    </p>
+                                                    {message.created_at && (
+                                                        <time className="shrink-0 text-[10px] text-muted-foreground">
+                                                            {new Date(
+                                                                message.created_at,
+                                                            ).toLocaleString(
+                                                                'id-ID',
+                                                            )}
+                                                        </time>
+                                                    )}
+                                                </div>
+                                                <p className="mt-1.5 whitespace-pre-wrap text-sm text-muted-foreground">
+                                                    {message.body}
+                                                </p>
+                                                {message.attachment_path &&
+                                                    message.attachment_name && (
+                                                        <a
+                                                            href={`/storage/${message.attachment_path}`}
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                            className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-stone-700 hover:underline dark:text-stone-200"
+                                                        >
+                                                            <Download className="h-3.5 w-3.5" />
+                                                            {
+                                                                message.attachment_name
+                                                            }
+                                                        </a>
+                                                    )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
                         </CardContent>
                     </Card>
                 )}

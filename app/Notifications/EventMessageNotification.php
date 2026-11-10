@@ -55,6 +55,7 @@ class EventMessageNotification extends Notification implements ShouldQueue
                 'category' => 'event_message',
                 'event_id' => $this->eventMessage->event_id,
                 'message_id' => $this->eventMessage->id,
+                'sender_name' => $this->eventMessage->sender_name,
             ],
         ];
     }
@@ -69,6 +70,7 @@ class EventMessageNotification extends Notification implements ShouldQueue
             'eventTitle' => $event?->title ?: 'Event Pelayanan',
             'messageTitle' => $this->eventMessage->title,
             'messageBody' => $this->eventMessage->body ?? '',
+            'senderName' => $this->eventMessage->sender_name,
             'attachmentName' => $this->eventMessage->attachment_name,
             'hasAttachment' => $hasAttachment,
             'actionUrl' => $event

@@ -50,7 +50,7 @@ class MobileNotificationController extends Controller
             }
         }
 
-        $messages = EventMessage::with(['event', 'reads'])
+        $messages = EventMessage::with(['event', 'sender:id,name', 'reads'])
             ->when($memberId, fn ($query) => $query->whereHas('event.volunteers', fn ($volunteers) => $volunteers->where('member_id', $memberId)))
             ->when(! $memberId, fn ($query) => $query->whereKey(0))
             ->latest()
@@ -73,6 +73,7 @@ class MobileNotificationController extends Controller
                 'title' => $msg->title ?: ($event ? "Pesan: {$event->title}" : 'Pesan event'),
                 'description' => mb_substr(strip_tags($msg->body ?? ''), 0, 120),
                 'body' => $msg->body,
+                'sender_name' => $msg->sender_name,
                 'event_id' => $msg->event_id,
                 'category' => 'event_message',
                 'is_read' => in_array($msg->id, $readIdsByUser, true),

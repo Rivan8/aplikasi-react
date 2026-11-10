@@ -257,7 +257,39 @@ Kategori minimum adalah `schedule_pending` dan `event_message`. Badge dihitung d
 - `GET /api/mobile/v1/me/messages/{eventMessage}` - detail pesan lengkap.
 - `POST /api/mobile/v1/me/messages/{eventMessage}/read` - menandai pesan sebagai sudah dibaca.
 
-Request wajib mengirim `Authorization: Bearer <token>` dan `Accept: application/json`. Response pesan berisi `id`, `event_id`, `event_title`, `title`, `body`, `attachment`, `is_read`, dan `created_at`.
+Request wajib mengirim `Authorization: Bearer <token>` dan `Accept: application/json`.
+
+`title` adalah topik/percakapan. Satu topik dapat berisi lebih dari satu pesan, sehingga mobile sebaiknya mengelompokkan pesan berdasarkan `event_id` + `title` (case-insensitive) dan mengurutkan `created_at` menaik di dalam thread. Setiap pesan membawa `sender_name`, `body`, dan `created_at` (waktu pengiriman).
+
+Response `200`:
+
+```json
+{
+  "data": [
+    {
+      "id": 15,
+      "event_id": 59,
+      "event_title": "Sunday Service 1&2",
+      "title": "Persiapan Pelayanan Minggu",
+      "body": "Update: soundcheck dipindah ke pukul 06.30.",
+      "sender_name": "QA Admin Pesan",
+      "attachment": null,
+      "is_read": false,
+      "created_at": "2026-11-10T14:52:47+07:00"
+    }
+  ],
+  "meta": {
+    "current_page": 1,
+    "last_page": 1,
+    "per_page": 20,
+    "total": 1
+  }
+}
+```
+
+`sender_name` selalu berupa string; pesan lama tanpa pengirim mengembalikan `"Admin"`. `created_at` memakai format ISO 8601 dan boleh `null` hanya untuk data lama yang tidak memiliki timestamp.
+
+Notifikasi dengan kategori `event_message` juga menyertakan `sender_name` di samping `title`, `description`, `body`, dan `created_at`, sehingga layar notifikasi mobile dapat menampilkan pengirim tanpa request tambahan.
 
 ### Avatar User
 

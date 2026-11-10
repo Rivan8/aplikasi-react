@@ -28,13 +28,18 @@ function createMobileMessageFixture(string $memberId): array
         'response_status' => 'pending',
     ]);
 
+    $sender = User::factory()->create([
+        'name' => 'Pembina Volunteer',
+    ]);
+
     $message = EventMessage::create([
         'event_id' => $event->id,
+        'sender_id' => $sender->id,
         'title' => 'Persiapan pelayanan',
         'body' => 'Mohon hadir 30 menit lebih awal.',
     ]);
 
-    return [$event, $message];
+    return [$event, $message, $sender];
 }
 
 it('mobile login returns a bearer token that can read assigned event messages', function () {
@@ -59,7 +64,10 @@ it('mobile login returns a bearer token that can read assigned event messages', 
         ->getJson('/api/mobile/v1/me/messages')
         ->assertOk()
         ->assertJsonPath('data.0.id', $message->id)
+        ->assertJsonPath('data.0.title', 'Persiapan pelayanan')
         ->assertJsonPath('data.0.body', 'Mohon hadir 30 menit lebih awal.')
+        ->assertJsonPath('data.0.sender_name', 'Pembina Volunteer')
+        ->assertJsonPath('data.0.created_at', fn ($value): bool => is_string($value) && $value !== '')
         ->assertJsonPath('data.0.is_read', false);
 });
 

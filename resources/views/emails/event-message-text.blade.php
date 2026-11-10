@@ -3,6 +3,8 @@ Halo {{ $name }},
 Anda menerima pesan baru untuk event pelayanan: {{ $eventTitle }}
 
 {{ $messageTitle }}
+Dikirim oleh {{ $senderName }}
+
 {{ $messageBody }}
 
 Buka Event Saya di {{ $actionUrl }}

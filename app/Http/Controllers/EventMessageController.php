@@ -30,7 +30,10 @@ class EventMessageController extends Controller
             $validated['attachment_size'] = $attachment->getSize();
         }
 
-        $eventMessage = EventMessage::create($validated);
+        $eventMessage = EventMessage::create([
+            ...$validated,
+            'sender_id' => $request->user()?->id,
+        ]);
 
         User::query()
             ->whereIn('member_id', $eventMessage->event->volunteers()->pluck('member_id'))

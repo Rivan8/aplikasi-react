@@ -163,6 +163,87 @@ class LiveEventController extends Controller
             ->with('success', 'Pindah ke segment berikutnya.');
     }
 
+    public function previous(Event $event, Request $request)
+    {
+        $session = $event->liveSession;
+
+        if (! $session || $session->status !== 'running') {
+            return back()->with('error', 'Live event belum berjalan.');
+        }
+
+        $segments = $event->rundownSegments()->orderBy('sort_order')->get()->values();
+        $currentSegment = $segments->get($session->current_segment_index);
+
+        if (! $currentSegment) {
+            return back()->with('error', 'Segment aktif tidak ditemukan.');
+        }
+
+        if ($session->current_item_index > 0) {
+            $targetItemIndex = $session->current_item_index - 1;
+
+            $targetRun = $session->itemRuns()
+                ->where('segment_index', $session->current_segment_index)
+                ->where('item_index', $targetItemIndex)
+                ->first();
+            $resumeSeconds = (int) ($targetRun?->actual_seconds ?? 0);
+
+            $session->itemRuns()
+                ->where('segment_index', $session->current_segment_index)
+                ->where('item_index', $targetItemIndex)
+                ->delete();
+
+            $session->update([
+                'current_item_index' => $targetItemIndex,
+                'item_started_at' => now()->subSeconds($resumeSeconds),
+            ]);
+
+            return redirect()
+                ->route($request->boolean('from_events') ? 'events.index' : 'live-events.index', ['event_id' => $event->id])
+                ->with('success', 'Kembali ke item sebelumnya.');
+        }
+
+        $previousSegmentIndex = $session->current_segment_index - 1;
+
+        if ($previousSegmentIndex < 0) {
+            return back()->with('error', 'Sudah berada di item pertama.');
+        }
+
+        $previousItems = $segments->get($previousSegmentIndex)
+            ?->items()->orderBy('sort_order')->get()->values();
+
+        if (! $previousItems || $previousItems->isEmpty()) {
+            return back()->with('error', 'Item sebelumnya tidak ditemukan.');
+        }
+
+        $targetItemIndex = $previousItems->count() - 1;
+
+        $targetRun = $session->itemRuns()
+            ->where('segment_index', $previousSegmentIndex)
+            ->where('item_index', $targetItemIndex)
+            ->first();
+        $resumeItemSeconds = (int) ($targetRun?->actual_seconds ?? 0);
+
+        $segmentRun = $session->runs()->where('segment_index', $previousSegmentIndex)->first();
+        $resumeSegmentSeconds = (int) ($segmentRun?->actual_seconds ?? 0);
+
+        $session->itemRuns()
+            ->where('segment_index', $previousSegmentIndex)
+            ->where('item_index', $targetItemIndex)
+            ->delete();
+        $session->runs()->where('segment_index', $previousSegmentIndex)->delete();
+
+        $session->update([
+            'current_segment_index' => $previousSegmentIndex,
+            'current_item_index' => $targetItemIndex,
+            'segment_started_at' => now()->subSeconds($resumeSegmentSeconds),
+            'item_started_at' => now()->subSeconds($resumeItemSeconds),
+        ]);
+
+        return redirect()
+            ->route($request->boolean('from_events') ? 'events.index' : 'live-events.index', ['event_id' => $event->id])
+            ->with('success', 'Kembali ke item terakhir segment sebelumnya.');
+    }
+
     public function finish(Event $event)
     {
         $session = $event->liveSession;

@@ -27,8 +27,13 @@ function createMobileNotificationFixture(string $memberId): array
         'response_status' => 'pending',
     ]);
 
+    $sender = User::factory()->create([
+        'name' => 'Pembina Volunteer',
+    ]);
+
     $message = EventMessage::create([
         'event_id' => $event->id,
+        'sender_id' => $sender->id,
         'title' => 'Persiapan pelayanan',
         'body' => 'Mohon hadir 30 menit lebih awal.',
     ]);
@@ -56,7 +61,7 @@ it('mobile receives schedule and event message notifications', function () {
             'response_status' => 'pending',
             'is_read' => false,
         ])
-        ->assertJsonFragment(['id' => 2000000 + $message->id, 'category' => 'event_message', 'is_read' => false]);
+        ->assertJsonFragment(['id' => 2000000 + $message->id, 'category' => 'event_message', 'is_read' => false, 'sender_name' => 'Pembina Volunteer']);
 });
 
 it('reading a schedule notification keeps it available as read', function () {
