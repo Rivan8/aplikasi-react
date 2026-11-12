@@ -81,6 +81,8 @@ interface RosterMember {
     foto_url?: string | null;
     role_category?: string | null;
     role_name?: string | null;
+    role_categories?: string[];
+    is_unscheduled?: boolean;
     response_status?: string | null;
     scan_time: string | null;
     check_out_time?: string | null;
@@ -200,7 +202,15 @@ export default function ScanQR({
     const onTimePercentage = stats.total > 0 ? (stats.on_time / stats.total) * 100 : 0;
     const latePercentage = stats.total > 0 ? (stats.late / stats.total) * 100 : 0;
     const pendingBarPercentage = Math.max(0, 100 - onTimePercentage - latePercentage);
-    const divisionCount = new Set(roster.map((member) => member.role_category).filter(Boolean)).size;
+    const divisionCount = new Set(
+        roster.flatMap((member) => member.role_categories ?? (member.role_category ? [member.role_category] : [])),
+    ).size;
+    const unscheduledCount = roster.filter((member) => member.is_unscheduled).length;
+    const tabCounts = {
+        checked: roster.filter((member) => Boolean(member.scan_time)).length,
+        pending: roster.filter((member) => !member.scan_time && !member.is_unscheduled).length,
+        all: roster.filter((member) => !member.is_unscheduled).length,
+    };
 
     const heroScan = recentScans[0] ?? null;
 
@@ -314,7 +324,7 @@ export default function ScanQR({
             return;
         }
 
-        const timeout = window.setTimeout(() => setScanNotice(null), 4000);
+        const timeout = window.setTimeout(() => setScanNotice(null), 2500);
 
         return () => window.clearTimeout(timeout);
     }, [scanNotice]);
@@ -567,7 +577,14 @@ export default function ScanQR({
     };
 
     const departments = useMemo(
-        () => Array.from(new Set(roster.map((member) => member.role_category).filter(Boolean) as string[])).sort((a, b) => a.localeCompare(b)),
+        () =>
+            Array.from(
+                new Set(
+                    roster.flatMap(
+                        (member) => member.role_categories ?? (member.role_category ? [member.role_category] : []),
+                    ),
+                ),
+            ).sort((a, b) => a.localeCompare(b)),
         [roster],
     );
 
@@ -575,6 +592,11 @@ export default function ScanQR({
         const term = search.trim().toLowerCase();
 
         const result = roster.filter((member) => {
+            // Jemaat di luar jadwal hanya muncul di tab Sudah Absen.
+            if (member.is_unscheduled && rosterTab !== 'checked') {
+                return false;
+            }
+
             if (rosterTab === 'checked' && !member.scan_time) {
                 return false;
             }
@@ -583,8 +605,12 @@ export default function ScanQR({
                 return false;
             }
 
-            if (departmentFilter && member.role_category !== departmentFilter) {
-                return false;
+            if (departmentFilter) {
+                const memberDepartments = member.role_categories ?? (member.role_category ? [member.role_category] : []);
+
+                if (!memberDepartments.includes(departmentFilter)) {
+                    return false;
+                }
             }
 
             if (statusFilter === 'present' && member.status !== 'Present') {
@@ -1272,9 +1298,9 @@ export default function ScanQR({
                             <div className="flex flex-col gap-2.5 rounded-xl border border-slate-800/90 bg-[#141A24] p-3 shadow-md">
                                 <div className="flex flex-wrap items-center justify-between gap-2">
                                     <div className="inline-flex flex-wrap rounded-lg border border-slate-800 bg-[#0F141E] p-1">
-                                        {tabButton('checked', 'Sudah Absen', stats.checked_in, 'bg-emerald-500 text-emerald-950')}
-                                        {tabButton('pending', 'Belum Absen', stats.pending, 'border border-rose-500/30 bg-rose-950 text-rose-300')}
-                                        {tabButton('all', 'Semua Terdaftar', stats.total, 'bg-slate-800 text-slate-300')}
+                                        {tabButton('checked', 'Sudah Absen', tabCounts.checked, 'bg-emerald-500 text-emerald-950')}
+                                        {tabButton('pending', 'Belum Absen', tabCounts.pending, 'border border-rose-500/30 bg-rose-950 text-rose-300')}
+                                        {tabButton('all', 'Semua Terdaftar', tabCounts.all, 'bg-slate-800 text-slate-300')}
                                     </div>
                                     <button
                                         type="button"
@@ -1385,11 +1411,19 @@ export default function ScanQR({
                                                             </div>
                                                         </td>
                                                         <td className="px-4 py-2">
-                                                            <span className="inline-flex rounded-md border border-slate-700/60 bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-200">
-                                                                {member.role_category || '—'}
-                                                            </span>
-                                                            {member.role_name && (
-                                                                <span className="mt-1 block text-[10px] text-slate-400">{member.role_name}</span>
+                                                            {member.is_unscheduled ? (
+                                                                <span className="inline-flex rounded-md border border-amber-500/30 bg-amber-950/60 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
+                                                                    Tanpa jadwal
+                                                                </span>
+                                                            ) : (
+                                                                <>
+                                                                    <span className="inline-flex rounded-md border border-slate-700/60 bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-200">
+                                                                        {member.role_category || '—'}
+                                                                    </span>
+                                                                    {member.role_name && (
+                                                                        <span className="mt-1 block text-[10px] text-slate-400">{member.role_name}</span>
+                                                                    )}
+                                                                </>
                                                             )}
                                                         </td>
                                                         <td className={`px-4 py-2 font-mono text-[11px] font-medium ${member.status === 'Late' ? 'text-amber-400' : 'text-slate-200'}`}>
@@ -1414,15 +1448,21 @@ export default function ScanQR({
                                                         </td>
                                                         <td className="px-4 py-2">
                                                             <div className="flex items-center justify-between gap-2">
-                                                                <span className="max-w-[130px] truncate text-[11px] text-slate-400">
-                                                                    {member.check_out_time
-                                                                        ? `Pulang ${shortTime(member.check_out_time)}`
-                                                                        : member.scan_time
-                                                                            ? 'Check-in tercatat'
-                                                                            : member.response_status === 'pending'
-                                                                                ? 'Belum konfirmasi jadwal'
-                                                                                : 'Belum absen'}
-                                                                </span>
+                                                                {member.is_unscheduled ? (
+                                                                    <span className="max-w-[150px] text-[10px] leading-snug font-medium text-amber-300">
+                                                                        Volunteer tidak tercatat dalam jadwal pelayanan
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="max-w-[130px] truncate text-[11px] text-slate-400">
+                                                                        {member.check_out_time
+                                                                            ? `Pulang ${shortTime(member.check_out_time)}`
+                                                                            : member.scan_time
+                                                                                ? 'Check-in tercatat'
+                                                                                : member.response_status === 'pending'
+                                                                                    ? 'Belum konfirmasi jadwal'
+                                                                                    : 'Belum absen'}
+                                                                    </span>
+                                                                )}
                                                                 {processing ? null : member.scan_time ? (
                                                                     !member.check_out_time && (
                                                                         <button
@@ -1459,6 +1499,12 @@ export default function ScanQR({
                                             Menampilkan <strong className="text-white">{pagedRoster.length}</strong> dari{' '}
                                             <strong className="text-white">{filteredRoster.length}</strong> data kehadiran live
                                         </span>
+                                        {unscheduledCount > 0 && (
+                                            <>
+                                                <span className="h-1 w-1 rounded-full bg-slate-600" />
+                                                <span className="font-medium text-amber-300">{unscheduledCount} di luar jadwal</span>
+                                            </>
+                                        )}
                                         <span className="h-1 w-1 rounded-full bg-slate-600" />
                                         <span className="flex items-center gap-1 font-semibold text-emerald-400">
                                             <span className="h-2 w-2 rounded-full bg-emerald-400" /> Terhubung Realtime

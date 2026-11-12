@@ -912,64 +912,131 @@ class AttendanceController extends Controller
 
             $attendanceByMember = $attendances->keyBy(fn (Attendance $attendance) => (string) $attendance->member_id);
 
-            $roster = $volunteers->map(function (EventVolunteer $volunteer) use ($attendanceByMember, $members): array {
-                $attendance = $attendanceByMember->get((string) $volunteer->member_id);
-                $member = $members[(string) $volunteer->member_id] ?? null;
+            // Satu orang bisa dijadwalkan di beberapa posisi: gabungkan menjadi satu baris.
+            $roster = $volunteers
+                ->groupBy(fn (EventVolunteer $volunteer) => (string) $volunteer->member_id)
+                ->map(function (Collection $assignments, string $memberId) use ($attendanceByMember, $members): array {
+                    $attendance = $attendanceByMember->get($memberId);
+                    $member = $members[$memberId] ?? null;
+                    $categories = $assignments->pluck('role_category')
+                        ->map(fn ($value) => trim((string) $value))
+                        ->filter()
+                        ->unique()
+                        ->values();
+                    $roles = $assignments->pluck('role_name')
+                        ->map(fn ($value) => trim((string) $value))
+                        ->filter()
+                        ->unique()
+                        ->values();
+                    $responseStatuses = $assignments->pluck('response_status');
 
-                return [
-                    'id' => 'vol-'.$volunteer->id,
-                    'member_id' => (string) $volunteer->member_id,
-                    'name' => $member['name'] ?? 'Member #'.$volunteer->member_id,
-                    'foto_url' => $member['foto_url'] ?? null,
-                    'role_category' => $volunteer->role_category,
-                    'role_name' => $volunteer->role_name,
-                    'response_status' => $volunteer->response_status,
-                    'scan_time' => $attendance?->scan_time?->format('H:i:s'),
-                    'check_out_time' => $attendance?->check_out_time?->format('H:i:s'),
-                    'status' => $attendance?->status ?? ($attendance ? 'Present' : null),
-                ];
-            })->values();
+                    return [
+                        'id' => 'vol-'.$assignments->first()->id,
+                        'member_id' => $memberId,
+                        'name' => $member['name'] ?? 'Member #'.$memberId,
+                        'foto_url' => $member['foto_url'] ?? null,
+                        'role_category' => $categories->implode(', '),
+                        'role_name' => $roles->implode(', '),
+                        'role_categories' => $categories->all(),
+                        'is_unscheduled' => false,
+                        'response_status' => $responseStatuses->contains('accepted')
+                            ? 'accepted'
+                            : ($responseStatuses->first(fn ($status) => $status !== 'pending') ?? 'pending'),
+                        'scan_time' => $attendance?->scan_time?->format('H:i:s'),
+                        'check_out_time' => $attendance?->check_out_time?->format('H:i:s'),
+                        'status' => $attendance?->status ?? ($attendance ? 'Present' : null),
+                    ];
+                })->values();
 
             if ($roster->isEmpty()) {
                 $roster = $attendances->map(function (Attendance $attendance) use ($members, $departmentMap): array {
                     $member = $members[(string) $attendance->member_id] ?? null;
+                    $department = $departmentMap->get((string) $attendance->member_id);
 
                     return [
                         'id' => 'att-'.$attendance->id,
                         'member_id' => (string) $attendance->member_id,
                         'name' => $member['name'] ?? 'Member #'.$attendance->member_id,
                         'foto_url' => $member['foto_url'] ?? null,
-                        'role_category' => $departmentMap->get((string) $attendance->member_id),
+                        'role_category' => $department,
                         'role_name' => null,
+                        'role_categories' => $department ? [$department] : [],
+                        'is_unscheduled' => false,
                         'response_status' => 'registered',
                         'scan_time' => $attendance->scan_time?->format('H:i:s'),
                         'check_out_time' => $attendance->check_out_time?->format('H:i:s'),
                         'status' => $attendance->status ?? 'Present',
                     ];
                 })->values();
+            } elseif ($volunteers->isNotEmpty()) {
+                // Jemaat yang tidak dijadwalkan tetapi tetap scan absen: tampilkan satu baris
+                // dengan penanda agar admin tahu mereka di luar jadwal pelayanan.
+                $scheduledMemberIds = $volunteers->pluck('member_id')
+                    ->map(fn ($id) => (string) $id)
+                    ->unique();
+
+                $unscheduledRows = $attendances
+                    ->reject(fn (Attendance $attendance) => $scheduledMemberIds->contains((string) $attendance->member_id))
+                    ->map(function (Attendance $attendance) use ($members): array {
+                        $member = $members[(string) $attendance->member_id] ?? null;
+
+                        return [
+                            'id' => 'att-'.$attendance->id,
+                            'member_id' => (string) $attendance->member_id,
+                            'name' => $member['name'] ?? 'Member #'.$attendance->member_id,
+                            'foto_url' => $member['foto_url'] ?? null,
+                            'role_category' => '',
+                            'role_name' => '',
+                            'role_categories' => [],
+                            'is_unscheduled' => true,
+                            'response_status' => 'unscheduled',
+                            'scan_time' => $attendance->scan_time?->format('H:i:s'),
+                            'check_out_time' => $attendance->check_out_time?->format('H:i:s'),
+                            'status' => $attendance->status ?? 'Present',
+                        ];
+                    });
+
+                if ($unscheduledRows->isNotEmpty()) {
+                    $roster = $roster->concat($unscheduledRows)->values();
+                }
             }
 
-            $uniqueRoster = $roster->unique(fn (array $member) => (string) $member['member_id']);
+            // Statistik tetap dihitung dari volunteer terjadwal, bukan dari baris tambahan di luar jadwal.
+            $scheduledRoster = $roster->reject(fn (array $member) => $member['is_unscheduled']);
 
             $stats = [
-                'total' => $uniqueRoster->count(),
-                'checked_in' => $uniqueRoster->whereNotNull('scan_time')->count(),
-                'on_time' => $uniqueRoster->where('status', 'Present')->count(),
-                'late' => $uniqueRoster->where('status', 'Late')->count(),
+                'total' => $scheduledRoster->count(),
+                'checked_in' => $scheduledRoster->whereNotNull('scan_time')->count(),
+                'on_time' => $scheduledRoster->where('status', 'Present')->count(),
+                'late' => $scheduledRoster->where('status', 'Late')->count(),
             ];
             $stats['pending'] = max(0, $stats['total'] - $stats['checked_in']);
 
             $recentAttendances = $attendances->take(10)->map(function (Attendance $attendance) use ($members, $volunteers, $departmentMap, $selectedEvent, $selectedSession): array {
                 $member = $members[(string) $attendance->member_id] ?? null;
-                $volunteer = $volunteers->firstWhere('member_id', (string) $attendance->member_id);
+                $memberAssignments = $volunteers->filter(
+                    fn (EventVolunteer $volunteer) => (string) $volunteer->member_id === (string) $attendance->member_id,
+                );
+                $categories = $memberAssignments->pluck('role_category')
+                    ->map(fn ($value) => trim((string) $value))
+                    ->filter()
+                    ->unique()
+                    ->values();
+                $roles = $memberAssignments->pluck('role_name')
+                    ->map(fn ($value) => trim((string) $value))
+                    ->filter()
+                    ->unique()
+                    ->values();
 
                 return [
                     'id' => $attendance->id,
                     'member_id' => (string) $attendance->member_id,
                     'name' => $member['name'] ?? 'Member #'.$attendance->member_id,
                     'foto_url' => $member['foto_url'] ?? null,
-                    'role_category' => $volunteer?->role_category ?? $departmentMap->get((string) $attendance->member_id),
-                    'role_name' => $volunteer?->role_name,
+                    'role_category' => $categories->isNotEmpty()
+                        ? $categories->implode(', ')
+                        : $departmentMap->get((string) $attendance->member_id),
+                    'role_name' => $roles->isNotEmpty() ? $roles->implode(', ') : null,
                     'time' => $attendance->scan_time?->format('H:i:s'),
                     'check_out_time' => $attendance->check_out_time?->format('H:i:s'),
                     'status' => $this->attendanceStatus($selectedEvent, $selectedSession, $attendance->scan_time),
