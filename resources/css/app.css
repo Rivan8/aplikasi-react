@@ -168,6 +168,11 @@
     }
 }
 
+/* html5-qrcode membuat area luar scan lebih gelap dari dalam kotak; overlay orange sudah menjadi bingkai utama */
+#admin-reader #qr-shaded-region {
+    display: none !important;
+}
+
 .page-loader-sweep {
     animation: page-loader-sweep 1.2s cubic-bezier(0.65, 0, 0.35, 1) infinite;
 }

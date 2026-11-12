@@ -90,6 +90,7 @@ class HandleInertiaRequests extends Middleware
                 'success' => $request->session()->get('success'),
                 'error' => $request->session()->get('error'),
                 'info' => $request->session()->get('info'),
+                'scan_result' => $request->session()->get('scan_result'),
             ],
         ];
     }

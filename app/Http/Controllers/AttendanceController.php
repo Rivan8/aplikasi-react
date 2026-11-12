@@ -860,8 +860,15 @@ class AttendanceController extends Controller
 
         $recentAttendances = [];
         $totalScanned = 0;
+        $roster = [];
+        $stats = ['total' => 0, 'checked_in' => 0, 'on_time' => 0, 'late' => 0, 'pending' => 0];
 
         if ($selectedEventId) {
+            $selectedEvent = $events->firstWhere('id', (int) $selectedEventId);
+            $selectedSession = $selectedSessionId && $selectedEvent
+                ? $selectedEvent->sessions->firstWhere('id', (int) $selectedSessionId)
+                : null;
+
             $query = Attendance::where('event_id', $selectedEventId);
 
             if ($selectedSessionId) {
@@ -870,42 +877,112 @@ class AttendanceController extends Controller
                 $query->whereNull('event_session_id');
             }
 
-            $attendances = (clone $query)->orderBy('scan_time', 'desc')
-                ->take(10)
+            $attendances = (clone $query)->orderBy('scan_time', 'desc')->get();
+            $totalScanned = $attendances->count();
+
+            $volunteers = EventVolunteer::where('event_id', $selectedEventId)
+                ->orderBy('role_category')
+                ->orderBy('role_name')
                 ->get();
 
-            $totalScanned = (clone $query)->count();
+            $memberIds = $attendances->pluck('member_id')
+                ->merge($volunteers->pluck('member_id'))
+                ->filter()
+                ->unique()
+                ->values();
 
-            $memberIds = $attendances->pluck('member_id')->unique()->toArray();
             $members = [];
 
-            if (! empty($memberIds)) {
+            if ($memberIds->isNotEmpty()) {
                 try {
-                    foreach ($this->memberApi->findMany($memberIds) as $member) {
-                        $members[$member['idjemaat']] = [
-                            'name' => $member['name'],
-                        ];
-                    }
-                } catch (\Exception $e) {
-                    // Fail silently
+                    $members = $this->memberApi->findMany($memberIds);
+                } catch (\Throwable) {
+                    // Fail silently: nama fallback ke Member #id
                 }
             }
 
-            $recentAttendances = $attendances->map(function ($att) use ($members) {
+            $departmentMap = $memberIds->isEmpty()
+                ? collect()
+                : MemberDetail::with('department')
+                    ->whereIn('member_id', $memberIds->all())
+                    ->get()
+                    ->mapWithKeys(fn (MemberDetail $detail) => [
+                        (string) $detail->member_id => $detail->department?->name,
+                    ]);
+
+            $attendanceByMember = $attendances->keyBy(fn (Attendance $attendance) => (string) $attendance->member_id);
+
+            $roster = $volunteers->map(function (EventVolunteer $volunteer) use ($attendanceByMember, $members): array {
+                $attendance = $attendanceByMember->get((string) $volunteer->member_id);
+                $member = $members[(string) $volunteer->member_id] ?? null;
+
                 return [
-                    'id' => $att->id,
-                    'name' => $members[$att->member_id]['name'] ?? 'Member #'.$att->member_id,
-                    'time' => $att->scan_time->diffForHumans(),
-                    'check_out_time' => $att->check_out_time?->format('H:i:s'),
-                    'status' => $att->status,
+                    'id' => 'vol-'.$volunteer->id,
+                    'member_id' => (string) $volunteer->member_id,
+                    'name' => $member['name'] ?? 'Member #'.$volunteer->member_id,
+                    'foto_url' => $member['foto_url'] ?? null,
+                    'role_category' => $volunteer->role_category,
+                    'role_name' => $volunteer->role_name,
+                    'response_status' => $volunteer->response_status,
+                    'scan_time' => $attendance?->scan_time?->format('H:i:s'),
+                    'check_out_time' => $attendance?->check_out_time?->format('H:i:s'),
+                    'status' => $attendance?->status ?? ($attendance ? 'Present' : null),
                 ];
-            });
+            })->values();
+
+            if ($roster->isEmpty()) {
+                $roster = $attendances->map(function (Attendance $attendance) use ($members, $departmentMap): array {
+                    $member = $members[(string) $attendance->member_id] ?? null;
+
+                    return [
+                        'id' => 'att-'.$attendance->id,
+                        'member_id' => (string) $attendance->member_id,
+                        'name' => $member['name'] ?? 'Member #'.$attendance->member_id,
+                        'foto_url' => $member['foto_url'] ?? null,
+                        'role_category' => $departmentMap->get((string) $attendance->member_id),
+                        'role_name' => null,
+                        'response_status' => 'registered',
+                        'scan_time' => $attendance->scan_time?->format('H:i:s'),
+                        'check_out_time' => $attendance->check_out_time?->format('H:i:s'),
+                        'status' => $attendance->status ?? 'Present',
+                    ];
+                })->values();
+            }
+
+            $uniqueRoster = $roster->unique(fn (array $member) => (string) $member['member_id']);
+
+            $stats = [
+                'total' => $uniqueRoster->count(),
+                'checked_in' => $uniqueRoster->whereNotNull('scan_time')->count(),
+                'on_time' => $uniqueRoster->where('status', 'Present')->count(),
+                'late' => $uniqueRoster->where('status', 'Late')->count(),
+            ];
+            $stats['pending'] = max(0, $stats['total'] - $stats['checked_in']);
+
+            $recentAttendances = $attendances->take(10)->map(function (Attendance $attendance) use ($members, $volunteers, $departmentMap, $selectedEvent, $selectedSession): array {
+                $member = $members[(string) $attendance->member_id] ?? null;
+                $volunteer = $volunteers->firstWhere('member_id', (string) $attendance->member_id);
+
+                return [
+                    'id' => $attendance->id,
+                    'member_id' => (string) $attendance->member_id,
+                    'name' => $member['name'] ?? 'Member #'.$attendance->member_id,
+                    'foto_url' => $member['foto_url'] ?? null,
+                    'role_category' => $volunteer?->role_category ?? $departmentMap->get((string) $attendance->member_id),
+                    'role_name' => $volunteer?->role_name,
+                    'time' => $attendance->scan_time?->format('H:i:s'),
+                    'check_out_time' => $attendance->check_out_time?->format('H:i:s'),
+                    'status' => $this->attendanceStatus($selectedEvent, $selectedSession, $attendance->scan_time),
+                ];
+            })->values();
         }
 
         return Inertia::render('scan-qr/index', [
             'events' => $events,
             'recentScans' => $recentAttendances,
             'totalScanned' => $totalScanned,
+            'roster' => $roster,
+            'stats' => $stats,
             'filters' => [
                 'event_id' => $selectedEventIdStr,
                 'event_session_id' => $selectedSessionId,
@@ -1235,6 +1312,16 @@ class AttendanceController extends Controller
         $sessionId = $request->input('event_session_id');
         $event = Event::find($request->event_id);
 
+        $scanResult = fn (string $type, string $action, ?string $time, ?string $status): array => [
+            'type' => $type,
+            'action' => $action,
+            'name' => $member['name'],
+            'photo' => $member['foto_url'] ?? null,
+            'status' => $status,
+            'time' => $time,
+            'event' => $event->title,
+        ];
+
         if (! $sessionId && $event->attendance_type === 'class_participant') {
             $matchedSession = $event->sessions()->whereDate('date', now()->toDateString())->first();
             if ($matchedSession) {
@@ -1260,16 +1347,23 @@ class AttendanceController extends Controller
             }
 
             if ($attendance->check_out_time) {
-                return back()->with('info', $member['name'].' sudah tercatat check-out untuk sesi/event ini.');
+                return back()
+                    ->with('info', $member['name'].' sudah tercatat check-out untuk sesi/event ini.')
+                    ->with('scan_result', $scanResult('info', 'check_out', $attendance->check_out_time?->toIso8601String(), $attendance->status));
             }
 
-            $attendance->update(['check_out_time' => now()]);
+            $checkOutTime = now();
+            $attendance->update(['check_out_time' => $checkOutTime]);
 
-            return back()->with('success', 'Check-out berhasil dicatat untuk '.$member['name']);
+            return back()
+                ->with('success', 'Check-out berhasil dicatat untuk '.$member['name'])
+                ->with('scan_result', $scanResult('success', 'check_out', $checkOutTime->toIso8601String(), $attendance->status));
         }
 
         if ($attendance) {
-            return back()->with('info', $member['name'].' sudah tercatat check-in untuk sesi/event ini.');
+            return back()
+                ->with('info', $member['name'].' sudah tercatat check-in untuk sesi/event ini.')
+                ->with('scan_result', $scanResult('info', 'check_in', $attendance->scan_time?->toIso8601String(), $attendance->status));
         }
 
         $session = $sessionId ? $event->sessions()->find($sessionId) : null;
@@ -1288,6 +1382,8 @@ class AttendanceController extends Controller
             ? 'Absensi berhasil dicatat untuk '.$member['name'].' (Terlambat).'
             : 'Kehadiran berhasil dicatat untuk '.$member['name'];
 
-        return back()->with('success', $message);
+        return back()
+            ->with('success', $message)
+            ->with('scan_result', $scanResult('success', 'check_in', $scanTime->toIso8601String(), $status));
     }
 }
