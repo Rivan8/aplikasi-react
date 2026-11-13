@@ -664,7 +664,7 @@ export default function ScanQR({
             return;
         }
 
-        const header = ['No', 'Nama', 'ID Jemaat', 'Divisi', 'Peran', 'Jam Absen', 'Jam Pulang', 'Status'];
+        const header = ['No', 'Nama', 'ID Jemaat', 'Departemen', 'Peran', 'Jam Absen', 'Jam Pulang', 'Status'];
         const rows = roster.map((member, index) => [
             index + 1,
             member.name,
@@ -716,7 +716,7 @@ export default function ScanQR({
         ? 'Pastikan kartu member valid dan QR tidak rusak, lalu coba scan ulang.'
         : heroScan?.check_out_time
             ? `Check-out tercatat pukul ${shortTime(heroScan.check_out_time)} WIB.`
-            : 'Selamat melayani! Jangan lupa konfirmasi briefing dengan koordinator divisi.';
+            : 'Selamat melayani! Jangan lupa konfirmasi briefing dengan koordinator departemen.';
 
     const heroStyles: Record<string, { wrapper: string; icon: string; title: string; badge: string; role: string; note: string }> = {
         success: {
@@ -974,7 +974,7 @@ export default function ScanQR({
                             <div className="mt-1 flex flex-wrap items-baseline gap-1.5">
                                 <span className="text-xl leading-none font-bold text-white sm:text-2xl">{stats.total}</span>
                                 <span className="text-[10px] font-medium text-slate-400">Orang</span>
-                                <span className="hidden text-[10px] font-medium text-slate-500 sm:inline">· {divisionCount} Divisi · {activeEvent?.expected ?? 0} Target</span>
+                                <span className="hidden text-[10px] font-medium text-slate-500 sm:inline">· {divisionCount} Departemen · {activeEvent?.expected ?? 0} Target</span>
                             </div>
                         </div>
 
@@ -1334,7 +1334,7 @@ export default function ScanQR({
                                         }}
                                         className="h-10 rounded-lg border border-slate-700/80 bg-[#0F141E] px-3 text-xs text-slate-200 focus:border-[#F58220] focus:ring-1 focus:ring-[#F58220] focus:outline-none sm:col-span-4"
                                     >
-                                        <option value="">Semua Divisi ({divisionCount})</option>
+                                        <option value="">Semua Departemen ({divisionCount})</option>
                                         {departments.map((department) => (
                                             <option key={department} value={department}>{department}</option>
                                         ))}
