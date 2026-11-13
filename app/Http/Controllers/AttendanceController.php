@@ -1235,27 +1235,71 @@ class AttendanceController extends Controller
             $totalScanned = (clone $query)->count();
             $members = $this->memberApi->findMany($attendances->pluck('member_id')->unique());
             $selectedEvent = $events->firstWhere('id', $selectedEventId);
+            $rolesByPair = $this->volunteerRolesByAttendance($attendances);
 
-            $recentScans = $attendances->map(function (Attendance $attendance) use ($members, $selectedEvent) {
+            $recentScans = $attendances->map(function (Attendance $attendance) use ($members, $selectedEvent, $rolesByPair) {
                 $member = $members[(string) $attendance->member_id] ?? null;
                 $session = $selectedEvent?->sessions->firstWhere('id', $attendance->event_session_id);
+                $status = $this->attendanceStatus($selectedEvent, $session, $attendance->scan_time);
+                $toleranceTime = $session?->attendance_start_time
+                    ?? $session?->start_time
+                    ?? $selectedEvent?->attendance_start_time
+                    ?? $selectedEvent?->time;
+                $toleranceDate = $session?->date ?? $selectedEvent?->date;
+                $lateMinutes = 0;
+
+                if ($status === 'Late' && $toleranceTime && $toleranceDate && $attendance->scan_time) {
+                    $lateMinutes = max(1, (int) Carbon::parse($toleranceDate.' '.$toleranceTime)
+                        ->diffInMinutes($attendance->scan_time));
+                }
+
+                $assignments = $rolesByPair->get($attendance->event_id.'|'.(string) $attendance->member_id) ?? collect();
+                $categories = $assignments->pluck('role_category')
+                    ->map(fn ($value) => trim((string) $value))
+                    ->filter()
+                    ->unique()
+                    ->values();
+                $roles = $assignments->pluck('role_name')
+                    ->map(fn ($value) => trim((string) $value))
+                    ->filter()
+                    ->unique()
+                    ->values();
+
+                if ($roles->isEmpty()) {
+                    $roleLabel = $categories->isNotEmpty() ? $categories->implode(', ') : null;
+                } elseif ($categories->count() <= 1) {
+                    $roleLabel = trim($roles->implode(', ').($categories->isNotEmpty() ? ' · '.$categories->first() : ''));
+                } else {
+                    $roleLabel = $assignments
+                        ->map(fn (EventVolunteer $volunteer) => trim(trim((string) $volunteer->role_category).' · '.trim((string) $volunteer->role_name)))
+                        ->filter()
+                        ->unique()
+                        ->implode(', ');
+                }
 
                 return [
                     'id' => $attendance->id,
                     'member_id' => (string) $attendance->member_id,
                     'name' => $member['name'] ?? 'Member #'.$attendance->member_id,
                     'foto_url' => $member['foto_url'] ?? null,
+                    'role_label' => $roleLabel ?: null,
                     'time' => $attendance->scan_time?->format('H:i:s'),
                     'check_out_time' => $attendance->check_out_time?->format('H:i:s'),
-                    'status' => $this->attendanceStatus($selectedEvent, $session, $attendance->scan_time),
+                    'status' => $status,
+                    'late_minutes' => $lateMinutes,
                 ];
             })->values();
+
+            $totalVolunteer = EventVolunteer::where('event_id', $selectedEventId)
+                ->distinct()
+                ->count('member_id');
         }
 
         return Inertia::render('attendance-monitor/index', [
             'events' => $events,
             'recentScans' => $recentScans,
             'totalScanned' => $totalScanned,
+            'totalVolunteer' => $totalVolunteer ?? 0,
             'filters' => [
                 'event_id' => (string) $selectedEventId,
                 'event_session_id' => (string) ($selectedSessionId ?? ''),
