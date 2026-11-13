@@ -853,7 +853,20 @@ class AttendanceController extends Controller
         }
 
         if (! $selectedEventId && $events->isNotEmpty()) {
-            return redirect()->route('scan-qr', ['event_id' => $events->first()->id]);
+            $now = now();
+            $nearest = $events
+                ->map(fn (Event $event) => [
+                    'event' => $event,
+                    'distance' => $event->date
+                        ? abs(Carbon::parse($event->date.' '.($event->time ?? '00:00:00'))->diffInSeconds($now))
+                        : null,
+                ])
+                ->filter(fn (array $item) => $item['distance'] !== null)
+                ->sortBy('distance')
+                ->first();
+            $fallback = $nearest['event'] ?? $events->first();
+
+            return redirect()->route('scan-qr', ['event_id' => $fallback->id]);
         }
         $selectedSessionId = $request->input('event_session_id');
         $selectedEventIdStr = (string) $selectedEventId;

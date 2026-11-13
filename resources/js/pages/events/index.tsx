@@ -480,7 +480,7 @@ export default function Events({
     const [eventCategory, setEventCategory] = useState('all');
     const [eventGroup, setEventGroup] = useState('all');
     const [eventStatus, setEventStatus] = useState<'all' | 'upcoming' | 'past'>('all');
-    const [eventSort, setEventSort] = useState<'date-asc' | 'date-desc' | 'title'>('date-asc');
+    const [eventSort, setEventSort] = useState<'date-asc' | 'date-desc' | 'title'>('date-desc');
     const [currentTime, setCurrentTime] = useState(() => new Date());
     const [messageEventId, setMessageEventId] = useState<number | null>(null);
     const messageEvent = messageEventId ? events.find((event) => event.id === messageEventId) ?? null : null;
@@ -1273,7 +1273,7 @@ return;
                     return firstDate - secondDate || firstEvent.id - secondEvent.id;
                 }
 
-                return secondDate - firstDate || firstEvent.id - secondEvent.id;
+                return secondDate - firstDate || secondEvent.id - firstEvent.id;
             });
     }, [categories, eventCategory, eventGroup, eventSearch, eventSort, eventStatus, events]);
 
@@ -1314,14 +1314,14 @@ return;
         eventGroup !== 'all' ||
         eventCategory !== 'all' ||
         eventStatus !== 'all' ||
-        eventSort !== 'date-asc';
+        eventSort !== 'date-desc';
 
     const resetEventFilters = () => {
         setEventSearch('');
         setEventCategory('all');
         setEventGroup('all');
         setEventStatus('all');
-        setEventSort('date-asc');
+        setEventSort('date-desc');
     };
 
     const openAddEventForCategory = (categoryName?: string) => {
@@ -1440,8 +1440,8 @@ return false;
                                         <SelectValue placeholder="Urutkan" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="date-asc">Tanggal terdekat</SelectItem>
                                         <SelectItem value="date-desc">Tanggal terbaru</SelectItem>
+                                        <SelectItem value="date-asc">Tanggal terdekat</SelectItem>
                                         <SelectItem value="title">Nama A-Z</SelectItem>
                                     </SelectContent>
                                 </Select>
