@@ -10,12 +10,18 @@ export default function MyScan({ event, qr_value }: { event?: any, qr_value?: st
     const { auth, flash } = usePage().props as any;
     const scannerRef = useRef<Html5Qrcode | null>(null);
     const readerElementRef = useRef<HTMLDivElement | null>(null);
+    const autoSubmitDoneRef = useRef(false);
     const [isScanning, setIsScanning] = useState(false);
     const [scanResult, setScanResult] = useState<string | null>(null);
     const [scanError, setScanError] = useState<string | null>(null);
     const [processing, setProcessing] = useState(false);
     const [scanType, setScanType] = useState<'check_in' | 'check_out'>('check_in');
+    const scanTypeRef = useRef<'check_in' | 'check_out'>('check_in');
     const isMountedRef = useRef(true);
+
+    useEffect(() => {
+        scanTypeRef.current = scanType;
+    }, [scanType]);
 
     useEffect(() => {
         isMountedRef.current = true;
@@ -44,12 +50,15 @@ export default function MyScan({ event, qr_value }: { event?: any, qr_value?: st
 
     // Handle direct QR code processing when qr_value is provided (from clicked QR code)
     useEffect(() => {
-        if (qr_value) {
-            setProcessing(true);
-            router.post(qr_value, { scan_type: scanType }, {
-                onFinish: () => setProcessing(false)
-            });
+        if (!qr_value || autoSubmitDoneRef.current) {
+            return;
         }
+
+        autoSubmitDoneRef.current = true;
+        setProcessing(true);
+        router.post(qr_value, { scan_type: scanTypeRef.current }, {
+            onFinish: () => setProcessing(false)
+        });
     }, [qr_value]);
 
     const stopScanner = useCallback(async () => {
@@ -68,32 +77,62 @@ export default function MyScan({ event, qr_value }: { event?: any, qr_value?: st
         }
 
         setIsScanning(false);
-    }, [scanType]);
+    }, []);
 
-    const processQrCode = useCallback((text: string) => {
+    /**
+     * Ambil ID event dari isi QR. QR event resmi berbentuk
+     * `<origin>/attendance/{id}/scan` dan bisa juga membawa `?event_id={id}`.
+     * Pola dibuat toleran agar QR dari host/path berbeda tetap terbaca.
+     */
+    const parseEventIdFromQr = useCallback((text: string): number | null => {
+        const raw = text.trim();
+
+        if (!raw) {
+            return null;
+        }
+
+        const toEventId = (value: string | null | undefined) => {
+            const id = Number(value);
+
+            return Number.isInteger(id) && id > 0 ? id : null;
+        };
+
         try {
-            const url = new URL(text);
-            const path = url.pathname;
+            const url = new URL(raw);
+            const fromQuery = toEventId(url.searchParams.get('event_id') ?? url.searchParams.get('eventId'));
 
-            if (!/^\/attendance\/[^/]+\/scan(?:-event)?$/.test(path)) {
-                setScanError("QR Code tidak valid untuk absensi event ini.");
-
-                return;
+            if (fromQuery) {
+                return fromQuery;
             }
 
-            const scanPath = path.endsWith('/scan')
-                ? `${path}-event`
-                : path;
+            const fromPath = url.pathname.match(/\/attendance\/(\d+)(?:\/|$)/);
 
-            setProcessing(true);
-            router.post(scanPath, { scan_type: scanType }, {
-                onFinish: () => setProcessing(false)
-            });
-
-        } catch (e) {
-            setScanError("Format QR Code tidak dikenali.");
+            if (fromPath) {
+                return toEventId(fromPath[1]);
+            }
+        } catch {
+            // Bukan URL: coba cocokkan pola teks di bawah.
         }
+
+        const fromText = raw.match(/\/attendance\/(\d+)(?:\/|$)/);
+
+        return fromText ? toEventId(fromText[1]) : null;
     }, []);
+
+    const processQrCode = useCallback((text: string) => {
+        const eventId = parseEventIdFromQr(text);
+
+        if (!eventId) {
+            setScanError('QR tidak dikenali. Pastikan Anda memindai QR event (bukan kartu anggota), lalu coba lagi.');
+
+            return;
+        }
+
+        setProcessing(true);
+        router.post(`/attendance/${eventId}/scan-event`, { scan_type: scanTypeRef.current }, {
+            onFinish: () => setProcessing(false)
+        });
+    }, [parseEventIdFromQr]);
 
     const getCameraErrorMessage = (error: unknown): string => {
         const errorName = error instanceof DOMException ? error.name : '';

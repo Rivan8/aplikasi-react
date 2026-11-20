@@ -47,7 +47,7 @@ return [
         'timeout' => env('MYESC_MEMBER_API_TIMEOUT', 10),
         'idjemaat_length' => env('MYESC_IDJEMAAT_LENGTH', 10),
         'noaj_length' => env('MYESC_NOAJ_LENGTH', 7),
+        'nik_length' => env('MYESC_NIK_LENGTH', 16),
     ],
 
 ];
-

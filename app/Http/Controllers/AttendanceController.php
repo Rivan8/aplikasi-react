@@ -1426,11 +1426,11 @@ class AttendanceController extends Controller
             'scan_type' => 'nullable|in:check_in,check_out',
         ]);
 
-        $scan = trim($request->scan);
+        $scan = trim((string) $request->scan);
         $member = $this->memberApi->findByScan($scan);
 
         if (! $member) {
-            return back()->with('error', 'QR Code tidak dikenali. Pastikan kartu member valid. (Kode: '.$scan.')');
+            return back()->with('error', 'QR Code tidak dikenali. Pastikan kartu/QR jemaat valid, atau masukkan ID jemaat/NIK secara manual. (Kode: '.$scan.')');
         }
 
         $sessionId = $request->input('event_session_id');

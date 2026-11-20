@@ -609,7 +609,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // QR Attendance Routes
     Route::get('my/scan', [AttendanceController::class, 'showUserScan'])->name('my.scan');
-    Route::get('attendance/{event}/scan', [AttendanceController::class, 'showEventScan'])->middleware('role:admin,superadmin')->name('attendance.scan');
+    Route::get('attendance/{event}/scan', [AttendanceController::class, 'showEventScan'])->name('attendance.scan');
     Route::post('attendance/{event}/scan-event', [AttendanceController::class, 'scanEventQr'])->name('attendance.scan-event');
     Route::post('attendance/scan-member', [AttendanceController::class, 'scanMemberQr'])->middleware('role:admin,superadmin')->name('attendance.scan-member');
 

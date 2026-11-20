@@ -9,6 +9,15 @@ use Illuminate\Support\Facades\Log;
 
 class MemberApiService
 {
+    /**
+     * Penanda cache untuk kode yang gagal diverifikasi dalam waktu singkat.
+     */
+    private const MISSING_MARKER = '__member-api-missing__';
+
+    private const LIST_CACHE_KEY = 'member-api:list-all';
+
+    private const LIST_BACKUP_KEY = 'member-api:list-all-backup';
+
     public function authenticate(string $identity, string $password): ?array
     {
         if (! config('services.myesc.enabled', true)) {
@@ -50,26 +59,120 @@ class MemberApiService
 
     public function findByScan(string $scan): ?array
     {
+        foreach ($this->scanCandidates($scan) as $candidate) {
+            $member = $this->resolveScanCandidate($candidate);
+
+            if ($member !== null) {
+                return $member;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Mengubah hasil scan (kartu fisik, QR digital, URL, atau JSON) menjadi
+     * daftar kandidat kode jemaat yang bisa diverifikasi ke layanan anggota.
+     *
+     * @return array<int, string>
+     */
+    private function scanCandidates(string $scan): array
+    {
         $scan = trim($scan);
 
         if ($scan === '') {
+            return [];
+        }
+
+        $candidates = [];
+        $isJson = str_starts_with($scan, '{');
+        $isUrl = preg_match('~^[a-z][a-z0-9+.-]*://~i', $scan) === 1;
+
+        if (! $isJson && ! $isUrl) {
+            $candidates[] = $scan;
+        }
+
+        // QR bisa berupa JSON (mis. { "member_id": "...", "noaj": "..." }).
+        if ($isJson) {
+            $payload = json_decode($scan, true);
+
+            if (is_array($payload)) {
+                foreach (['code', 'member_id', 'idjemaat', 'noaj'] as $key) {
+                    if (isset($payload[$key]) && is_scalar($payload[$key])) {
+                        $candidates[] = (string) $payload[$key];
+                    }
+                }
+            }
+        }
+
+        // QR bisa berupa URL (halaman absensi/kartu digital); ambil kode dari path/query.
+        if ($isUrl) {
+            $query = [];
+            parse_str((string) parse_url($scan, PHP_URL_QUERY), $query);
+
+            foreach (['code', 'member_id', 'idjemaat', 'id'] as $key) {
+                if (isset($query[$key]) && is_scalar($query[$key])) {
+                    $candidates[] = (string) $query[$key];
+                }
+            }
+
+            $segments = array_values(array_filter(
+                explode('/', (string) parse_url($scan, PHP_URL_PATH)),
+                fn (string $segment) => $segment !== '',
+            ));
+
+            if ($segments !== []) {
+                $candidates[] = rawurldecode((string) end($segments));
+            }
+        }
+
+        // Kartu/QR fisik sering memakai pemisah, mis. "2205290001-0000010".
+        $digits = preg_replace('/[^0-9]/', '', $scan) ?? '';
+
+        if ($digits !== '') {
+            $candidates[] = $digits;
+        }
+
+        $candidates = array_map(fn ($candidate) => trim((string) $candidate), $candidates);
+
+        return array_values(array_unique(array_filter(
+            $candidates,
+            fn (string $candidate) => $candidate !== '' && preg_match('/[0-9]/', $candidate) === 1,
+        )));
+    }
+
+    private function resolveScanCandidate(string $code): ?array
+    {
+        if ($code === '') {
             return null;
         }
 
         $idLength = (int) config('services.myesc.idjemaat_length', 10);
         $noajLength = (int) config('services.myesc.noaj_length', 7);
+        $digits = preg_replace('/[^0-9]/', '', $code) ?? '';
+        $expectedLength = $idLength + $noajLength;
 
-        if (ctype_digit($scan) && strlen($scan) === $idLength + $noajLength) {
-            $idjemaat = substr($scan, 0, $idLength);
-            $noaj = substr($scan, $idLength, $noajLength);
-            $member = $this->findById($idjemaat);
+        // Format gabungan idjemaat + noaj (dengan atau tanpa pemisah).
+        if ($digits !== '' && strlen($digits) === $expectedLength) {
+            $member = $this->findById(substr($digits, 0, $idLength));
 
-            return $member !== null && (string) $member['noaj'] === $noaj
-                ? $member
-                : null;
+            if ($member !== null && (string) $member['noaj'] === substr($digits, $idLength)) {
+                return $member;
+            }
         }
 
-        return $this->findById($scan);
+        $member = $this->findById($code);
+
+        if ($member !== null) {
+            return $member;
+        }
+
+        // NIK (16 digit) tidak dilayani endpoint scan; cari lewat indeks jemaat.
+        if (strlen($digits) === (int) config('services.myesc.nik_length', 16)) {
+            return $this->findByNik($digits);
+        }
+
+        return null;
     }
 
     public function findById(string|int $idjemaat): ?array
@@ -81,24 +184,142 @@ class MemberApiService
         }
 
         $cacheKey = 'member-api:'.$idjemaat;
+        $cached = Cache::get($cacheKey);
 
-        if (! config('services.myesc.enabled', true)) {
-            return Cache::get($cacheKey);
+        if (is_array($cached)) {
+            return $cached;
         }
 
-        return Cache::remember(
-            $cacheKey,
-            now()->addMinutes((int) config('services.myesc.cache_minutes', 10)),
-            fn (): ?array => $this->request($idjemaat),
-        );
+        if ($cached === self::MISSING_MARKER) {
+            return null;
+        }
+
+        if (! config('services.myesc.enabled', true)) {
+            return null;
+        }
+
+        $member = $this->request($idjemaat);
+
+        if ($member !== null) {
+            Cache::put(
+                $cacheKey,
+                $member,
+                now()->addMinutes((int) config('services.myesc.cache_minutes', 10)),
+            );
+
+            return $member;
+        }
+
+        // Kegagalan hanya disimpan sebentar: sebelumnya null ikut ter-cache 10 menit
+        // sehingga gangguan sesaat membuat semua scan ditolak "tidak dikenali".
+        Cache::put($cacheKey, self::MISSING_MARKER, now()->addSeconds(30));
+
+        // Pakai indeks lokal (jika sudah tersedia) agar absensi tetap jalan saat API bermasalah.
+        $fallback = $this->cachedMemberIndex()['by_id'][$idjemaat] ?? null;
+
+        return is_array($fallback) ? $fallback : null;
     }
 
+    private function findByNik(string $nik): ?array
+    {
+        $nik = trim($nik);
+
+        if ($nik === '') {
+            return null;
+        }
+
+        $idjemaat = $this->memberIndex()['by_nik'][$nik] ?? null;
+
+        return is_string($idjemaat) && $idjemaat !== '' ? $this->findById($idjemaat) : null;
+    }
+
+    /**
+     * @return array{by_nik: array<string, string>, by_id: array<string, array>}
+     */
+    private function memberIndex(): array
+    {
+        $cached = $this->cachedMemberIndex();
+
+        if ($cached['by_id'] !== []) {
+            return $cached;
+        }
+
+        $index = ['by_nik' => [], 'by_id' => []];
+
+        foreach ($this->listAll() as $member) {
+            $idjemaat = (string) ($member['idjemaat'] ?? '');
+
+            if ($idjemaat === '') {
+                continue;
+            }
+
+            $index['by_id'][$idjemaat] = $member;
+            $nik = preg_replace('/[^0-9]/', '', (string) ($member['nik'] ?? '')) ?? '';
+
+            if ($nik !== '') {
+                $index['by_nik'][$nik] = $idjemaat;
+            }
+        }
+
+        if ($index['by_id'] !== []) {
+            Cache::put('member-api:member-index', $index, now()->addMinutes(60));
+        }
+
+        return $index;
+    }
+
+    /**
+     * @return array{by_nik: array<string, string>, by_id: array<string, array>}
+     */
+    private function cachedMemberIndex(): array
+    {
+        $cached = Cache::get('member-api:member-index');
+
+        return is_array($cached) && isset($cached['by_nik'], $cached['by_id'])
+            ? $cached
+            : ['by_nik' => [], 'by_id' => []];
+    }
+
+    /**
+     * Ambil banyak member sekaligus (dipakai laporan absensi). Indeks jemaat
+     * dipakai lebih dulu agar tidak memicu puluhan permintaan HTTP berurutan
+     * yang membuat halaman laporan lambat atau timeout.
+     */
     public function findMany(iterable $ids): array
     {
-        $members = [];
+        $ids = collect($ids)
+            ->map(fn ($id) => trim((string) $id))
+            ->filter()
+            ->unique()
+            ->values();
 
-        foreach (collect($ids)->map(fn ($id) => (string) $id)->filter()->unique() as $id) {
-            $member = $this->findById($id);
+        if ($ids->isEmpty()) {
+            return [];
+        }
+
+        $members = [];
+        $pending = [];
+
+        foreach ($ids as $id) {
+            $cached = Cache::get('member-api:'.$id);
+
+            if (is_array($cached)) {
+                $members[(string) $cached['idjemaat']] = $cached;
+
+                continue;
+            }
+
+            $pending[] = $id;
+        }
+
+        if ($pending === []) {
+            return $members;
+        }
+
+        $indexed = $this->memberIndex()['by_id'];
+
+        foreach ($pending as $id) {
+            $member = $indexed[$id] ?? $this->findById($id);
 
             if ($member !== null) {
                 $members[(string) $member['idjemaat']] = $member;
@@ -142,29 +363,58 @@ class MemberApiService
             return [];
         }
 
-        return Cache::remember(
-            'member-api:list-all',
+        $cached = Cache::get(self::LIST_CACHE_KEY);
+
+        if (is_array($cached) && $cached !== []) {
+            if (! Cache::has(self::LIST_BACKUP_KEY)) {
+                Cache::put(self::LIST_BACKUP_KEY, $cached, now()->addDays(7));
+            }
+
+            return $cached;
+        }
+
+        $members = [];
+        $page = 1;
+        $perPage = 1000;
+
+        do {
+            $result = $this->list($page, $perPage);
+
+            foreach ($result['data'] as $member) {
+                $members[(string) $member['idjemaat']] = $member;
+            }
+
+            $page = (int) ($result['pagination']['next_page'] ?? 0);
+        } while ($page > 0);
+
+        if ($members === []) {
+            // Jangan simpan daftar kosong: sebelumnya kegagalan sesaat membuat
+            // daftar jemaat kosong selama 10 menit, sehingga nama jemaat hilang
+            // dari laporan dan pilihan member pada absensi manual.
+            return $this->lastKnownMemberList();
+        }
+
+        $members = array_values($members);
+
+        Cache::put(
+            self::LIST_CACHE_KEY,
+            $members,
             now()->addMinutes((int) config('services.myesc.cache_minutes', 10)),
-            function (): array {
-                $members = [];
-                $page = 1;
-                $perPage = 1000;
-
-                do {
-                    $result = $this->list($page, $perPage);
-
-                    foreach ($result['data'] as $member) {
-                        $members[(string) $member['idjemaat']] = $member;
-                    }
-
-                    $pagination = $result['pagination'];
-                    $nextPage = (int) ($pagination['next_page'] ?? 0);
-                    $page = $nextPage;
-                } while ($page > 0);
-
-                return array_values($members);
-            },
         );
+        Cache::put(self::LIST_BACKUP_KEY, $members, now()->addDays(7));
+
+        return $members;
+    }
+
+    /**
+     * Daftar jemaat terakhir yang pernah berhasil diambil, dipakai saat API
+     * sedang tidak bisa dihubungi.
+     */
+    private function lastKnownMemberList(): array
+    {
+        $backup = Cache::get(self::LIST_BACKUP_KEY);
+
+        return is_array($backup) ? $backup : [];
     }
 
     private function request(string $scan): ?array

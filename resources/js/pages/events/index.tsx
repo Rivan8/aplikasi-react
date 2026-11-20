@@ -1404,7 +1404,7 @@ return false;
                             </div>
                             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 xl:w-[560px]">
                                 <Select value={eventGroup} onValueChange={(value) => {
- setEventGroup(value); setEventCategory('all'); 
+ setEventGroup(value); setEventCategory('all');
 }}>
                                     <SelectTrigger className="h-11 w-full rounded-xl bg-background">
                                         <SelectValue placeholder="Semua group" />
@@ -2244,7 +2244,7 @@ return;
                                                             id="title"
                                                             value={data.title}
                                                             onChange={(e) => {
- clearFieldError('title'); setData('title', e.target.value); 
+ clearFieldError('title'); setData('title', e.target.value);
 }}
                                                             aria-invalid={!!fieldError('title')}
                                                             placeholder="Sunday Service"
@@ -2255,7 +2255,7 @@ return;
                                                     <div className="space-y-2.5">
                                                         <Label htmlFor="category" className="text-xs font-bold text-foreground/70 ml-1">Kategori <span className="text-destructive">Wajib</span></Label>
                                                         <Select value={data.category} onValueChange={(val) => {
- clearFieldError('category'); setData('category', val); 
+ clearFieldError('category'); setData('category', val);
 }}>
                                                             <SelectTrigger aria-invalid={!!fieldError('category')} className={cn("h-12 bg-muted/20 border-border/40 focus:bg-background transition-all rounded-xl px-4", fieldError('category') && 'border-destructive focus:ring-destructive')}>
                                                                 <SelectValue placeholder="Pilih Kategori" />
@@ -2325,7 +2325,7 @@ return;
                                                                             mode="single"
                                                                             selected={data.date}
                                                                             onSelect={(date: Date | undefined) => {
- clearFieldError('date'); setData('date', date); 
+ clearFieldError('date'); setData('date', date);
 }}
                                                                             initialFocus
                                                                         />
@@ -2341,7 +2341,7 @@ return;
                                                                         type="time"
                                                                         value={data.time}
                                                                         onChange={(e) => {
- clearFieldError('time'); setData('time', e.target.value); 
+ clearFieldError('time'); setData('time', e.target.value);
 }}
                                                                         aria-invalid={!!fieldError('time')}
                                                                         className={cn("h-12 bg-muted/20 border-border/40 focus:bg-background transition-all rounded-xl", fieldError('time') && 'border-destructive focus-visible:ring-destructive')}
@@ -2447,7 +2447,7 @@ return;
                                                                 type="number"
                                                                 value={data.expected}
                                                                 onChange={(e) => {
- clearFieldError('expected'); setData('expected', e.target.value === '' ? 0 : parseInt(e.target.value)); 
+ clearFieldError('expected'); setData('expected', e.target.value === '' ? 0 : parseInt(e.target.value));
 }}
                                                                 aria-invalid={!!fieldError('expected')}
                                                                 className={cn("h-12 bg-muted/20 border-border/40 focus:bg-background transition-all rounded-xl pl-11", fieldError('expected') && 'border-destructive focus-visible:ring-destructive')}
@@ -2463,7 +2463,7 @@ return;
                                                                 id="location"
                                                                 value={data.location}
                                                                 onChange={(e) => {
- clearFieldError('location'); setData('location', e.target.value); 
+ clearFieldError('location'); setData('location', e.target.value);
 }}
                                                                 aria-invalid={!!fieldError('location')}
                                                                 placeholder="Gereja ESC"
@@ -2479,7 +2479,7 @@ return;
                                                         id="address"
                                                         value={data.address}
                                                         onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
- clearFieldError('address'); setData('address', e.target.value); 
+ clearFieldError('address'); setData('address', e.target.value);
 }}
                                                         aria-invalid={!!fieldError('address')}
                                                         placeholder="Jl. Raya..."
@@ -3684,7 +3684,7 @@ return;
                             <div className="flex flex-col items-center justify-center space-y-6 p-6">
                                 <div className="rounded-xl border bg-white p-4 shadow-sm">
                                     <QRCodeComponent
-                                        value={`${window.location.origin}/attendance/${qrEvent.id}/scan`}
+                                        value={`${window.location.origin}/attendance/${qrEvent.id}/scan?event_id=${qrEvent.id}`}
                                         size={256}
                                         level="H"
                                     />
